@@ -1,0 +1,272 @@
+## ==========================================================================
+## LICENSE
+## Copyright (c) 2008-2026, Trinity Software & Beyond Ltd.
+##
+## All rights reserved.
+##
+## Redistribution and use in source and binary forms, with or without modification,
+## are permitted provided that the following conditions are met:
+##
+## 1. Redistributions of source code must retain the above copyright notice,
+##    this list of conditions and the following disclaimer.
+## 2. Redistributions in binary form must reproduce the above copyright notice,
+##    this list of conditions and the following disclaimer in the documentation
+##    and/or other materials provided with the distribution.
+## 3. Neither the name of the copyright holder nor the names of its contributors
+##    may be used to endorse or promote products derived from this software
+##    without specific prior written permission.
+##
+## THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+## AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+## THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+## IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY
+## DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+## (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+## LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+## WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+## ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+## ==========================================================================
+
+## ==========================================================================
+## OVERVIEW — tsb.livedoc.matrix.v1 — render.vm
+## ==========================================================================
+
+#set ( $warnSingleProject = "Select a <b>single project</b> in the Data Set scope." )
+#set ( $warnWorkItemType = "Select a <b>Work Item Type</b>." )
+#set ( $warnColumnEnum = "Select <b>Column Enumeration</b> or enable <b>Use Column Queries</b> with at least one column." )
+#set ( $warnColumnQueries = "Add at least one <b>Additional Column</b> (title + Lucene query)." )
+
+#set ( $allowRendering = true )
+#set ( $projectId = $parameters.dataSet.scope().projectId() )
+#set ( $docsQuery = $parameters.dataSet.getFor().revision("").queryToShow() )
+#set ( $workItemType = $parameters.workItemType.singleValue() )
+#set ( $workItemTypeName = $parameters.workItemType.singleName() )
+#set ( $typeId = $workItemType.id() )
+#set ( $columnEnumValue = $parameters.columnEnum.singleValue() )
+#set ( $columnEnumName = $parameters.columnEnum.singleName() )
+#set ( $useColumnQueries = $parameters.useColumnQueries.value() )
+#set ( $excludeHeadings = $parameters.excludeHeadings.value() )
+#set ( $showEmptyDocuments = $parameters.showEmptyDocuments.value() )
+#set ( $showRowTotalColumn = $parameters.showRowTotalColumn.value() )
+#set ( $showFooterTotalsRow = $parameters.showFooterTotalsRow.value() )
+
+## ==========================================================================
+## Warnings - if the parameters are not set correctly, or the conditions are not met, we will display a warning
+## ==========================================================================
+
+## -------------------------------------------------------------------------
+## When ProjectID is missing / empty, we will display a warning
+## Polarion shows a warning box, refer to $warnSingleProject
+## Will not render the table
+## -------------------------------------------------------------------------
+
+#if ( !$projectId ) 
+	$widgetContext.renderWarning("$warnSingleProject")
+	#set ( $allowRendering = false )
+#end
+
+#if ( !$workItemType )
+	$widgetContext.renderWarning("$warnWorkItemType")
+	#set ( $allowRendering = false )
+#end
+
+## -------------------------------------------------------------------------
+## Remember: columnEnumValue is a boolean
+## If we are not using column queries, and the columnEnumValue is not set, we will display a warning
+## -------------------------------------------------------------------------
+
+#if ( (!$columnEnumValue) && (!$useColumnQueries) )
+	$widgetContext.renderWarning("$warnColumnEnum")
+	#set ( $allowRendering = false )
+#end
+
+## -------------------------------------------------------------------------
+## If we are using column queries, and the columns are not set, hence empty, we will display a warning
+## -------------------------------------------------------------------------
+#if ( $useColumnQueries && ($parameters.columns.get().size() == 0) )
+	$widgetContext.renderWarning("$warnColumnQueries")
+	#set ( $allowRendering = false )
+#end
+
+#set ( $columnTitles = [] )
+#set ( $columnQueries = [] )
+#set ( $rowTitles = [] )
+#set ( $rowQueries = [] )
+#macro ( isSystemFieldMacro $p_id $r_result )
+	#set ( $r_result = false )
+	#if ( ($p_id == "priority") || ($p_id == "severity") || ($p_id == "status") || ($p_id == "resolution") )
+		#set ( $r_result = true )
+	#end
+#end
+
+## ==========================================================================
+## MACROS 
+## ==========================================================================
+
+#macro ( prepareColumnsMacro )
+	#isSystemFieldMacro($columnEnumValue $isSystemField)
+
+	#if ( true == $useColumnQueries )
+		#foreach ( $columnParam in $parameters.columns.get() )
+			#set ( $void = $columnTitles.add($columnParam.title.value()) )
+			#set ( $void = $columnQueries.add($columnParam.query.value()) )
+		#end
+	#elseif ( $isSystemField == true )
+		#set ( $enumOptions = $transaction.enumerations().getEnumeration("$columnEnumValue").forType("$typeId").forProject("$projectId").options() )
+		#set ( $void = $columnTitles.add("Any Value") )
+		#set ( $void = $columnQueries.add("(HAS_VALUE:$columnEnumValue)") )
+		#set ( $void = $columnTitles.add("None") )
+		#set ( $void = $columnQueries.add("(NOT HAS_VALUE:$columnEnumValue)") )
+		#foreach ( $enumOption in $enumOptions )
+			#set ( $void = $columnTitles.add($enumOption.label()) )
+			#set ( $void = $columnQueries.add("($columnEnumValue:$enumOption.id())") )
+		#end
+	#else
+		#set ( $contextId = $projectService.getProject($projectId).getContextId() )
+		#set ( $customField = $trackerService.getDataService().getCustomFieldsService().getCustomField($columnEnumValue, "WorkItem", $contextId, "$typeId") )
+		#if ( $customField.getType().class.name == "com.polarion.subterra.base.data.model.internal.ListType" )
+			#set ( $enumType = $customField.getType().getItemType() )
+		#else
+			#set ( $enumType = $customField.getType() )
+		#end
+		#set ( $enumOptions = $trackerService.getDataService().getEnumerationForEnumId($enumType, $contextId).getAvailableOptions($typeId) )
+		#set ( $customEnumKey = "${columnEnumValue}.KEY" )
+		#set ( $void = $columnTitles.add("Any Value") )
+		#set ( $void = $columnQueries.add("(HAS_VALUE:$customEnumKey)") )
+		#set ( $void = $columnTitles.add("None") )
+		#set ( $void = $columnQueries.add("(NOT HAS_VALUE:$customEnumKey)") )
+		#foreach ( $enumOption in $enumOptions )
+			#set ( $void = $columnTitles.add($enumOption.getName()) )
+			#set ( $void = $columnQueries.add("($customEnumKey:$enumOption.getId())") )
+		#end
+	#end
+#end
+
+#macro ( prepareRowsMacro )
+	#set ( $q = '"' )
+	#set ( $docs = $transaction.documents().search().query($docsQuery).sort("space") )
+	#set ( $headingClause = "" )
+	#if ( $excludeHeadings )
+		#set ( $headingClause = " AND (NOT type:heading)" )
+	#end
+	#foreach ( $doc in $docs )
+		#set ( $void = $rowTitles.add($doc) )
+		#set ( $docPath = $doc.getOldApi().getRelativePath().replace("_default/", "") )
+		#set ( $void = $rowQueries.add("(project.id:$projectId AND type:$typeId$headingClause AND document.id:$q$docPath$q)") )
+	#end
+#end
+
+#macro ( countCellMacro $rowQuery $columnQuery $r_count )
+	#if ( $columnQuery.equals("") )
+		#set ( $cellQuery = $rowQuery )
+	#else
+		#set ( $cellQuery = "$rowQuery AND ($columnQuery)" )
+	#end
+	#set ( $r_count = $transaction.workItems().count().query("$cellQuery").result() )
+#end
+
+#macro ( renderCellLinkMacro $cellQuery $count )
+	#set ( $link = $transaction.context().createPortalLink().project("$projectId").workItems().query("$cellQuery").toEncodedRelativeUrl() )
+	<a href="$link">$count</a>
+#end
+
+#macro ( renderTableStartMacro )
+	<table class="polarion-Document-table" style="margin:auto;border-collapse:collapse;width:90%;border:1px solid #CCCCCC;">
+	<tbody>
+#end
+
+#macro ( renderTableEndMacro )
+	</tbody>
+	</table>
+	<p style="text-align:center;font-size:smaller;color:#666;">$workItemTypeName · project $projectId</p>
+#end
+
+#macro ( renderTableHeaderMacro )
+	#set ( $colLabel = "Queries" )
+	#if ( false == $useColumnQueries )
+		#set ( $colLabel = $columnEnumName )
+	#end
+	<tr>
+		<th style="text-align:center;padding:6px;background-color:#d3d3d3;border:1px solid #CCC;">Documents / $colLabel</th>
+		#foreach ( $t in $columnTitles )
+			<th style="text-align:center;padding:6px;background-color:#d3d3d3;border:1px solid #CCC;">$t</th>
+		#end
+		#if ( $showRowTotalColumn )
+			<th style="text-align:center;padding:6px;background-color:#b8b8b8;border:1px solid #CCC;">Total</th>
+		#end
+	</tr>
+#end
+
+#macro ( renderTableRowsMacro )
+	#foreach ( $rowTitle in $rowTitles )
+		#set ( $rowIndex = $velocityCount - 1 )
+		#set ( $rowQuery = $rowQueries.get($rowIndex) )
+		#set ( $rowTotal = 0 )
+
+		#foreach ( $columnQuery in $columnQueries )
+			#countCellMacro($rowQuery $columnQuery $cellCount)
+			#set ( $rowTotal = $rowTotal + $cellCount )
+		#end
+
+		#if ( ($showEmptyDocuments == true) || ($rowTotal > 0) )
+			<tr>
+				<td style="text-align:left;padding:5px;border:1px solid #CCC;">$rowTitle.render().withSpace(true).withLinks(true)</td>
+				#foreach ( $columnQuery in $columnQueries )
+					#countCellMacro($rowQuery $columnQuery $cellCount)
+					#if ( $columnQuery.equals("") )
+						#set ( $cellQuery = $rowQuery )
+					#else
+						#set ( $cellQuery = "$rowQuery AND ($columnQuery)" )
+					#end
+					<td style="text-align:center;padding:5px;border:1px solid #CCC;">
+						#renderCellLinkMacro($cellQuery $cellCount)
+					</td>
+				#end
+				#if ( $showRowTotalColumn )
+					<td style="text-align:center;padding:5px;border:1px solid #CCC;background-color:#f5f5f5;font-weight:bold;">$rowTotal</td>
+				#end
+			</tr>
+		#end
+	#end
+#end
+
+#macro ( renderFooterTotalsRowMacro )
+	#if ( $showFooterTotalsRow )
+		#set ( $footerGrandTotal = 0 )
+		<tr>
+			<td style="text-align:left;padding:5px;border:1px solid #CCC;background-color:#e8e8e8;font-weight:bold;">All documents</td>
+			#foreach ( $columnQuery in $columnQueries )
+				#set ( $colSum = 0 )
+				#foreach ( $rowQuery in $rowQueries )
+					#countCellMacro($rowQuery $columnQuery $cellCount)
+					#set ( $colSum = $colSum + $cellCount )
+				#end
+				#set ( $footerGrandTotal = $footerGrandTotal + $colSum )
+				<td style="text-align:center;padding:5px;border:1px solid #CCC;background-color:#e8e8e8;font-weight:bold;">$colSum</td>
+			#end
+			#if ( $showRowTotalColumn )
+				<td style="text-align:center;padding:5px;border:1px solid #CCC;background-color:#d0d0d0;font-weight:bold;">$footerGrandTotal</td>
+			#end
+		</tr>
+	#end
+#end
+
+## ==========================================================================
+## Main
+## ==========================================================================
+#if ( $allowRendering == true )
+	#prepareColumnsMacro()
+	#prepareRowsMacro()
+
+	#if ( $columnQueries.size() == 0 )
+		$widgetContext.renderWarning("No columns configured.")
+	#elseif ( $rowQueries.size() == 0 )
+		$widgetContext.renderWarning("No documents matched the Data Set query.")
+	#else
+		#renderTableStartMacro()
+		#renderTableHeaderMacro()
+		#renderTableRowsMacro()
+		#renderFooterTotalsRowMacro()
+		#renderTableEndMacro()
+	#end
+#end
