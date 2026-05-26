@@ -28,245 +28,183 @@
 ## ==========================================================================
 
 ## ==========================================================================
-## OVERVIEW — tsb.livedoc.matrix.v1 — render.vm
+## OVERVIEW — tsb.livedoc.meta.v1 — render.vm
+##
+## Document list: title, document status (Draft/Published), last editor, last updated.
 ## ==========================================================================
 
 #set ( $warnSingleProject = "Select a <b>single project</b> in the Data Set scope." )
-#set ( $warnWorkItemType = "Select a <b>Work Item Type</b>." )
-#set ( $warnColumnEnum = "Select <b>Column Enumeration</b> or enable <b>Use Column Queries</b> with at least one column." )
-#set ( $warnColumnQueries = "Add at least one <b>Additional Column</b> (title + Lucene query)." )
+#set ( $warnNoQuery = "Set a <b>Data Set</b> query (e.g. <code>*</code> or <code>space:Requirements</code>)." )
 
 #set ( $allowRendering = true )
 #set ( $projectId = $parameters.dataSet.scope().projectId() )
 #set ( $docsQuery = $parameters.dataSet.getFor().revision("").queryToShow() )
-#set ( $workItemType = $parameters.workItemType.singleValue() )
-#set ( $workItemTypeName = $parameters.workItemType.singleName() )
-#set ( $typeId = $workItemType.id() )
-#set ( $columnEnumValue = $parameters.columnEnum.singleValue() )
-#set ( $columnEnumName = $parameters.columnEnum.singleName() )
-#set ( $useColumnQueries = $parameters.useColumnQueries.value() )
-#set ( $excludeHeadings = $parameters.excludeHeadings.value() )
-#set ( $showEmptyDocuments = $parameters.showEmptyDocuments.value() )
-#set ( $showRowTotalColumn = $parameters.showRowTotalColumn.value() )
-#set ( $showFooterTotalsRow = $parameters.showFooterTotalsRow.value() )
+#set ( $sortByLastUpdated = $parameters.sortByLastUpdated.value() )
+#set ( $showSpaceColumn = $parameters.showSpaceColumn.value() )
+
+#set ( $editorFieldIds = ["updatedBy", "author", "modifiedBy"] )
+#set ( $updatedFieldId = "updated" )
 
 ## ==========================================================================
-## Warnings - if the parameters are not set correctly, or the conditions are not met, we will display a warning
+## Warnings
 ## ==========================================================================
 
-## -------------------------------------------------------------------------
-## When ProjectID is missing / empty, we will display a warning
-## Polarion shows a warning box, refer to $warnSingleProject
-## Will not render the table
-## -------------------------------------------------------------------------
-
-#if ( !$projectId ) 
+#if ( !$projectId )
 	$widgetContext.renderWarning("$warnSingleProject")
 	#set ( $allowRendering = false )
 #end
 
-#if ( !$workItemType )
-	$widgetContext.renderWarning("$warnWorkItemType")
-	#set ( $allowRendering = false )
-#end
-
-## -------------------------------------------------------------------------
-## Remember: columnEnumValue is a boolean
-## If we are not using column queries, and the columnEnumValue is not set, we will display a warning
-## -------------------------------------------------------------------------
-
-#if ( (!$columnEnumValue) && (!$useColumnQueries) )
-	$widgetContext.renderWarning("$warnColumnEnum")
-	#set ( $allowRendering = false )
-#end
-
-## -------------------------------------------------------------------------
-## If we are using column queries, and the columns are not set, hence empty, we will display a warning
-## -------------------------------------------------------------------------
-#if ( $useColumnQueries && ($parameters.columns.get().size() == 0) )
-	$widgetContext.renderWarning("$warnColumnQueries")
-	#set ( $allowRendering = false )
-#end
-
-#set ( $columnTitles = [] )
-#set ( $columnQueries = [] )
-#set ( $rowTitles = [] )
-#set ( $rowQueries = [] )
-#macro ( isSystemFieldMacro $p_id $r_result )
-	#set ( $r_result = false )
-	#if ( ($p_id == "priority") || ($p_id == "severity") || ($p_id == "status") || ($p_id == "resolution") )
-		#set ( $r_result = true )
+#if ( $allowRendering == true )
+	#if ( !$docsQuery || $docsQuery.trim().equals("") )
+		$widgetContext.renderWarning("$warnNoQuery")
+		#set ( $allowRendering = false )
 	#end
 #end
 
 ## ==========================================================================
-## MACROS 
+## MACROS
 ## ==========================================================================
 
-#macro ( prepareColumnsMacro )
-	#isSystemFieldMacro($columnEnumValue $isSystemField)
+## -------------------------------------------------------------------------
+## Prefix the Data Set Lucene query with project.id when the query does not already scope by project.
+## -------------------------------------------------------------------------
+#macro ( resolveDocsQueryMacro $p_projectId $p_docsQuery $r_query )
+	#set ( $r_query = $p_docsQuery )
+	#if ( $p_projectId && !$p_docsQuery.contains("project.id:") )
+		#set ( $r_query = "project.id:$p_projectId AND ($p_docsQuery)" )
+	#end
+#end
 
-	#if ( true == $useColumnQueries )
-		#foreach ( $columnParam in $parameters.columns.get() )
-			#set ( $void = $columnTitles.add($columnParam.title.value()) )
-			#set ( $void = $columnQueries.add($columnParam.query.value()) )
+## -------------------------------------------------------------------------
+## Search documents via $transaction.documents().search(); sort by "updated" or "space title" per widget parameter.
+## -------------------------------------------------------------------------
+#macro ( loadDocumentsMacro $p_query $p_sortByUpdated $r_docs )
+	#if ( true == $p_sortByUpdated )
+		#set ( $r_docs = $transaction.documents().search().query($p_query).sort("updated") )
+	#end
+	#if ( false == $p_sortByUpdated )
+		#set ( $r_docs = $transaction.documents().search().query($p_query).sort("space title") )
+	#end
+#end
+
+## -------------------------------------------------------------------------
+## Copy search results into a list, skipping documents that are unresolvable in this transaction.
+## -------------------------------------------------------------------------
+#macro ( buildDocListMacro $p_docs $r_docList )
+	#set ( $r_docList = [] )
+	#foreach ( $d in $p_docs )
+		#if ( !$d.isUnresolvable() )
+			#set ( $void = $r_docList.add($d) )
 		#end
-	#elseif ( $isSystemField == true )
-		#set ( $enumOptions = $transaction.enumerations().getEnumeration("$columnEnumValue").forType("$typeId").forProject("$projectId").options() )
-		#set ( $void = $columnTitles.add("Any Value") )
-		#set ( $void = $columnQueries.add("(HAS_VALUE:$columnEnumValue)") )
-		#set ( $void = $columnTitles.add("None") )
-		#set ( $void = $columnQueries.add("(NOT HAS_VALUE:$columnEnumValue)") )
-		#foreach ( $enumOption in $enumOptions )
-			#set ( $void = $columnTitles.add($enumOption.label()) )
-			#set ( $void = $columnQueries.add("($columnEnumValue:$enumOption.id())") )
-		#end
+	#end
+#end
+
+## -------------------------------------------------------------------------
+## Render one document field with $doc.fields().get($fieldId).render() when readable; otherwise show an em dash.
+## -------------------------------------------------------------------------
+#macro ( renderDocFieldIfPresentMacro $doc $fieldId )
+	#if ( $doc.fields().get($fieldId).getIfCan() )
+		$!doc.fields().get($fieldId).render()
 	#else
-		#set ( $contextId = $projectService.getProject($projectId).getContextId() )
-		#set ( $customField = $trackerService.getDataService().getCustomFieldsService().getCustomField($columnEnumValue, "WorkItem", $contextId, "$typeId") )
-		#if ( $customField.getType().class.name == "com.polarion.subterra.base.data.model.internal.ListType" )
-			#set ( $enumType = $customField.getType().getItemType() )
-		#else
-			#set ( $enumType = $customField.getType() )
-		#end
-		#set ( $enumOptions = $trackerService.getDataService().getEnumerationForEnumId($enumType, $contextId).getAvailableOptions($typeId) )
-		#set ( $customEnumKey = "${columnEnumValue}.KEY" )
-		#set ( $void = $columnTitles.add("Any Value") )
-		#set ( $void = $columnQueries.add("(HAS_VALUE:$customEnumKey)") )
-		#set ( $void = $columnTitles.add("None") )
-		#set ( $void = $columnQueries.add("(NOT HAS_VALUE:$customEnumKey)") )
-		#foreach ( $enumOption in $enumOptions )
-			#set ( $void = $columnTitles.add($enumOption.getName()) )
-			#set ( $void = $columnQueries.add("($customEnumKey:$enumOption.getId())") )
+		<span style="color:#999;">—</span>
+	#end
+#end
+
+## -------------------------------------------------------------------------
+## Show last editor from the first readable field in $editorFieldIds (updatedBy, author, modifiedBy); otherwise an em dash.
+## -------------------------------------------------------------------------
+#macro ( renderLastEditorMacro $doc )
+	#set ( $rendered = false )
+	#foreach ( $fid in $editorFieldIds )
+		#if ( !$rendered && $doc.fields().get($fid).getIfCan() )
+			$!doc.fields().get($fid).render()
+			#set ( $rendered = true )
 		#end
 	#end
-#end
-
-#macro ( prepareRowsMacro )
-	#set ( $q = '"' )
-	#set ( $docs = $transaction.documents().search().query($docsQuery).sort("space") )
-	#set ( $headingClause = "" )
-	#if ( $excludeHeadings )
-		#set ( $headingClause = " AND (NOT type:heading)" )
-	#end
-	#foreach ( $doc in $docs )
-		#set ( $void = $rowTitles.add($doc) )
-		#set ( $docPath = $doc.getOldApi().getRelativePath().replace("_default/", "") )
-		#set ( $void = $rowQueries.add("(project.id:$projectId AND type:$typeId$headingClause AND document.id:$q$docPath$q)") )
+	#if ( !$rendered )
+		<span style="color:#999;">—</span>
 	#end
 #end
 
-#macro ( countCellMacro $rowQuery $columnQuery $r_count )
-	#if ( $columnQuery.equals("") )
-		#set ( $cellQuery = $rowQuery )
-	#else
-		#set ( $cellQuery = "$rowQuery AND ($columnQuery)" )
-	#end
-	#set ( $r_count = $transaction.workItems().count().query("$cellQuery").result() )
-#end
-
-#macro ( renderCellLinkMacro $cellQuery $count )
-	#set ( $link = $transaction.context().createPortalLink().project("$projectId").workItems().query("$cellQuery").toEncodedRelativeUrl() )
-	<a href="$link">$count</a>
-#end
-
+## -------------------------------------------------------------------------
+## Open the Polarion-styled HTML table and tbody for the document list.
+## -------------------------------------------------------------------------
 #macro ( renderTableStartMacro )
 	<table class="polarion-Document-table" style="margin:auto;border-collapse:collapse;width:90%;border:1px solid #CCCCCC;">
 	<tbody>
 #end
 
-#macro ( renderTableEndMacro )
+## -------------------------------------------------------------------------
+## Close the table and render a centered footer with project id and document count.
+## -------------------------------------------------------------------------
+#macro ( renderTableEndMacro $p_count )
 	</tbody>
 	</table>
-	<p style="text-align:center;font-size:smaller;color:#666;">$workItemTypeName · project $projectId</p>
+	<p style="text-align:center;font-size:smaller;color:#666;">project $projectId · $p_count document(s)</p>
 #end
 
+## -------------------------------------------------------------------------
+## Output column headers (optional Space, Document, Status, Last edited by, Last updated).
+## -------------------------------------------------------------------------
 #macro ( renderTableHeaderMacro )
-	#set ( $colLabel = "Queries" )
-	#if ( false == $useColumnQueries )
-		#set ( $colLabel = $columnEnumName )
-	#end
 	<tr>
-		<th style="text-align:center;padding:6px;background-color:#d3d3d3;border:1px solid #CCC;">Documents / $colLabel</th>
-		#foreach ( $t in $columnTitles )
-			<th style="text-align:center;padding:6px;background-color:#d3d3d3;border:1px solid #CCC;">$t</th>
+		#if ( true == $showSpaceColumn )
+			<th style="text-align:left;padding:6px;background-color:#d3d3d3;border:1px solid #CCC;">Space</th>
 		#end
-		#if ( $showRowTotalColumn )
-			<th style="text-align:center;padding:6px;background-color:#b8b8b8;border:1px solid #CCC;">Total</th>
-		#end
+		<th style="text-align:left;padding:6px;background-color:#d3d3d3;border:1px solid #CCC;">Document</th>
+		<th style="text-align:center;padding:6px;background-color:#d3d3d3;border:1px solid #CCC;">Status</th>
+		<th style="text-align:center;padding:6px;background-color:#d3d3d3;border:1px solid #CCC;">Last edited by</th>
+		<th style="text-align:center;padding:6px;background-color:#d3d3d3;border:1px solid #CCC;">Last updated</th>
 	</tr>
 #end
 
-#macro ( renderTableRowsMacro )
-	#foreach ( $rowTitle in $rowTitles )
-		#set ( $rowIndex = $velocityCount - 1 )
-		#set ( $rowQuery = $rowQueries.get($rowIndex) )
-		#set ( $rowTotal = 0 )
-
-		#foreach ( $columnQuery in $columnQueries )
-			#countCellMacro($rowQuery $columnQuery $cellCount)
-			#set ( $rowTotal = $rowTotal + $cellCount )
+## -------------------------------------------------------------------------
+## Render one table row: space (optional), linked document title, status, last editor, last updated.
+## -------------------------------------------------------------------------
+#macro ( renderDocumentRowMacro $doc )
+	<tr>
+		#if ( true == $showSpaceColumn )
+			<td style="text-align:left;padding:5px;border:1px solid #CCC;">$!doc.space().render()</td>
 		#end
-
-		#if ( ($showEmptyDocuments == true) || ($rowTotal > 0) )
-			<tr>
-				<td style="text-align:left;padding:5px;border:1px solid #CCC;">$rowTitle.render().withSpace(true).withLinks(true)</td>
-				#foreach ( $columnQuery in $columnQueries )
-					#countCellMacro($rowQuery $columnQuery $cellCount)
-					#if ( $columnQuery.equals("") )
-						#set ( $cellQuery = $rowQuery )
-					#else
-						#set ( $cellQuery = "$rowQuery AND ($columnQuery)" )
-					#end
-					<td style="text-align:center;padding:5px;border:1px solid #CCC;">
-						#renderCellLinkMacro($cellQuery $cellCount)
-					</td>
-				#end
-				#if ( $showRowTotalColumn )
-					<td style="text-align:center;padding:5px;border:1px solid #CCC;background-color:#f5f5f5;font-weight:bold;">$rowTotal</td>
-				#end
-			</tr>
-		#end
-	#end
+		<td style="text-align:left;padding:5px;border:1px solid #CCC;">$doc.render().withSpace(true).withLinks(true)</td>
+		<td style="text-align:center;padding:5px;border:1px solid #CCC;">#renderDocFieldIfPresentMacro($doc "status")</td>
+		<td style="text-align:center;padding:5px;border:1px solid #CCC;">#renderLastEditorMacro($doc)</td>
+		<td style="text-align:center;padding:5px;border:1px solid #CCC;">#renderDocFieldIfPresentMacro($doc $updatedFieldId)</td>
+	</tr>
 #end
 
-#macro ( renderFooterTotalsRowMacro )
-	#if ( $showFooterTotalsRow )
-		#set ( $footerGrandTotal = 0 )
-		<tr>
-			<td style="text-align:left;padding:5px;border:1px solid #CCC;background-color:#e8e8e8;font-weight:bold;">All documents</td>
-			#foreach ( $columnQuery in $columnQueries )
-				#set ( $colSum = 0 )
-				#foreach ( $rowQuery in $rowQueries )
-					#countCellMacro($rowQuery $columnQuery $cellCount)
-					#set ( $colSum = $colSum + $cellCount )
-				#end
-				#set ( $footerGrandTotal = $footerGrandTotal + $colSum )
-				<td style="text-align:center;padding:5px;border:1px solid #CCC;background-color:#e8e8e8;font-weight:bold;">$colSum</td>
-			#end
-			#if ( $showRowTotalColumn )
-				<td style="text-align:center;padding:5px;border:1px solid #CCC;background-color:#d0d0d0;font-weight:bold;">$footerGrandTotal</td>
-			#end
-		</tr>
+## -------------------------------------------------------------------------
+## Emit all document rows; when sorted by last updated, iterate the list in reverse so newest appears first.
+## -------------------------------------------------------------------------
+#macro ( renderDocumentRowsMacro $p_docList )
+	#if ( true == $sortByLastUpdated )
+		#set ( $rowIndex = $p_docList.size() - 1 )
+		#foreach ( $ignored in $p_docList )
+			#renderDocumentRowMacro($p_docList.get($rowIndex))
+			#set ( $rowIndex = $rowIndex - 1 )
+		#end
+	#else
+		#foreach ( $doc in $p_docList )
+			#renderDocumentRowMacro($doc)
+		#end
 	#end
 #end
 
 ## ==========================================================================
 ## Main
 ## ==========================================================================
-#if ( $allowRendering == true )
-	#prepareColumnsMacro()
-	#prepareRowsMacro()
 
-	#if ( $columnQueries.size() == 0 )
-		$widgetContext.renderWarning("No columns configured.")
-	#elseif ( $rowQueries.size() == 0 )
+#if ( $allowRendering == true )
+	#resolveDocsQueryMacro($projectId $docsQuery $effectiveQuery)
+	#loadDocumentsMacro($effectiveQuery $sortByLastUpdated $docs)
+	#buildDocListMacro($docs $docList)
+
+	#if ( $docList.size() == 0 )
 		$widgetContext.renderWarning("No documents matched the Data Set query.")
 	#else
 		#renderTableStartMacro()
 		#renderTableHeaderMacro()
-		#renderTableRowsMacro()
-		#renderFooterTotalsRowMacro()
-		#renderTableEndMacro()
+		#renderDocumentRowsMacro($docList)
+		#renderTableEndMacro($docList.size())
 	#end
 #end

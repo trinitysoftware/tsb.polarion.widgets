@@ -1,35 +1,31 @@
-# tsb.livedoc.matrix.v1
+# tsb.livedoc.meta.v1
 
-**TSB LiveDoc Work Items Matrix** — new document matrix widget for Polarion testing.
+**TSB LiveDoc Document Status** — document rows with lifecycle metadata (not work item counts).
 
-| Property | Value |
-|----------|--------|
-| Widget id | `tsb.livedoc.matrix.v1` |
-| Label | TSB LiveDoc Work Items Matrix |
-| Polarion path | `.polarion/pages/widgets/tsb.livedoc.matrix.v1/` |
+| | |
+|---|---|
+| **Widget id** | `tsb.livedoc.meta.v1` |
+| **Label** | TSB LiveDoc Document Status |
+| **Polarion path** | `.polarion/pages/widgets/tsb.livedoc.meta.v1/` |
 
-## New vs legacy `t1/` widgets
+## vs `tsb.livedoc.matrix.v1`
 
-| Feature | This widget | `tsb.doc.items.by.enumeration.matrix` | `tsb.doc.items.by.query.matrix` |
-|---------|-------------|--------------------------------------|----------------------------------|
-| Document rows | Yes | Yes | Yes |
-| Enum columns | Yes | Yes (status only) | No |
-| Query columns | Yes | No | Yes |
-| Row total column | Yes | No | No |
-| Footer totals row | Yes | No | No |
+| | LiveDoc matrix | This widget |
+|---|---|---|
+| Rows | One per document | One per document |
+| Columns | Work item counts by status enum | Document **status**, **last editor**, **last updated** |
+| Needs Work Item Type | Yes | No |
 
-## Zip and upload
+## Upload
 
-From `new-widget-1/velocity-widget/`:
+Zip folder `tsb.livedoc.meta.v1` → **Administration** → **Documents and Pages** → **Velocity Widgets** → **Upload**.
 
-1. Right-click folder `tsb.livedoc.matrix.v1` → Send to compressed folder.
-2. Polarion → **Administration** → **Velocity Widgets** → **Upload**.
+## Parameters
 
-Full checklist: [../../TEST-IN-POLARION.md](../../TEST-IN-POLARION.md)
+- **Data Set** — Document prototype, single project, Lucene query (`*` or `space:…`).
+- **Sort by Last Updated** — Newest first (default on).
+- **Show Space Column** — Optional.
 
-## Minimal test configuration
+## Last editor field
 
-- Data Set: Document, current project, query `*`
-- Work Item Type: `requirement` (or your type)
-- Column Enumeration: `status`
-- Apply
+Tries document fields in order: `updatedBy`, `author`, `modifiedBy`. If all are empty, the cell shows **—** (check your project’s document field ids in Administration).
