@@ -20,7 +20,7 @@
 
 ## Zip and upload
 
-From `new-widget-1/velocity-widget/`:
+From `tsb.polarion.widgets/tsb.livedoc.matrix`:
 
 1. Right-click folder `tsb.livedoc.matrix` → Send to compressed folder.
 2. Polarion → **Administration** → **Velocity Widgets** → **Upload**.
