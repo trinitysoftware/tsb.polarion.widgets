@@ -1,6 +1,6 @@
-# tsb.livedoc.matrix.v1
+# tsb.livedoc.matrix V1.1
 
-**TSB LiveDoc Work Items Matrix** — new document matrix widget for Polarion testing.
+**TSB LiveDoc Work Items Matrix** — new document matrix widget for Polarion.
 
 | Property | Value |
 |----------|--------|

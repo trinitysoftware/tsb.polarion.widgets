@@ -58,3 +58,4 @@ $parameters.columnEnum.set().addEnumItem("resolution", "Resolution")
 		#end
 	#end
 #end
+

@@ -29,4 +29,4 @@
 
 ## Widget id: tsb.livedoc.matrix
 
-<b>LiveDoc work item matrix</b> — each row is a document; columns show counts by enumeration or Lucene query. Includes optional <b>row totals</b> and <b>footer totals</b>. Built for Polarion 2512 Rich Page testing.
+<b>LiveDoc work item matrix</b> — each row is a document; columns show counts by enumeration or Lucene query. Includes optional <b>row totals</b> and <b>footer totals</b>.
