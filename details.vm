@@ -27,6 +27,6 @@
 ## ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## ==========================================================================
 
-## Widget id: tsb.livedoc.meta.v1
+## Widget id: tsb.livedoc.matrix
 
-<b>LiveDoc document status</b> — one row per document from your Data Set. Shows <b>document status</b> (Draft, Published, …), <b>who last edited</b>, and <b>when</b> — not work item counts. Use instead of the work item matrix when you need document lifecycle info.
+<b>LiveDoc work item matrix</b> — each row is a document; columns show counts by enumeration or Lucene query. Includes optional <b>row totals</b> and <b>footer totals</b>.

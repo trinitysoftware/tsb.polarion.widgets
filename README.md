@@ -1,31 +1,27 @@
-# tsb.livedoc.meta.v1
+# tsb.livedoc.matrix V1.1
 
-**TSB LiveDoc Document Status** — document rows with lifecycle metadata (not work item counts).
+**TSB LiveDoc Work Items Matrix** — new document matrix widget for Polarion.
 
-| | |
-|---|---|
-| **Widget id** | `tsb.livedoc.meta.v1` |
-| **Label** | TSB LiveDoc Document Status |
-| **Polarion path** | `.polarion/pages/widgets/tsb.livedoc.meta.v1/` |
+| Property | Value |
+|----------|--------|
+| Widget id | `tsb.livedoc.matrix` |
+| Label | TSB LiveDoc Work Items Matrix |
+| Polarion path | `.polarion/pages/widgets/tsb.livedoc.matrix` |
 
-## vs `tsb.livedoc.matrix.v1`
+## Feature Matrix
 
-| | LiveDoc matrix | This widget |
-|---|---|---|
-| Rows | One per document | One per document |
-| Columns | Work item counts by status enum | Document **status**, **last editor**, **last updated** |
-| Needs Work Item Type | Yes | No |
+| Feature | `tsb.livedoc.matrix V1` | `tsb.doc.items.by.enumeration.matrix` | `tsb.doc.items.by.query.matrix` |
+|---------|-------------|--------------------------------------|----------------------------------|
+| Document rows | Yes | Yes | Yes |
+| Enum columns | Yes | Yes (status only) | No |
+| Query columns | Yes | No | Yes |
+| Row total column | Yes | No | No |
+| Footer totals row | Yes | No | No |
 
-## Upload
+## Zip and upload
 
-Zip folder `tsb.livedoc.meta.v1` → **Administration** → **Documents and Pages** → **Velocity Widgets** → **Upload**.
+From `new-widget-1/velocity-widget/`:
 
-## Parameters
+1. Right-click folder `tsb.livedoc.matrix` → Send to compressed folder.
+2. Polarion → **Administration** → **Velocity Widgets** → **Upload**.
 
-- **Data Set** — Document prototype, single project, Lucene query (`*` or `space:…`).
-- **Sort by Last Updated** — Newest first (default on).
-- **Show Space Column** — Optional.
-
-## Last editor field
-
-Tries document fields in order: `updatedBy`, `author`, `modifiedBy`. If all are empty, the cell shows **—** (check your project’s document field ids in Administration).
