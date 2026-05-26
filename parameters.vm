@@ -28,45 +28,9 @@
 ## ==========================================================================
 
 ## ==========================================================================
-## OVERVIEW — tsb.livedoc.matrix.v1 — parameters.vm
-##
-## Velocity Context: $parameters, $factory, $transaction, $widgetContext, $objectFactory
-## ==========================================================================
-
-## ==========================================================================
-## Build Data Set Parameter 
+## OVERVIEW — tsb.livedoc.meta.v1 — parameters.vm
 ## ==========================================================================
 
 $parameters.put("dataSet", $factory.dataSet("Data Set").prototype().document().allowedPrototypes(["Document"]).dependencySource(true).build())
-
-## ==========================================================================
-## dependencySource = allows the script to process dependencies (parent-child items) - can be used to include the entire linked structure
-## When we create a report, we can pull user stories, evaluate their status, which document it is linked to, etc. 
-## ==========================================================================
-
-## ==========================================================================
-## Work Item Type
-## ==========================================================================
-$parameters.put("workItemType", $factory.enumeration("Work Item Type", "workitem-type").allowNoValue(false).singleValue("requirement").dependencyTarget(true).build())
-
-## ==========================================================================
-## Use Column Queries
-## ==========================================================================
-$parameters.put("useColumnQueries", $factory.bool("Use Column Queries").value(false).build())
-$parameters.put("columnEnum", $factory.customEnum("Column Enumeration").dependencyTarget(true).singleValue("status").build())
-
-#set($colTitle = $factory.string("Title").build())
-#set($colQuery = $factory.string("Query (Lucene)").value("").build())
-#set($colComposite = $factory.composite("Column Query").add("title", $colTitle).add("query", $colQuery).build())
-
-
-## ============================================================================
-## Parameters are the conditions or filters that we can see in the widget
-## These can help filter the data accordingly - alignd with what users want to see
-## ============================================================================
-
-$parameters.put("columns", $factory.multi("Additional Columns", $colComposite).build())
-$parameters.put("excludeHeadings", $factory.bool("Exclude Headings").value(true).build())
-$parameters.put("showEmptyDocuments", $factory.bool("Show Empty Documents").value(true).build())
-$parameters.put("showRowTotalColumn", $factory.bool("Show Row Total Column").value(true).build())
-$parameters.put("showFooterTotalsRow", $factory.bool("Show Footer Totals Row").value(true).build())
+$parameters.put("sortByLastUpdated", $factory.bool("Sort by Last Updated (newest first)").value(true).build())
+$parameters.put("showSpaceColumn", $factory.bool("Show Space Column").value(false).build())
