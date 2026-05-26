@@ -28,7 +28,7 @@
 ## ==========================================================================
 
 ## ==========================================================================
-## OVERVIEW — tsb.livedoc.matrix.v1 — render.vm
+## OVERVIEW — tsb.livedoc.matrix — render.vm
 ## ==========================================================================
 
 #set ( $warnSingleProject = "Select a <b>single project</b> in the Data Set scope." )

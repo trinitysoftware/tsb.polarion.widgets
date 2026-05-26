@@ -27,6 +27,6 @@
 ## ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## ==========================================================================
 
-## Widget id: tsb.livedoc.matrix.v1
+## Widget id: tsb.livedoc.matrix
 
 <b>LiveDoc work item matrix</b> — each row is a document; columns show counts by enumeration or Lucene query. Includes optional <b>row totals</b> and <b>footer totals</b>. Built for Polarion 2512 Rich Page testing.
