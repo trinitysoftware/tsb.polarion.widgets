@@ -1,4 +1,4 @@
-# velocity-widget-1
+# tsb.polarion.widgets
 
 Custom **Velocity widgets** for [Siemens Polarion ALM](https://plm.sw.siemens.com/en-US/polarion/), maintained by [Trinity Software & Beyond Ltd.](https://github.com/trinitysoftware)
 
