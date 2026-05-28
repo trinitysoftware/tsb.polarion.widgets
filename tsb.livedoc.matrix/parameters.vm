@@ -28,14 +28,14 @@
 ## ==========================================================================
 
 ## ==========================================================================
-## OVERVIEW — tsb.livedoc.meta.v1 — parameters.vm
+## OVERVIEW — tsb.livedoc.matrix — parameters.vm
 ## ==========================================================================
 
-## ==========================================================================
-## Build Data Set Parameter 
-## ==========================================================================
-
-$parameters.put("dataSet", $factory.dataSet("Data Set").prototype().document().allowedPrototypes(["Document"]).dependencySource(true).build())
+## ========================================================================== 
+## Build Data Set Parameter  
+## ========================================================================== 
+$parameters.put("dataSet", $factory.dataSet("Data Set").prototype().document().allowedPrototypes(["Document"]).build()) 
+ 
 
 ## ==========================================================================
 ## dependencySource = allows the script to process dependencies (parent-child items) - can be used to include the entire linked structure
@@ -46,7 +46,18 @@ $parameters.put("dataSet", $factory.dataSet("Data Set").prototype().document().a
 ## Parameters are the conditions or filters that we can see in the widget
 ## These can help filter the data accordingly - alignd with what users want to see
 ## ============================================================================
+$parameters.put("showSignaturesStatus", $factory.bool("Show Signatures Status").value(true).build()) 
+$parameters.put("showUnresolvedComments", $factory.bool("Show Unresolved Comments").value(true).build()) 
+$parameters.put("showProject", $factory.bool("Show Project").value(true).build()) 
+$parameters.put("showSpace", $factory.bool("Show Space").value(true).build()) 
+$parameters.put("columnFields", $factory.string("Show Fields as Columns").value("status,updated").build()) 
 
-$parameters.put("sortByLastUpdated", $factory.bool("Sort by Last Updated (newest first)").value(true).build())
-$parameters.put("showSpaceColumn", $factory.bool("Show Space Column").value(false).build())
+## ========================================================================== 
+## Build Additional Column workitem queries  
+## ========================================================================== 
+#set($title = $factory.string("Title").build()) 
+#set($query = $factory.string("Query (Lucene)").value("").build()) 
+#set($composite = $factory.composite("Column Query").add("title", $title).add("query", $query).build()) 
+$parameters.put("columns", $factory.multi("Additional Columns", $composite).build()) 
+
 
