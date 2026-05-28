@@ -45,8 +45,4 @@ velocity-widget-1/
 
 Widgets are implemented in **Apache Velocity** (`.vm` files). Edit the `.vm` files in the widget folder, re-zip, and re-upload to Polarion to see the changes.
 
-Parameter and behavior notes for the current widget are documented in [`tsb.livedoc.matrix/description.vm`](tsb.livedoc.matrix/description.vm) and [`tsb.livedoc.matrix/CHANGELOG.md`](tsb.livedoc.matrix/CHANGELOG.md).
-
-## License
-
-Widget source is licensed under the **BSD 3-Clause License** — see [`tsb.livedoc.matrix/LICENSE`](tsb.livedoc.matrix/LICENSE). Copyright (c) 2008–2026, Trinity Software & Beyond Ltd.
+Parameter and behavior notes for the current widget are documented in [`tsb.livedoc.matrix/description.vm`](tsb.livedoc.matrix/description.vm) and [`tsb.livedoc.matrix/CHANGELOG.md`](tsb.livedoc.matrix/CHANGELOG.md)
