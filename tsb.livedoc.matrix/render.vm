@@ -28,189 +28,193 @@
 ## ==========================================================================
 
 ## ==========================================================================
-## OVERVIEW — tsb.livedoc.meta.v1 — render.vm
-##
-## Document list: title, document status (Draft/Published), last editor, last updated.
+## OVERVIEW — tsb.livedoc.matrix — render.vm
 ## ==========================================================================
 
-#set ( $warnSingleProject = "Select a <b>single project</b> in the Data Set scope." )
-#set ( $warnNoQuery = "Set a <b>Data Set</b> query (e.g. <code>*</code> or <code>space:Requirements</code>)." )
 
-#set ( $allowRendering = true )
-#set ( $projectId = $parameters.dataSet.scope().projectId() )
-#set ( $docsQuery = $parameters.dataSet.getFor().revision("").queryToShow() )
-#set ( $sortByLastUpdated = $parameters.sortByLastUpdated.value() )
-#set ( $showSpaceColumn = $parameters.showSpaceColumn.value() )
+## ========================================================================== 
+## Global Texts 
+## ========================================================================== 
+#set($warnSingleProject = "This widget provides workitem count for <b>single Projects only</b>. Please select a <b>single Project</b> for the <b>Scope parameter</b>.") 
+ 
+ 
+## ========================================================================== 
+## Initialize and validate parameters 
+## ========================================================================== 
+#set ($allowRendering = true) 
+#set ($projectId = $parameters.dataSet.scope().projectId()) 
+#set ($docsQuery = $parameters.dataSet.getFor().revision("").queryToShow()) 
+ 
+#if (!$projectId) 
+	$widgetContext.renderWarning("$warnSingleProject") 
+	#set ($allowRendering = false) 
+#end 
+ 
+#set($columnTitles = [])  
+#set($columnQueries = [])  
 
-#set ( $editorFieldIds = ["updatedBy", "author"] )
-#set ( $updatedFieldId = "updated" )
+#macro (prepareColumns) 
+	#foreach ($columnParam in $parameters.columns.get()) 
+		#if ( !($columnParam.title.value() == "") && !($columnParam.query.value() == "") ) 
+			#set ($void = $columnTitles.add($columnParam.title.value())) 
+			#set ($void = $columnQueries.add($columnParam.query.value())) 
+		#end 
+	#end 
+#end 
+ 
+#set($rowTitles = [])  
+#set($rowQueries = [])  
 
-## ==========================================================================
-## Warnings
-## ==========================================================================
-
-#if ( !$projectId )
-	$widgetContext.renderWarning("$warnSingleProject")
-	#set ( $allowRendering = false )
-#end
-
-#if ( $allowRendering == true )
-	#if ( !$docsQuery || $docsQuery.trim().equals("") )
-		$widgetContext.renderWarning("$warnNoQuery")
-		#set ( $allowRendering = false )
-	#end
-#end
-
-## ==========================================================================
-## MACROS
-## ==========================================================================
-
-## -------------------------------------------------------------------------
-## Prefix the Data Set Lucene query with project.id when the query does not already scope by project.
-## -------------------------------------------------------------------------
-#macro ( resolveDocsQueryMacro $p_projectId $p_docsQuery $r_query )
-	#set ( $r_query = $p_docsQuery )
-	#if ( $p_projectId && !$p_docsQuery.contains("project.id:") )
-		#set ( $r_query = "project.id:$p_projectId AND ($p_docsQuery)" )
-	#end
-#end
-
-## -------------------------------------------------------------------------
-## Search documents via $transaction.documents().search(); sort by "updated" or "space title" per widget parameter.
-## -------------------------------------------------------------------------
-#macro ( loadDocumentsMacro $p_query $p_sortByUpdated $r_docs )
-	#if ( true == $p_sortByUpdated )
-		#set ( $r_docs = $transaction.documents().search().query($p_query).sort("updated") )
-	#end
-	#if ( false == $p_sortByUpdated )
-		#set ( $r_docs = $transaction.documents().search().query($p_query).sort("space title") )
-	#end
-#end
-
-## -------------------------------------------------------------------------
-## Copy search results into a list, skipping documents that are unresolvable in this transaction.
-## -------------------------------------------------------------------------
-#macro ( buildDocListMacro $p_docs $r_docList )
-	#set ( $r_docList = [] )
-	#foreach ( $d in $p_docs )
-		#if ( !$d.isUnresolvable() )
-			#set ( $void = $r_docList.add($d) )
-		#end
-	#end
-#end
-
-## -------------------------------------------------------------------------
-## Render one document field with $doc.fields().get($fieldId).render() when readable; otherwise show an em dash.
-## -------------------------------------------------------------------------
-#macro ( renderDocFieldIfPresentMacro $doc $fieldId )
-	#if ( $doc.fields().get($fieldId).getIfCan() )
-		$!doc.fields().get($fieldId).render()
-	#else
-		<span style="color:#999;">—</span>
-	#end
-#end
-
-## -------------------------------------------------------------------------
-## Show last editor from the first readable field in $editorFieldIds (updatedBy, author); otherwise an em dash.
-## What each means: 
-##			$doc - live document object for that table row
-##			fields() - access to the custom/system fields
-##			get($fid) - field handle for the current id in the loop (updatedBy, author)
-##			getIfCan - "can the current user read this field?" 
-## 					if not, cause its missing or they have no permission, skip to next $fid
-## -------------------------------------------------------------------------
-#macro ( renderLastEditorMacro $doc )
-	#set ( $rendered = false )
-	#foreach ( $fid in $editorFieldIds )
-		#if ( !$rendered && $doc.fields().get($fid).getIfCan() )
-			$!doc.fields().get($fid).render()
-			#set ( $rendered = true )
-		#end
-	#end
-	#if ( !$rendered )
-		<span style="color:#999;">—</span>
-	#end
-#end
-
-## -------------------------------------------------------------------------
-## Open the Polarion-styled HTML table and tbody for the document list.
-## -------------------------------------------------------------------------
-#macro ( renderTableStartMacro )
-	<table class="polarion-Document-table" style="margin:auto;border-collapse:collapse;width:90%;border:1px solid #CCCCCC;">
-	<tbody>
-#end
-
-## -------------------------------------------------------------------------
-## Close the table and render a centered footer with project id and document count.
-## -------------------------------------------------------------------------
-#macro ( renderTableEndMacro $p_count )
-	</tbody>
-	</table>
-	<p style="text-align:center;font-size:smaller;color:#666;">project $projectId · $p_count document(s)</p>
-#end
-
-## -------------------------------------------------------------------------
-## Output column headers (optional Space, Document, Status, Last edited by, Last updated).
-## -------------------------------------------------------------------------
-#macro ( renderTableHeaderMacro )
-	<tr>
-		#if ( true == $showSpaceColumn )
-			<th style="text-align:left;padding:6px;background-color:#d3d3d3;border:1px solid #CCC;">Space</th>
-		#end
-		<th style="text-align:left;padding:6px;background-color:#d3d3d3;border:1px solid #CCC;">Document</th>
-		<th style="text-align:center;padding:6px;background-color:#d3d3d3;border:1px solid #CCC;">Status</th>
-		<th style="text-align:center;padding:6px;background-color:#d3d3d3;border:1px solid #CCC;">Last edited by</th>
-		<th style="text-align:center;padding:6px;background-color:#d3d3d3;border:1px solid #CCC;">Last updated</th>
-	</tr>
-#end
-
-## -------------------------------------------------------------------------
-## Render one table row: space (optional), linked document title, status, last editor, last updated.
-## -------------------------------------------------------------------------
-#macro ( renderDocumentRowMacro $doc )
-	<tr>
-		#if ( true == $showSpaceColumn )
-			<td style="text-align:left;padding:5px;border:1px solid #CCC;">$!doc.space().render()</td>
-		#end
-		<td style="text-align:left;padding:5px;border:1px solid #CCC;">$doc.render().withSpace(true).withLinks(true)</td>
-		<td style="text-align:center;padding:5px;border:1px solid #CCC;">#renderDocFieldIfPresentMacro($doc "status")</td>
-		<td style="text-align:center;padding:5px;border:1px solid #CCC;">#renderLastEditorMacro($doc)</td>
-		<td style="text-align:center;padding:5px;border:1px solid #CCC;">#renderDocFieldIfPresentMacro($doc $updatedFieldId)</td>
-	</tr>
-#end
-
-## -------------------------------------------------------------------------
-## Emit all document rows; when sorted by last updated, iterate the list in reverse so newest appears first.
-## -------------------------------------------------------------------------
-#macro ( renderDocumentRowsMacro $p_docList )
-	#if ( true == $sortByLastUpdated )
-		#set ( $rowIndex = $p_docList.size() - 1 )
-		#foreach ( $ignored in $p_docList )
-			#renderDocumentRowMacro($p_docList.get($rowIndex))
-			#set ( $rowIndex = $rowIndex - 1 )
-		#end
-	#else
-		#foreach ( $doc in $p_docList )
-			#renderDocumentRowMacro($doc)
-		#end
-	#end
-#end
-
-## ==========================================================================
-## Main
-## ==========================================================================
-
-#if ( $allowRendering == true )
-	#resolveDocsQueryMacro($projectId $docsQuery $effectiveQuery)
-	#loadDocumentsMacro($effectiveQuery $sortByLastUpdated $docs)
-	#buildDocListMacro($docs $docList)
-
-	#if ( $docList.size() == 0 )
-		$widgetContext.renderWarning("No documents matched the Data Set query.")
-	#else
-		#renderTableStartMacro()
-		#renderTableHeaderMacro()
-		#renderDocumentRowsMacro($docList)
-		#renderTableEndMacro($docList.size())
-	#end
-#end
+#macro (prepareRows) 
+	#set ($q = '"') 
+	#set ($docs = $transaction.documents().search().query($docsQuery).sort("project.id space.id title")) 
+ 
+	#foreach ($doc in $docs) 
+		#set ($void = $rowTitles.add($doc)) 
+		#set ($docNameWithSpace = $doc.getOldApi().getRelativePath().replace("_default/","")) 
+		#set ($void = $rowQueries.add("(project.id:$projectId AND (NOT type:heading) AND document.id:$q$docNameWithSpace$q)")) 
+	#end 
+#end 
+ 
+ 
+#macro(renderTableStart) 
+	<table class="polarion-Document-table" style="margin: auto;empty-cells: show;border-collapse: collapse;width: 100%;border: 1px solid #CCCCCC;" id="polarion_wiki macro name=table;params=uid=client2"> 
+	<tbody> 
+#end 
+ 
+#macro(renderTableEnd) 
+	</tbody> 
+	</table> 
+#end 
+ 
+#macro(renderTableHeader) 
+	<tr> 
+		#if ($parameters.showProject.value() == true) 
+			<th style='text-align: left;vertical-align: top;height: 10px;border: 1px solid #CCCCCC;padding: 3px; background-color: #d3d3d3;min-width:120px;'>Project</th> 
+		#end 
+ 
+		#if ($parameters.showSpace.value() == true) 
+			<th style='text-align: left;vertical-align: top;height: 10px;border: 1px solid #CCCCCC;padding: 3px; background-color: #d3d3d3;min-width:150px;'>Space</th> 
+		#end 
+ 
+		<th style='text-align: left;vertical-align: top;height: 10px;border: 1px solid #CCCCCC;padding: 3px;background-color: #d3d3d3;'>Document</th> 
+ 
+		## ========================================================================== 
+		## Add column fields titles 
+		## ========================================================================== 
+		## split the fields 
+		#set($fieldsId = $parameters.columnFields.value().split(","))  
+ 
+		## get the first document in the list  
+		#set ($firstDoc = "") 
+		#if (!($rowTitles.size() == 0)) 
+			#set ($firstDoc = $rowTitles.get(0)) 
+		#end  
+ 
+ 
+		## render field label 
+		#foreach ($f in $fieldsId) 
+			#set ($fieldTitle = "") 
+			#if ($firstDoc == "") 
+				#set ($fieldTitle = $f) 
+			#else 
+				#set ($fieldTitle = $!firstDoc.fields().get($f).label()) 
+			#end 
+ 
+			<th style='text-align: center;vertical-align: top;height: 10px;border: 1px solid #CCCCCC;padding: 3px; background-color: #d3d3d3;'>$fieldTitle</th> 
+		#end 
+ 
+		## ========================================================================== 
+		## Add signature column 
+		## ========================================================================== 
+		#if ($parameters.showSignaturesStatus.value() == true) 
+			<th style='text-align: center;vertical-align: top;height: 10px;border: 1px solid #CCCCCC;padding: 3px; background-color: #d3d3d3;'>Signatures</th> 
+		#end 
+ 
+		## ========================================================================== 
+		## ToDo: Add unresolved comments title 
+		## ========================================================================== 
+ 
+		#foreach ($t in $columnTitles) 
+			<th style='text-align: center;vertical-align: top;height: 10px;border: 1px solid #CCCCCC;padding: 3px; background-color: #d3d3d3;'>$t</th> 
+		#end 
+	</tr> 
+#end 
+ 
+#macro(renderTableRows) 
+	#foreach ($rowTitle in $rowTitles) 
+		#set ($indexLoop = $velocityCount - 1) 
+		#set ($rowQuery = "$rowQueries.get($indexLoop)") 
+		#set ($workitemCount= $transaction.workItems().count().query("$rowQuery").result()) 
+ 
+	<tr> 
+ 		#if ($parameters.showProject.value() == true) 
+			<td style='text-align: left;vertical-align: top;height: 10px;border: 1px solid #CCCCCC;padding: 3px;font-size: 11px;'>$rowTitle.fields().project().render()</td> 
+		#end 
+ 
+		#if ($parameters.showSpace.value() == true) 
+			<td style='text-align: left;vertical-align: top;height: 10px;border: 1px solid #CCCCCC;padding: 3px;font-size: 11px;'>$rowTitle.space().render()</td> 
+		#end 
+ 
+		<td style='text-align: left;vertical-align: top;height: 10px;border: 1px solid #CCCCCC;padding: 3px;font-size: 11px;'>$rowTitle.render().withIcon().withLinks(true)</td> 
+ 
+		## ========================================================================== 
+		## Add column fields 
+		## ========================================================================== 
+		## split the fields 
+		#set($fieldsId = $parameters.columnFields.value().split(","))  
+ 
+		## render field label 
+		#foreach ($f in $fieldsId) 
+			<td style='text-align: center;vertical-align: top;height: 10px;border: 1px solid #CCCCCC;padding: 3px;font-size: 11px;'> 
+			$!rowTitle.fields().get($f).render() 
+			</td> 
+		#end 
+ 
+## ========================================================================== 
+## Add signature column 
+## ========================================================================== 
+#if ($parameters.showSignaturesStatus.value() == true) 
+<td style='text-align: left;vertical-align: top;height: 10px;border: 1px solid #CCCCCC;padding: 3px;font-size: 11px;'> 
+#foreach($c in $rowTitle.fields().workflowSignatures())  
+#if(!$c.fields().signatureState().optionId().equals("obsolete") && !$c.fields().signatureState().optionId().equals("notAvailable")) 
+<span style="margin: 1px;">$c.render().htmlFor().forFrame().replace(", ", "")</span> 
+#end 
+#end 
+</td> 
+#end 
+ 
+## ========================================================================== 
+## ToDo: Add unresolved comments 
+## ========================================================================== 
+ 
+ 
+#foreach($columnQuery in $columnQueries) 
+#set($cellQuery = "$rowQuery AND ($columnQuery)") 
+ 
+<td style='text-align: center;vertical-align: top;height: 10px;border: 1px solid #CCCCCC;padding: 3px;font-size: 11px;'> 
+#set($workitemCount= $transaction.workItems().count().query("$cellQuery").result()) 
+#set($link = $transaction.context().createPortalLink().project("$projectId").workItems().query("$cellQuery").toEncodedRelativeUrl()) 
+#set($docSpace = $rowTitle.getOldApi().getModuleFolder()) 
+#set($docName = $rowTitle.fields().moduleName().get()) 
+#set($docLink = $transaction.context().createPortalLink().project("$projectId").document("$docSpace","$docName").filter("$cellQuery").toEncodedRelativeUrl()) 
+<a href="$link">$workitemCount</a> / <a href="$docLink">Doc</a>  
+</td> 
+#end 
+</tr> 
+#end 
+#end 
+ 
+## ========================================================================== 
+## Main Code starts here 
+## ========================================================================== 
+#if ($allowRendering == true) 
+#set ($contextId = $projectService.getProject($projectId).getContextId())  
+#prepareColumns() 
+#prepareRows() 
+ 
+#renderTableStart() 
+#renderTableHeader() 
+#renderTableRows() 
+#renderTableEnd() 
+#end 
