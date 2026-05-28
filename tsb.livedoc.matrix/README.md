@@ -10,13 +10,18 @@
 
 ## Feature Matrix
 
-| Feature | `tsb.livedoc.matrix V1` | `tsb.doc.items.by.enumeration.matrix` | `tsb.doc.items.by.query.matrix` |
-|---------|-------------|--------------------------------------|----------------------------------|
-| Document rows | Yes | Yes | Yes |
-| Enum columns | Yes | Yes (status only) | No |
-| Query columns | Yes | No | Yes |
-| Row total column | Yes | No | No |
-| Footer totals row | Yes | No | No |
+| Feature | Supported |
+|---------|-----------|
+| Data Set — documents (single project) | Yes |
+| Data Set — Lucene query (e.g. `*` or `space:Requirements`) | Yes |
+| Document rows | Yes |
+| Document column (linked title) | Yes |
+| Status column | Yes |
+| Last edited by column (`updatedBy`, then `author`) | Yes |
+| Last updated column | Yes |
+| Optional space column | Yes (parameter) |
+| Sort by last updated (newest first) | Yes (parameter, default on) |
+| Footer — project id and document count | Yes |
 
 ## Zip and upload
 

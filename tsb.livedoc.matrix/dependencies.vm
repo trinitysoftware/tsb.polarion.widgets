@@ -1,5 +1,5 @@
 ## ==========================================================================
-## LICENSE
+## BSD 3-CLAUSE LICENSE
 ## Copyright (c) 2008-2026, Trinity Software & Beyond Ltd.
 ##
 ## All rights reserved.
@@ -28,34 +28,7 @@
 ## ==========================================================================
 
 ## ==========================================================================
-## OVERVIEW — tsb.livedoc.matrix — dependencies.vm
+## OVERVIEW — tsb.livedoc.meta.v1 — dependencies.vm
 ## ==========================================================================
 
 #set ( $scope = $parameters.dataSet.scope() )
-$parameters.workItemType.set().scope($scope)
-
-$parameters.columnEnum.set().clear()
-$parameters.columnEnum.set().addEnumItem("priority", "Priority")
-$parameters.columnEnum.set().addEnumItem("severity", "Severity")
-$parameters.columnEnum.set().addEnumItem("status", "Status")
-$parameters.columnEnum.set().addEnumItem("resolution", "Resolution")
-
-#set ( $workItemType = $parameters.workItemType.singleValue() )
-#set ( $projectId = $parameters.dataSet.scope().projectId() )
-
-#if ( $workItemType && $projectId )
-	#set ( $typeId = $workItemType.id() )
-	#set ( $contextId = $projectService.getProject($projectId).getContextId() )
-	#set ( $customFields = $trackerService.getDataService().getCustomFieldsService().getCustomFields("WorkItem", $contextId, $typeId) )
-
-	#foreach ( $customField in $customFields )
-		#if ( $customField.getType().class.name == "com.polarion.subterra.base.data.model.internal.ListType" )
-			#if ( $customField.getType().getItemType().class.name == "com.polarion.subterra.base.data.model.internal.EnumType" )
-				$parameters.columnEnum.set().addEnumItem($customField.getId(), $customField.getName())
-			#end
-		#elseif ( $customField.getType().class.name == "com.polarion.subterra.base.data.model.internal.EnumType" )
-			$parameters.columnEnum.set().addEnumItem($customField.getId(), $customField.getName())
-		#end
-	#end
-#end
-
