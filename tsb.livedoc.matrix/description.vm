@@ -29,13 +29,12 @@
 
 ## Widget id: tsb.livedoc.matrix
 
-Version 1.0<br/>
-
 <ul>
 	<li><b>Data Set</b> — Documents (single project). Same query as the LiveDoc matrix (e.g. <code>*</code> or <code>space:Requirements</code>).</li>
-	<li><b>Columns</b> — Document · Status · Last edited by · Last updated (document fields, not work item status counts).</li>
-	<li><b>Sort by Last Updated</b> — Newest documents first (default on).</li>
-	<li><b>Show Space Column</b> — Optional space name before the document title.</li>
+	<li><b>Show Signatures Status</b> - TBD </li>
+	<li><b>Show Unresolved Comments</b> — TBD </li>
+	<li><b>Show Project</b> — TBD </li>
+	<li><b>Show Space</b> — Optional space name before the document title.</li>
+	<li><b>Show Fields as Columns</b> — TBD </li>
+	<li><b>Additional Columns</b> — TBD </li>
 </ul>
-
-Deploy folder name must be <code>tsb.livedoc.matrix</code>.
