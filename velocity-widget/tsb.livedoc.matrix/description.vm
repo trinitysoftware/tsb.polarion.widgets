@@ -27,14 +27,16 @@
 ## ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## ==========================================================================
 
-## Widget id: tsb.livedoc.matrix
+## ==========================================================================
+## OVERVIEW — tsb.livedoc.matrix — description.vm
+## ==========================================================================
 
 <ul>
-	<li><b>Data Set</b> — Documents (single project). Same query as the LiveDoc matrix (e.g. <code>*</code> or <code>space:Requirements</code>).</li>
-	<li><b>Show Signatures Status</b> - TBD </li>
-	<li><b>Show Unresolved Comments</b> — TBD </li>
-	<li><b>Show Project</b> — TBD </li>
-	<li><b>Show Space</b> — Optional space name before the document title.</li>
-	<li><b>Show Fields as Columns</b> — TBD </li>
-	<li><b>Additional Columns</b> — TBD </li>
+	<li><b>Data Set</b> — Defines the data source for the matrix, including Scope (specific project), query type, document type, and query. </li>
+	<li><b>Show Signatures Status</b> — Adds a signatures column showing electronic sign-off status for LiveDocs, providing visible proof of review, approval, and compliance.</li>
+	<li><b>Show Unresolved Comments</b> — When enabled, this will show unresolved review comments per document so teams can quickly identify open discussion items (planned; not yet rendered in this version).</li>
+	<li><b>Show Project</b> — Adds a project column so each document row shows its project context.</li>
+	<li><b>Show Space</b> — Displays the document's Space (a container similar to a digital folder, used to organize documents and rich pages).</li>
+	<li><b>Show Fields as Columns</b> — Displays selected document fields as extra columns for side-by-side comparison (for example: <code>author</code>, <code>updated</code>, <code>status</code>).</li>
+	<li><b>Additional Columns</b> — Define custom matrix columns using a title plus a work item query; each cell shows a clickable count and document link.</li>
 </ul>
