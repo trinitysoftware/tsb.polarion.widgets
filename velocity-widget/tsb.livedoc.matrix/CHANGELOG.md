@@ -47,3 +47,18 @@ Trinity naming and coding conventions applied. Version remains in `widget.proper
 
 ### `parameters.vm` cleanup
 - [FIX] Applied Velocity directive spacing on `#set ( $title = ... )`, `#set ( $query = ... )`, `#set ( $composite = ... )`.
+
+## Version 2.0 - 2026-06-04
+
+Major enhancement release: interactive in-page toolbar, JavaScript table rendering, and scoped CSS styling. Version remains in `widget.properties` label and this changelog only — not in the folder name.
+
+### Interactive toolbar (in-page, no widget reload)
+- [ENHANCEMENT] **Row filter** — text input filters visible rows by document title, name, and space (client-side).
+- [ENHANCEMENT] **Column toggles** — checkboxes for Project, Space, and Signatures; defaults follow widget parameters (`showProject`, `showSpace`, `showSignaturesStatus`).
+- [ENHANCEMENT] **Add field** — enter a document field id to show an extra column; pre-rendered cell HTML is read from hidden spans (field catalog includes `columnFields` plus common ids such as `status`, `author`, `updated`).
+- [ENHANCEMENT] **Add column** — enter title + Lucene query to add a query-count column at runtime; counts fetched via Polarion REST (`getRestApiToken`) with the same work-item / Doc link pattern as configured columns.
+- [ENHANCEMENT] **Column and field pickers** — checkbox chips to show or hide added field columns and query columns without reloading the widget.
+- [ENHANCEMENT] **Reset** — clears row filter, user-added columns/fields, visibility overrides, and restores toolbar defaults from widget parameters.
+
+### Removed / replaced
+- [ENHANCEMENT] Removed Velocity table macros (`prepareColumnsMacro`, `prepareRowsMacro`, `renderTableStartMacro`, `renderTableEndMacro`, `renderTableHeaderMacro`, `renderTableRowsMacro`); logic moved to span serialization (server) and DOM rendering (client).
