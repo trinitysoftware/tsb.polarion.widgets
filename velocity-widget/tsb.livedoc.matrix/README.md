@@ -5,7 +5,7 @@
 | Property | Value |
 |----------|--------|
 | Widget id | `tsb.livedoc.matrix` |
-| Label | TSB LiveDoc Matrix 2.0 |
+| Label | TSB LiveDoc Matrix 2.1 |
 | Polarion path | `.polarion/pages/widgets/tsb.livedoc.matrix` |
 
 ## Feature Matrix

@@ -42,10 +42,10 @@ $parameters.put("dataSet", $factory.dataSet("Data Set").prototype().document().a
 ## When we create a report, we can pull user stories, evaluate their status, which document it is linked to, etc.
 ## --------------------------------------------------------------------------
 
-## ==========================================================================
+## --------------------------------------------------------------------------
 ## Parameters are the conditions or filters that we can see in the widget
 ## These can help filter the data accordingly - aligned with what users want to see
-## ==========================================================================
+## --------------------------------------------------------------------------
 $parameters.put("showSignaturesStatus", $factory.bool("Show Signatures Status").value(true).build())
 $parameters.put("showUnresolvedComments", $factory.bool("Show Unresolved Comments").value(true).build())
 $parameters.put("showProject", $factory.bool("Show Project").value(true).build())

@@ -35,6 +35,53 @@
 ## --------------------------------------------------------------------------
 
 ## ==========================================================================
+## FLOW
+## ==========================================================================
+##
+## PURPOSE
+##   LiveDoc Matrix: one row per LiveDoc (document), columns for fields. 
+##   Toolbar for filter, show/hide columns, add field/column at runtime.
+##
+## ARCHITECTURE (two phases, one page load)
+##   1. SERVER (Velocity, runs once) — query Polarion, pre-render HTML snippets,
+##      write them into hidden <span value="..."> tags. Output empty table shell.
+##   2. CLIENT (JavaScript) — read spans, build header/rows, handle UI events.
+##      Runtime-added columns fetch counts via REST (getRestApiToken).
+##   There is no live Velocity↔JS bridge after the page is rendered.
+##
+## FILE MAP (top to bottom)
+##   • Parameters + validation ($projectId, $docsQuery, $allowRendering)
+##   • <script> — all client logic (grouped: DOM, Config, State, Table, Toolbar, Events, Render)
+##   • <style>  — scoped to [data-livedoc-matrix-root]
+##   • HTML shell — toolbar, empty <table>, hidden #params div, boot <img>
+##
+## SERVER FLOW (Velocity — Steps 1–5)
+##   Step 1  Read widget params; Lucene search → $docList
+##   Step 2  #foreach $doc — pre-render project/space/doc/fields/signatures into spans
+##   Step 3  Per row × query column — workItems().count() + portal links → cellHtml spans
+##   Step 4  All spans land in hidden #${matrixRootId}-params (JS data contract)
+##   Step 5  Output toolbar + empty thead/tbody + CSS; stop (no visible rows yet)
+##
+## CLIENT FLOW (JavaScript)
+##   Boot    <img onload="displayMatrix(this)"> → bootAllVisibleMatrixWidgets()
+##   Setup   resolveActiveMatrixRoot(fromNode) → activeMatrixRoot + matrixRootId
+##           loadMatrixConfiguration() reads #params spans into documentRows[]
+##   Draw    renderMatrixTable() fills #header-row and #body from documentRows
+##   Events  Delegated on [data-livedoc-matrix-root]: click/change/input/keydown
+##           Per-instance state stored on matrixRoot._ldmx
+##
+## KEY DOM CONCEPTS
+##   matrixRootId     Safe id prefix (ldmx_<projectId>) — all element ids use this
+##   activeMatrixRoot Current widget div [data-livedoc-matrix-root] JS operates on
+##   fromNode         DOM hint passed to resolveActiveMatrixRoot (click target or boot img)
+##   data-ldmx        Attribute marking toolbar controls inside a matrix
+##
+## MULTI-WIDGET
+##   Page may embed several matrices. isVisibleMatrixRoot() skips hidden tabs/panels.
+##   resolveActiveMatrixRoot() picks the visible instance the user interacted with.
+## --------------------------------------------------------------------------
+
+## ==========================================================================
 ## Global Texts
 ## ==========================================================================
 #set ( $debug = false )
@@ -63,7 +110,11 @@
 ## Main Code starts here
 ## ==========================================================================
 #if ( $allowRendering )
-    
+
+    ## --------------------------------------------------------------------------
+    ## TABLE RENDER FLOW — see PLAN at top of file (Steps 1–5 marked below)
+    ## --------------------------------------------------------------------------
+
     ## --------------------------------------------------------------------------
     ## projectService is an interface (IProjectService) from the package .com.polarion.alm.projects
     ## This component provides ways to create, modify, and delete projects.
@@ -85,20 +136,31 @@
     ## --------------------------------------------------------------------------
     #set ( $q = '"' )
 
-
+    ## --------------------------------------------------------------------------
+    ## This is for parsing the comma-separated additional column fields values. 
+    ## These are the additional ones we see that can be added to the table.
+    ## The parsing has to be done because we need a list of field ids to render columns.
+    ## These field IDs are used to render their individual columns.
+    ## --------------------------------------------------------------------------
     #set ( $fieldsRaw = $parameters.columnFields.value() )
     #set ( $fieldsId = $fieldsRaw.split( "," ) )
-    #set ( $docs = $transaction.documents().search().query( $docsQuery ).sort( "project.id space.id title" ) )
 
     ## --------------------------------------------------------------------------
+    ## Step 1 — Velocity reads widget parameters (project scope, document query,
+    ## column fields, extra query columns) and runs a Lucene search via
+    ## $transaction.documents().search().query($docsQuery) to get the document
+    ## list ($docList).
+    ##
     ## Materialize doc list once
     ## NOTE: $void is a convention meaning “discard the result.” In Velocity you can't do a
     ## standalone .add() call; assign to a dummy variable when you only need the side effect.
     ## --------------------------------------------------------------------------
+    #set ( $docs = $transaction.documents().search().query( $docsQuery ).sort( "project.id space.id title" ) )
     #set ( $docList = [] )
     #foreach ( $doc in $docs )
         #set ( $void = $docList.add( $doc ) )
     #end
+
     #set ( $firstDoc = "" )
     #if ( $docList.size() > 0 )
         #set ( $firstDoc = $docList.get( 0 ) )
@@ -114,6 +176,7 @@
     ## so nasty characters - quotes, sapces, etc., can't break the element lookup.
     ## --------------------------------------------------------------------------
     #set ( $matrixRootId = "ldmx_${projectId.replaceAll( '[^a-zA-Z0-9_]', '_' )}" )
+
     #set ( $allFieldIds = [] )
     #foreach ( $fieldIdPart in $fieldsId )
         #set ( $trimmedFieldId = $fieldIdPart.trim() )
@@ -125,7 +188,7 @@
     ## --------------------------------------------------------------------------
     ## Extra field ids — pre-render row data only (no toolbar checkboxes until user adds via Add field)
     ## --------------------------------------------------------------------------
-    #foreach ( $extraFieldId in ["status","updated","author","created","severity","priority","type","title"] )
+    #foreach ( $extraFieldId in [ "status", "updated", "author", "created", "severity", "priority", "type", "title" ] )
         #set ( $found = false )
         #foreach ( $existing in $allFieldIds )
             #if ( $existing.equals( $extraFieldId ) )
@@ -137,875 +200,1169 @@
         #end
     #end
 
-<script>
+    <script>
 
-if ( !window.__ldmxMatrix ) 
-    window.__ldmxMatrix = true;
+        // =======================================================================
+        // Globals
+        // =======================================================================
 
-let restApiToken;
-if ( window.getRestApiToken ) 
-    restApiToken = window.getRestApiToken() 
-else 
-    restApiToken = "";
+        /*
+            Rest API tokens will be used to fetch work item counts
+            refer to fetchWorkItemCount for this
 
-let activeMatrixRoot = null;
-let matrixRootId = "";
+            You can refer to this discussion in opening work items with some fields
+            already pre-filled:
+            https://community.sw.siemens.com/s/question/0D5KZ000006mEhj0AE/possible-to-open-workitem-form-in-create-mode-prefilled
+        */
+        if ( !window.__ldmxMatrix )
+            window.__ldmxMatrix = true;
 
-function isVisibleMatrixRoot( element ) {
-    if (!element || !element.isConnected) return false;
-    const computedStyle = window.getComputedStyle(element);
-    if (computedStyle.display === "none" || computedStyle.visibility === "hidden") return false;
-    return element.getClientRects().length > 0;
-}
+        let restApiToken;
+        if ( window.getRestApiToken )
+            restApiToken = window.getRestApiToken();
+        else
+            restApiToken = "";
 
-function resolveActiveMatrixRoot(fromNode) {
-    const allRoots = [...document.querySelectorAll("[data-livedoc-matrix-root]")];
-    let matrixRoot = fromNode && fromNode.closest ? fromNode.closest("[data-livedoc-matrix-root]") : null;
-    if (matrixRoot && isVisibleMatrixRoot(matrixRoot)) {
-        activeMatrixRoot = matrixRoot;
-        matrixRootId = matrixRoot.id;
-        return matrixRoot;
-    }
-    const visibleRoots = allRoots.filter(isVisibleMatrixRoot);
-    if (fromNode && visibleRoots.length) {
-        matrixRoot = visibleRoots.find(root => root.contains(fromNode)) || visibleRoots[visibleRoots.length - 1];
-    } else if (visibleRoots.length) {
-        matrixRoot = visibleRoots[visibleRoots.length - 1];
-    } else {
-        matrixRoot = allRoots[allRoots.length - 1] || matrixRoot;
-    }
-    if (!matrixRoot) return null;
-    activeMatrixRoot = matrixRoot;
-    matrixRootId = matrixRoot.id;
-    return matrixRoot;
-}
+        /*
+            activeMatrixRoot - which matrix widget is the code working on right now
+            matrixRootId - that widget's ID prefix used to find its buttons, table, hidden config data
+        */
+        let activeMatrixRoot = null;
+        let matrixRootId = "";
 
-function findMatrixElementByIdSuffix(elementIdSuffix) {
-    if (!activeMatrixRoot || !matrixRootId) return null;
-    const fullElementId = matrixRootId + "-" + elementIdSuffix;
-    const nodesWithId = activeMatrixRoot.querySelectorAll("[id]");
-    for (let index = 0; index < nodesWithId.length; index++) {
-        if (nodesWithId[index].id === fullElementId) return nodesWithId[index];
-    }
-    return null;
-}
+        // =======================================================================
+        // DOM — matrix root and element lookup
+        // =======================================================================
 
-function getMatrixState(matrixRoot) {
-    if (!matrixRoot._ldmx) {
-        matrixRoot._ldmx = {
-            addedColumns: [],
-            hiddenColumnKeys: new Set(),
-            addedFields: [],
-            hiddenFieldKeys: new Set(),
-            renderId: "",
-            showProject: true,
-            showSpace: true,
-            showSignatures: true,
-            fieldsInitialized: false
-        };
-    }
-    return matrixRoot._ldmx;
-}
+        /*
+            This is used to check if a matrix widget element is actually visible on the page.
+        */
+        function isVisibleMatrixRoot( element ) {
+            if ( !element || !element.isConnected )
+                return false;
 
-function findMatrixElementByDataAttribute(dataAttributeValue) {
-    return activeMatrixRoot ? activeMatrixRoot.querySelector('[data-ldmx="' + dataAttributeValue + '"]') : null;
-}
+            const computedStyle = window.getComputedStyle( element );
+            if ( computedStyle.display === "none" || computedStyle.visibility === "hidden" )
+                return false;
 
-function readSpanValue(spanIdSuffix, returnHtml) {
-    const spanElement = findMatrixElementByIdSuffix(spanIdSuffix);
-    if (!spanElement) return "";
-    const rawValue = spanElement.getAttribute("value") || "";
-    const parsedDocument = new DOMParser().parseFromString(rawValue, "text/html").body;
-    return returnHtml ? parsedDocument.innerHTML : parsedDocument.textContent;
-}
-
-function readBooleanSpan(spanIdSuffix) {
-    return readSpanValue(spanIdSuffix).toLowerCase() === "true";
-}
-
-function loadMatrixConfiguration() {
-    const matrixState = getMatrixState(activeMatrixRoot);
-    const scopeProjectId = readSpanValue("projectId");
-    const defaultFieldIds = new Set(readSpanValue("columnFields").split(",").map(part => part.trim().toLowerCase()).filter(Boolean));
-    const fieldCatalogCount = parseInt(readSpanValue("fieldCatalogCount"), 10) || 0;
-    const fieldCatalog = [];
-    for (let catalogIndex = 1; catalogIndex <= fieldCatalogCount; catalogIndex++) {
-        fieldCatalog.push({
-            id: readSpanValue("fieldCatalogId_" + catalogIndex),
-            label: readSpanValue("fieldCatalogLabel_" + catalogIndex)
-        });
-    }
-    const queryColumnCount = parseInt(readSpanValue("columnCount"), 10) || 0;
-    const queryColumns = [];
-    for (let columnIndex = 1; columnIndex <= queryColumnCount; columnIndex++) {
-        queryColumns.push({
-            key: "c" + columnIndex,
-            title: readSpanValue("columnTitle_" + columnIndex),
-            query: readSpanValue("columnQuery_" + columnIndex),
-            builtIn: true,
-            index: columnIndex
-        });
-    }
-    const documentRowCount = parseInt(readSpanValue("rowCount"), 10) || 0;
-    const documentRows = [];
-    for (let rowIndex = 1; rowIndex <= documentRowCount; rowIndex++) {
-        const fieldHtmlById = {};
-        fieldCatalog.forEach(field => {
-            fieldHtmlById[field.id] = readSpanValue("rowField_" + rowIndex + "_" + field.id, true);
-        });
-        const countCellsByColumnKey = {};
-        for (let columnIndex = 1; columnIndex <= queryColumnCount; columnIndex++) {
-            countCellsByColumnKey["c" + columnIndex] = readSpanValue("cellHtml_" + rowIndex + "_" + columnIndex, true);
+            return element.getClientRects().length > 0;
         }
-        documentRows.push({
-            searchText: (readSpanValue("rowSearch_" + rowIndex) + " " + readSpanValue("rowDocName_" + rowIndex) + " " + readSpanValue("rowDocSpace_" + rowIndex)).toLowerCase(),
-            rowQuery: readSpanValue("rowQuery_" + rowIndex),
-            projectId: readSpanValue("rowProjectId_" + rowIndex),
-            documentSpace: readSpanValue("rowDocSpace_" + rowIndex),
-            documentName: readSpanValue("rowDocName_" + rowIndex),
-            projectHtml: readSpanValue("rowProjectHtml_" + rowIndex, true),
-            spaceHtml: readSpanValue("rowSpaceHtml_" + rowIndex, true),
-            documentHtml: readSpanValue("rowDocHtml_" + rowIndex, true),
-            fieldHtmlById,
-            signaturesHtml: readSpanValue("rowSignaturesHtml_" + rowIndex, true),
-            countCellsByColumnKey
-        });
-    }
-    return {
-        scopeProjectId,
-        defaultFieldIds,
-        fieldCatalog,
-        queryColumns,
-        documentRows,
-        matrixState
-    };
-}
 
-function markDefaultFieldVisibilityInitialized(matrixState) {
-    if (matrixState.fieldsInitialized) return;
-    matrixState.fieldsInitialized = true;
-}
+        function resolveActiveMatrixRoot( fromNode ) {
+            const allRoots = [ ...document.querySelectorAll( "[data-livedoc-matrix-root]" ) ];
+            
+            /*
+                When something happens or something's triggered, walk up to the outer matrix container
+                and tell the code which matrix instance the user is interacting with.
 
-function resetMatrixStateIfWidgetReloaded(widgetParameterDefaults, matrixState) {
-    const renderId = readSpanValue("matrixRenderId");
-    if (!renderId || renderId === matrixState.renderId) return;
-    matrixState.renderId = renderId;
-    matrixState.addedColumns = [];
-    matrixState.hiddenColumnKeys = new Set();
-    matrixState.addedFields = [];
-    matrixState.hiddenFieldKeys = new Set();
-    matrixState.fieldsInitialized = false;
-    matrixState.showProject = widgetParameterDefaults.showProject;
-    matrixState.showSpace = widgetParameterDefaults.showSpace;
-    matrixState.showSignatures = widgetParameterDefaults.showSignatures;
-}
+                fromNode is a normal HTML DOM element, like a <div>, <button> etc. 
+                .closest(...) means walking up from that element to find the matrix wrapper
+                .contains(fromNode) means check which visible matrix contains that element
 
-function getAllQueryColumns(matrixConfiguration, matrixState) {
-    return matrixConfiguration.queryColumns.concat(matrixState.addedColumns);
-}
+                The next line of code defines the value of matrix root.
+                If fromNode and fromNode.closest are both true, matrixRoot becomes fromNode.closest.
+                Otherwise, it becomes null.
+            */
+            let matrixRoot = fromNode && fromNode.closest ? fromNode.closest( "[data-livedoc-matrix-root]" ) : null;
 
-function getVisibleQueryColumns(matrixConfiguration, matrixState) {
-    return getAllQueryColumns(matrixConfiguration, matrixState).filter(column => !matrixState.hiddenColumnKeys.has(column.key));
-}
-
-function getFieldVisibilityKey(field) { return "f:" + field.id; }
-
-function getDefaultFieldColumns(matrixConfiguration) {
-    return matrixConfiguration.fieldCatalog.filter(field =>
-        matrixConfiguration.defaultFieldIds.has(field.id.toLowerCase()));
-}
-
-function getVisibleFieldColumns(matrixConfiguration, matrixState) {
-    const visibleFieldColumns = getDefaultFieldColumns(matrixConfiguration);
-    const defaultFieldIdsSeen = new Set(visibleFieldColumns.map(field => field.id.toLowerCase()));
-    matrixState.addedFields.forEach(field => {
-        const fieldIdLower = field.id.toLowerCase();
-        if (defaultFieldIdsSeen.has(fieldIdLower)) return;
-        if (!matrixState.hiddenFieldKeys.has(getFieldVisibilityKey(field))) {
-            defaultFieldIdsSeen.add(fieldIdLower);
-            visibleFieldColumns.push(field);
-        }
-    });
-    return visibleFieldColumns;
-}
-
-function addFieldColumnById(fieldIdInput, matrixState, matrixConfiguration) {
-    let fieldId = (fieldIdInput || "").trim().toLowerCase();
-    if (!fieldId) return;
-    if (matrixConfiguration.defaultFieldIds.has(fieldId)) return;
-    const catalogField = matrixConfiguration.fieldCatalog.find(field => field.id.toLowerCase() === fieldId);
-    const fieldLabel = catalogField ? catalogField.label : fieldId;
-    if (!matrixState.addedFields.some(field => field.id.toLowerCase() === fieldId)) {
-        matrixState.addedFields.push({ id: fieldId, label: fieldLabel });
-    }
-    matrixState.hiddenFieldKeys.delete(getFieldVisibilityKey({ id: fieldId }));
-}
-
-function createTableCell(cellHtml, centerAlign) {
-    const tableCell = document.createElement("td");
-    tableCell.className = "ldmx-cell" + (centerAlign ? " ldmx-cell--center" : "");
-    if (cellHtml) tableCell.innerHTML = cellHtml;
-    return tableCell;
-}
-
-function createTableHeader(headerText, alignLeft) {
-    const tableHeader = document.createElement("th");
-    tableHeader.className = "ldmx-header" + (alignLeft ? " ldmx-header--left" : "");
-    tableHeader.textContent = headerText;
-    return tableHeader;
-}
-
-function buildWorkItemsPortalLink(projectId, luceneQuery) {
-    return "/polarion/#/project/" + encodeURIComponent(projectId) + "/workitems?query=" + encodeURIComponent(luceneQuery);
-}
-
-function buildDocumentPortalLink(projectId, documentSpace, documentName, luceneQuery) {
-    return "/polarion/#/project/" + encodeURIComponent(projectId) + "/wiki/" + encodeURIComponent(documentSpace) + "/sheet/" + encodeURIComponent(documentName) + "?query=" + encodeURIComponent(luceneQuery);
-}
-
-async function fetchWorkItemCount(projectId, luceneQuery) {
-    if (!restApiToken) return "?";
-    const restUrl = "/polarion/rest/v1/projects/" + encodeURIComponent(projectId) + "/workitems?query="
-        + encodeURIComponent(luceneQuery) + "&page[size]=1&fields[workitems]=id";
-    try {
-        const response = await fetch(restUrl, { headers: { Authorization: "Bearer " + restApiToken } });
-        if (!response.ok) return "?";
-        const responseJson = await response.json();
-        return responseJson.meta?.totalCount ?? responseJson.meta?.total ?? 0;
-    } catch (error) { return "?"; }
-}
-
-function buildCountCellHtml(projectId, documentRow, queryColumn, workItemCount) {
-    const combinedQuery = documentRow.rowQuery + " AND (" + queryColumn.query + ")";
-    return '<a href="' + buildWorkItemsPortalLink(projectId, combinedQuery) + '">' + workItemCount + '</a> / <a href="' + buildDocumentPortalLink(projectId, documentRow.documentSpace, documentRow.documentName, combinedQuery) + '">Doc</a>';
-}
-
-function syncFieldColumnPicker(matrixConfiguration, matrixState) {
-    const fieldPickerContainer = findMatrixElementByIdSuffix("field-picker");
-    if (!fieldPickerContainer) return;
-    fieldPickerContainer.innerHTML = "";
-    matrixState.addedFields.forEach(field => {
-        const labelElement = document.createElement("label");
-        labelElement.className = "ldmx-picker-item";
-        const checkbox = document.createElement("input");
-        checkbox.type = "checkbox";
-        const visibilityKey = getFieldVisibilityKey(field);
-        checkbox.checked = !matrixState.hiddenFieldKeys.has(visibilityKey);
-        checkbox.onchange = () => {
-            if (checkbox.checked) matrixState.hiddenFieldKeys.delete(visibilityKey);
-            else matrixState.hiddenFieldKeys.add(visibilityKey);
-            renderMatrixTable();
-        };
-        labelElement.appendChild(checkbox);
-        labelElement.appendChild(document.createTextNode(" " + field.label));
-        fieldPickerContainer.appendChild(labelElement);
-    });
-}
-
-function syncQueryColumnPicker(matrixConfiguration, matrixState) {
-    const columnPickerContainer = findMatrixElementByIdSuffix("column-picker");
-    if (!columnPickerContainer) return;
-    columnPickerContainer.innerHTML = "";
-    getAllQueryColumns(matrixConfiguration, matrixState).forEach(queryColumn => {
-        const labelElement = document.createElement("label");
-        labelElement.className = "ldmx-picker-item";
-        const checkbox = document.createElement("input");
-        checkbox.type = "checkbox";
-        checkbox.checked = !matrixState.hiddenColumnKeys.has(queryColumn.key);
-        checkbox.onchange = () => {
-            if (checkbox.checked) matrixState.hiddenColumnKeys.delete(queryColumn.key);
-            else matrixState.hiddenColumnKeys.add(queryColumn.key);
-            renderMatrixTable();
-        };
-        labelElement.appendChild(checkbox);
-        labelElement.appendChild(document.createTextNode(" " + queryColumn.title));
-        columnPickerContainer.appendChild(labelElement);
-    });
-}
-
-function applyToolbarDefaultsFromWidgetParameters(matrixState) {
-    matrixState.showProject = readBooleanSpan("showProject");
-    matrixState.showSpace = readBooleanSpan("showSpace");
-    matrixState.showSignatures = readBooleanSpan("showSignaturesStatus");
-    const showProjectCheckbox = findMatrixElementByDataAttribute("show-project");
-    const showSpaceCheckbox = findMatrixElementByDataAttribute("show-space");
-    const showSignaturesCheckbox = findMatrixElementByDataAttribute("show-signatures");
-    if (showProjectCheckbox) showProjectCheckbox.checked = matrixState.showProject;
-    if (showSpaceCheckbox) showSpaceCheckbox.checked = matrixState.showSpace;
-    if (showSignaturesCheckbox) showSignaturesCheckbox.checked = matrixState.showSignatures;
-}
-
-function resetMatrixFilters(matrixState) {
-    matrixState.addedColumns = [];
-    matrixState.hiddenColumnKeys = new Set();
-    matrixState.addedFields = [];
-    matrixState.hiddenFieldKeys = new Set();
-    matrixState.fieldsInitialized = false;
-    applyToolbarDefaultsFromWidgetParameters(matrixState);
-    const rowFilterInput = findMatrixElementByIdSuffix("row-filter");
-    const newColumnTitleInput = findMatrixElementByIdSuffix("new-col-title");
-    const newColumnQueryInput = findMatrixElementByIdSuffix("new-col-query");
-    const newFieldIdInput = findMatrixElementByIdSuffix("new-field-id");
-    if (rowFilterInput) rowFilterInput.value = "";
-    if (newColumnTitleInput) newColumnTitleInput.value = "";
-    if (newColumnQueryInput) newColumnQueryInput.value = "";
-    if (newFieldIdInput) newFieldIdInput.value = "";
-    const matrixConfiguration = loadMatrixConfiguration();
-    markDefaultFieldVisibilityInitialized(matrixState);
-    syncFieldColumnPicker(matrixConfiguration, matrixState);
-    syncQueryColumnPicker(matrixConfiguration, matrixState);
-    renderMatrixTable();
-}
-
-function initializeToolbarFromWidgetParameters(matrixConfiguration, matrixState) {
-    const toolbarElement = findMatrixElementByIdSuffix("toolbar");
-    if (!toolbarElement || toolbarElement.dataset.matrixInit) return;
-    toolbarElement.dataset.matrixInit = "1";
-    applyToolbarDefaultsFromWidgetParameters(matrixState);
-}
-
-function onMatrixRootClick( clickEvent ) {
-    const matrixRoot = clickEvent.currentTarget;
-    if ( !resolveActiveMatrixRoot( matrixRoot ) ) return;
-    const matrixState = getMatrixState( activeMatrixRoot );
-    const controlElement = clickEvent.target.closest( "[data-ldmx]" );
-    if ( !controlElement || !matrixRoot.contains( controlElement ) ) return;
-    const matrixConfiguration = loadMatrixConfiguration();
-    if ( controlElement.dataset.ldmx === "add-field" ) {
-        clickEvent.preventDefault();
-        addFieldColumnById( ( findMatrixElementByDataAttribute( "new-field-id" ) || {} ).value, matrixState, matrixConfiguration );
-        const newFieldIdInput = findMatrixElementByDataAttribute( "new-field-id" );
-        if ( newFieldIdInput ) newFieldIdInput.value = "";
-        syncFieldColumnPicker( matrixConfiguration, matrixState );
-        renderMatrixTable();
-    } else if ( controlElement.dataset.ldmx === "add-column" ) {
-        clickEvent.preventDefault();
-        const newColumnTitleInput = findMatrixElementByDataAttribute( "new-col-title" );
-        const newColumnQueryInput = findMatrixElementByDataAttribute( "new-col-query" );
-        const columnTitle = newColumnTitleInput ? newColumnTitleInput.value.trim() : "";
-        const columnQuery = newColumnQueryInput ? newColumnQueryInput.value.trim() : "";
-        if ( !columnTitle || !columnQuery ) return;
-        matrixState.addedColumns.push( { key: "a" + Date.now(), title: columnTitle, query: columnQuery, builtIn: false } );
-        if ( newColumnTitleInput ) newColumnTitleInput.value = "";
-        if ( newColumnQueryInput ) newColumnQueryInput.value = "";
-        syncQueryColumnPicker( matrixConfiguration, matrixState );
-        renderMatrixTable();
-    } else if ( controlElement.dataset.ldmx === "reset-filters" ) {
-        clickEvent.preventDefault();
-        resetMatrixFilters( matrixState );
-    }
-}
-
-function onMatrixRootChange( changeEvent ) {
-    const matrixRoot = changeEvent.currentTarget;
-    if ( !resolveActiveMatrixRoot( matrixRoot ) ) return;
-    const matrixState = getMatrixState( activeMatrixRoot );
-    const controlElement = changeEvent.target.closest( "[data-ldmx]" );
-    if ( !controlElement || !matrixRoot.contains( controlElement ) ) return;
-    if ( controlElement.dataset.ldmx === "show-project" ) {
-        matrixState.showProject = controlElement.checked;
-        renderMatrixTable();
-    } else if ( controlElement.dataset.ldmx === "show-space" ) {
-        matrixState.showSpace = controlElement.checked;
-        renderMatrixTable();
-    } else if ( controlElement.dataset.ldmx === "show-signatures" ) {
-        matrixState.showSignatures = controlElement.checked;
-        renderMatrixTable();
-    }
-}
-
-function onMatrixRootInput( inputEvent ) {
-    const matrixRoot = inputEvent.currentTarget;
-    if ( !resolveActiveMatrixRoot( matrixRoot ) ) return;
-    const controlElement = inputEvent.target.closest( "[data-ldmx]" );
-    if ( controlElement && controlElement.dataset.ldmx === "row-filter" ) renderMatrixTable();
-}
-
-function onMatrixRootKeydown( keydownEvent ) {
-    const matrixRoot = keydownEvent.currentTarget;
-    if ( !resolveActiveMatrixRoot( matrixRoot ) ) return;
-    const controlElement = keydownEvent.target.closest( "[data-ldmx]" );
-    if ( !controlElement || controlElement.dataset.ldmx !== "new-field-id" || keydownEvent.key !== "Enter" ) return;
-    keydownEvent.preventDefault();
-    const matrixState = getMatrixState(activeMatrixRoot);
-    const matrixConfiguration = loadMatrixConfiguration();
-    addFieldColumnById(controlElement.value, matrixState, matrixConfiguration);
-    controlElement.value = "";
-    syncFieldColumnPicker(matrixConfiguration, matrixState);
-    renderMatrixTable();
-}
-
-function bindMatrixRootEventHandlers(matrixRoot) {
-    if (!matrixRoot || matrixRoot.dataset.ldmxBound) return;
-    matrixRoot.dataset.ldmxBound = "1";
-    matrixRoot.addEventListener("click", onMatrixRootClick);
-    matrixRoot.addEventListener("change", onMatrixRootChange);
-    matrixRoot.addEventListener("input", onMatrixRootInput);
-    matrixRoot.addEventListener("keydown", onMatrixRootKeydown);
-}
-
-function renderMatrixTable() {
-    if (!activeMatrixRoot) return;
-    const matrixConfiguration = loadMatrixConfiguration();
-    const matrixState = matrixConfiguration.matrixState;
-    const rowFilterInput = findMatrixElementByIdSuffix("row-filter");
-    const rowFilterText = rowFilterInput ? rowFilterInput.value.trim().toLowerCase() : "";
-    const visibleQueryColumns = getVisibleQueryColumns(matrixConfiguration, matrixState);
-    const visibleFieldColumns = getVisibleFieldColumns(matrixConfiguration, matrixState);
-    const headerRowElement = findMatrixElementByIdSuffix("header-row");
-    const tableBodyElement = findMatrixElementByIdSuffix("body");
-    if (!headerRowElement || !tableBodyElement) return;
-    headerRowElement.innerHTML = "";
-    tableBodyElement.innerHTML = "";
-    if (matrixState.showProject) headerRowElement.appendChild(createTableHeader("Project", true));
-    if (matrixState.showSpace) headerRowElement.appendChild(createTableHeader("Space", true));
-    headerRowElement.appendChild(createTableHeader("Document", true));
-    visibleFieldColumns.forEach(field => headerRowElement.appendChild(createTableHeader(field.label)));
-    if (matrixState.showSignatures) headerRowElement.appendChild(createTableHeader("Signatures"));
-    visibleQueryColumns.forEach(queryColumn => headerRowElement.appendChild(createTableHeader(queryColumn.title)));
-
-    matrixConfiguration.documentRows.forEach(documentRow => {
-        if (rowFilterText && documentRow.searchText.indexOf(rowFilterText) < 0) return;
-        const tableRow = document.createElement("tr");
-        tableRow.className = "ldmx-row";
-        if (matrixState.showProject) tableRow.appendChild(createTableCell(documentRow.projectHtml));
-        if (matrixState.showSpace) tableRow.appendChild(createTableCell(documentRow.spaceHtml));
-        tableRow.appendChild(createTableCell(documentRow.documentHtml));
-        visibleFieldColumns.forEach(field => tableRow.appendChild(createTableCell(documentRow.fieldHtmlById[field.id] || "—", true)));
-        if (matrixState.showSignatures) tableRow.appendChild(createTableCell(documentRow.signaturesHtml));
-        visibleQueryColumns.forEach(queryColumn => {
-            const countCell = createTableCell("", true);
-            if (queryColumn.builtIn) {
-                countCell.innerHTML = documentRow.countCellsByColumnKey[queryColumn.key] || "";
-            } else {
-                countCell.textContent = "...";
-                const combinedQuery = documentRow.rowQuery + " AND (" + queryColumn.query + ")";
-                fetchWorkItemCount(matrixConfiguration.scopeProjectId, combinedQuery).then(workItemCount => {
-                    countCell.innerHTML = buildCountCellHtml(matrixConfiguration.scopeProjectId, documentRow, queryColumn, workItemCount);
-                });
+            if ( matrixRoot && isVisibleMatrixRoot( matrixRoot ) ) {
+                activeMatrixRoot = matrixRoot;
+                matrixRootId = matrixRoot.id;
+                return matrixRoot;
             }
-            tableRow.appendChild(countCell);
-        });
-        tableBodyElement.appendChild(tableRow);
-    });
-}
 
-function displayMatrix(fromNode) {
-    if (!resolveActiveMatrixRoot(fromNode)) return;
-    const matrixState = getMatrixState(activeMatrixRoot);
-    const matrixConfiguration = loadMatrixConfiguration();
+            /*
+                Keeps only the visible matrices. Only the ones the user can see
+            */
+            const visibleRoots = allRoots.filter( isVisibleMatrixRoot );
 
-    resetMatrixStateIfWidgetReloaded({
-        showProject: readBooleanSpan("showProject"),
-        showSpace: readBooleanSpan("showSpace"),
-        showSignatures: readBooleanSpan("showSignaturesStatus")
-    }, matrixState);
-    initializeToolbarFromWidgetParameters(matrixConfiguration, matrixState);
-    markDefaultFieldVisibilityInitialized(matrixState);
-    bindMatrixRootEventHandlers(activeMatrixRoot);
-    syncFieldColumnPicker(matrixConfiguration, matrixState);
-    syncQueryColumnPicker(matrixConfiguration, matrixState);
-    renderMatrixTable();
-}
+            if ( fromNode && visibleRoots.length ){
+                /*
+                    basically means if visibleRoots.find is null / undefined, it switches to the second statement
+                */
+                matrixRoot = visibleRoots.find( root => root.contains( fromNode ) ) || visibleRoots[ visibleRoots.length - 1 ];
+            } else if ( visibleRoots.length )
+                matrixRoot = visibleRoots[ visibleRoots.length - 1 ];
+            else
+                matrixRoot = allRoots[ allRoots.length - 1 ] || matrixRoot;
 
-function bootAllVisibleMatrixWidgets() {
-    document.querySelectorAll("[data-livedoc-matrix-root]").forEach(matrixRoot => {
-        if (!isVisibleMatrixRoot(matrixRoot)) return;
-        const bootImage = matrixRoot.querySelector('[data-ldmx="boot-img"]');
-        displayMatrix(bootImage || matrixRoot);
-        });
-    }
-    window.displayMatrix = displayMatrix;
-    window.bootAllVisibleMatrixWidgets = bootAllVisibleMatrixWidgets;
-}
-</script>
+            if ( !matrixRoot )
+                return null;
+
+            activeMatrixRoot = matrixRoot;
+            matrixRootId = matrixRoot.id;
+            return matrixRoot;
+        }
+
+        function findMatrixElementByIdSuffix( elementIdSuffix ) {
+            if ( !activeMatrixRoot || !matrixRootId )
+                return null;
+
+            const fullElementId = matrixRootId + "-" + elementIdSuffix;
+            const nodesWithId = activeMatrixRoot.querySelectorAll( "[id]" );
+
+            for ( let index = 0; index < nodesWithId.length; index++ ) {
+                if ( nodesWithId[ index ].id === fullElementId )
+                    return nodesWithId[ index ];
+            }
+            return null;
+        }
+
+        function findMatrixElementByDataAttribute( dataAttributeValue ) {
+            return activeMatrixRoot ? activeMatrixRoot.querySelector( '[data-ldmx="' + dataAttributeValue + '"]' ) : null;
+        }
+
+        /* --- State --- */
+
+        function getMatrixState( matrixRoot ) {
+            if ( !matrixRoot._ldmx )
+                matrixRoot._ldmx = {
+                    addedColumns: [],
+                    hiddenColumnKeys: new Set(),
+                    addedFields: [],
+                    hiddenFieldKeys: new Set(),
+                    renderId: "",
+                    showProject: true,
+                    showSpace: true,
+                    showSignatures: true,
+                    fieldsInitialized: false
+                };
+
+            return matrixRoot._ldmx;
+        }
+
+        // =======================================================================
+        // Config — read server-rendered span values (Velocity #params data contract)
+        //
+        // Reads hidden <span value="..."> elements that Velocity wrote in #params.
+        // =======================================================================
+        function readSpanValue( spanIdSuffix, returnHtml ) {
+            const spanElement = findMatrixElementByIdSuffix( spanIdSuffix );
+            if ( !spanElement )
+                return "";
+
+            const rawValue = spanElement.getAttribute( "value" ) || "";
+            const parsedDocument = new DOMParser().parseFromString( rawValue, "text/html" ).body;
+            return returnHtml ? parsedDocument.innerHTML : parsedDocument.textContent;
+        }
+
+        function readBooleanSpan( spanIdSuffix ) {
+            return readSpanValue( spanIdSuffix ).toLowerCase() === "true";
+        }
+
+        /* --- Configuration --- */
+
+        function loadMatrixConfiguration() {
+            const matrixState = getMatrixState( activeMatrixRoot );
+            const scopeProjectId = readSpanValue( "projectId" );
+            const defaultFieldIds = new Set(
+                readSpanValue( "columnFields" )
+                    .split( "," )
+                    .map( part => part.trim().toLowerCase() )
+                    .filter( Boolean )
+            );
+
+            const fieldCatalogCount = parseInt( readSpanValue( "fieldCatalogCount" ), 10 ) || 0;
+            const fieldCatalog = [];
+            for ( let catalogIndex = 1; catalogIndex <= fieldCatalogCount; catalogIndex++ ) {
+                fieldCatalog.push( {
+                    id: readSpanValue( "fieldCatalogId_" + catalogIndex ),
+                    label: readSpanValue( "fieldCatalogLabel_" + catalogIndex )
+                } );
+            }
+
+            const queryColumnCount = parseInt( readSpanValue( "columnCount" ), 10 ) || 0;
+            const queryColumns = [];
+            for ( let columnIndex = 1; columnIndex <= queryColumnCount; columnIndex++ ) {
+                queryColumns.push( {
+                    key: "c" + columnIndex,
+                    title: readSpanValue( "columnTitle_" + columnIndex ),
+                    query: readSpanValue( "columnQuery_" + columnIndex ),
+                    builtIn: true,
+                    index: columnIndex
+                } );
+            }
+
+            const documentRowCount = parseInt( readSpanValue( "rowCount" ), 10 ) || 0;
+            const documentRows = [];
+            for ( let rowIndex = 1; rowIndex <= documentRowCount; rowIndex++ ) {
+                const fieldHtmlById = {};
+                fieldCatalog.forEach( field => {
+                    fieldHtmlById[ field.id ] = readSpanValue( "rowField_" + rowIndex + "_" + field.id, true );
+                } );
+
+                const countCellsByColumnKey = {};
+                for ( let columnIndex = 1; columnIndex <= queryColumnCount; columnIndex++ ) {
+                    countCellsByColumnKey[ "c" + columnIndex ] = readSpanValue( "cellHtml_" + rowIndex + "_" + columnIndex, true );
+                }
+
+                documentRows.push( {
+                    searchText: (
+                        readSpanValue( "rowSearch_" + rowIndex ) + " "
+                        + readSpanValue( "rowDocName_" + rowIndex ) + " "
+                        + readSpanValue( "rowDocSpace_" + rowIndex )
+                    ).toLowerCase(),
+                    rowQuery: readSpanValue( "rowQuery_" + rowIndex ),
+                    projectId: readSpanValue( "rowProjectId_" + rowIndex ),
+                    documentSpace: readSpanValue( "rowDocSpace_" + rowIndex ),
+                    documentName: readSpanValue( "rowDocName_" + rowIndex ),
+                    projectHtml: readSpanValue( "rowProjectHtml_" + rowIndex, true ),
+                    spaceHtml: readSpanValue( "rowSpaceHtml_" + rowIndex, true ),
+                    documentHtml: readSpanValue( "rowDocHtml_" + rowIndex, true ),
+                    fieldHtmlById,
+                    signaturesHtml: readSpanValue( "rowSignaturesHtml_" + rowIndex, true ),
+                    countCellsByColumnKey
+                } );
+            }
+            return {
+                scopeProjectId,
+                defaultFieldIds,
+                fieldCatalog,
+                queryColumns,
+                documentRows,
+                matrixState
+            };
+        }
+
+        // =======================================================================
+        // State — columns, fields, visibility
+        // =======================================================================
+        function markDefaultFieldVisibilityInitialized( matrixState ) {
+            if ( matrixState.fieldsInitialized )
+                return;
+
+            matrixState.fieldsInitialized = true;
+        }
+
+        function resetMatrixStateIfWidgetReloaded( widgetParameterDefaults, matrixState ) {
+            const renderId = readSpanValue( "matrixRenderId" );
+            if ( !renderId || renderId === matrixState.renderId )
+                return;
+
+            matrixState.renderId = renderId;
+            matrixState.addedColumns = [];
+            matrixState.hiddenColumnKeys = new Set();
+            matrixState.addedFields = [];
+            matrixState.hiddenFieldKeys = new Set();
+            matrixState.fieldsInitialized = false;
+
+            matrixState.showProject = widgetParameterDefaults.showProject;
+            matrixState.showSpace = widgetParameterDefaults.showSpace;
+            matrixState.showSignatures = widgetParameterDefaults.showSignatures;
+        }
+
+        /* --- Columns and fields --- */
+
+        function getAllQueryColumns( matrixConfiguration, matrixState ) {
+            return matrixConfiguration.queryColumns.concat( matrixState.addedColumns );
+        }
+
+        function getVisibleQueryColumns( matrixConfiguration, matrixState ) {
+            return getAllQueryColumns( matrixConfiguration, matrixState )
+                .filter( column => !matrixState.hiddenColumnKeys.has( column.key ) );
+        }
+
+        function getFieldVisibilityKey( field ) {
+            return "f:" + field.id;
+        }
+
+        function getDefaultFieldColumns( matrixConfiguration ) {
+            return matrixConfiguration.fieldCatalog.filter( field =>
+                matrixConfiguration.defaultFieldIds.has( field.id.toLowerCase() )
+            );
+        }
+
+        function getVisibleFieldColumns( matrixConfiguration, matrixState ) {
+            const visibleFieldColumns = getDefaultFieldColumns( matrixConfiguration );
+            const defaultFieldIdsSeen = new Set( visibleFieldColumns.map( field => field.id.toLowerCase() ) );
+            matrixState.addedFields.forEach( field => {
+                const fieldIdLower = field.id.toLowerCase();
+                if ( defaultFieldIdsSeen.has( fieldIdLower ) )
+                    return;
+
+                if ( !matrixState.hiddenFieldKeys.has( getFieldVisibilityKey( field ) ) ) {
+                    defaultFieldIdsSeen.add( fieldIdLower );
+                    visibleFieldColumns.push( field );
+                }
+            } );
+            return visibleFieldColumns;
+        }
+
+        function addFieldColumnById( fieldIdInput, matrixState, matrixConfiguration ) {
+            let fieldId = ( fieldIdInput || "" ).trim().toLowerCase();
+            if ( !fieldId )
+                return;
+            if ( matrixConfiguration.defaultFieldIds.has( fieldId ) )
+                return;
+
+            const catalogField = matrixConfiguration.fieldCatalog.find( field => field.id.toLowerCase() === fieldId );
+            const fieldLabel = catalogField ? catalogField.label : fieldId;
+
+            if ( !matrixState.addedFields.some( field => field.id.toLowerCase() === fieldId ) )
+                matrixState.addedFields.push( { id: fieldId, label: fieldLabel } );
+
+            matrixState.hiddenFieldKeys.delete( getFieldVisibilityKey( { id: fieldId } ) );
+        }
+
+        /* --- Table helpers --- */
+        // =======================================================================
+        // Table — cell/header builders and REST count links
+        // =======================================================================
+
+        function createTableCell( cellHtml, centerAlign ) {
+            const tableCell = document.createElement( "td" );
+            tableCell.className = "ldmx-cell" + ( centerAlign ? " ldmx-cell--center" : "" );
+
+            if ( cellHtml )
+                tableCell.innerHTML = cellHtml;
+
+            return tableCell;
+        }
+
+        function createTableHeader( headerText, alignLeft ) {
+            const tableHeader = document.createElement( "th" );
+            tableHeader.className = "ldmx-header" + ( alignLeft ? " ldmx-header--left" : "" );
+            tableHeader.textContent = headerText;
+            return tableHeader;
+        }
+
+        function buildWorkItemsPortalLink( projectId, luceneQuery ) {
+            return "/polarion/#/project/" + encodeURIComponent( projectId ) + "/workitems?query=" + encodeURIComponent( luceneQuery );
+        }
+
+        function buildDocumentPortalLink( projectId, documentSpace, documentName, luceneQuery ) {
+            return "/polarion/#/project/" + encodeURIComponent( projectId )
+                + "/wiki/" + encodeURIComponent( documentSpace )
+                + "/sheet/" + encodeURIComponent( documentName )
+                + "?query=" + encodeURIComponent( luceneQuery );
+        }
+
+        async function fetchWorkItemCount( projectId, luceneQuery ) {
+            if ( !restApiToken )
+                return "?";
+
+            const restUrl = "/polarion/rest/v1/projects/" + encodeURIComponent( projectId ) + "/workitems?query="
+                + encodeURIComponent( luceneQuery ) + "&page[size]=1&fields[workitems]=id";
+
+            try {
+                const response = await fetch( restUrl, { headers: { Authorization: "Bearer " + restApiToken } } );
+                if ( !response.ok )
+                    return "?";
+
+                const responseJson = await response.json();
+                return responseJson.meta?.totalCount ?? responseJson.meta?.total ?? 0;
+            } catch ( error ) {
+                return "?";
+            }
+        }
+
+        function buildCountCellHtml( projectId, documentRow, queryColumn, workItemCount ) {
+            const combinedQuery = documentRow.rowQuery + " AND (" + queryColumn.query + ")";
+            return '<a href="' + buildWorkItemsPortalLink( projectId, combinedQuery ) + '">' + workItemCount + '</a> / <a href="'
+                + buildDocumentPortalLink( projectId, documentRow.documentSpace, documentRow.documentName, combinedQuery ) + '">Doc</a>';
+        }
+
+        // =======================================================================
+        // Toolbar — pickers, defaults, reset
+        // =======================================================================
+
+        function syncFieldColumnPicker( matrixConfiguration, matrixState ) {
+            const fieldPickerContainer = findMatrixElementByIdSuffix( "field-picker" );
+            if ( !fieldPickerContainer )
+                return;
+
+            fieldPickerContainer.innerHTML = "";
+
+            matrixState.addedFields.forEach( field => {
+                const labelElement = document.createElement( "label" );
+                labelElement.className = "ldmx-picker-item";
+
+                const checkbox = document.createElement( "input" );
+                checkbox.type = "checkbox";
+                const visibilityKey = getFieldVisibilityKey( field );
+                checkbox.checked = !matrixState.hiddenFieldKeys.has( visibilityKey );
+
+                checkbox.onchange = () => {
+                    if ( checkbox.checked )
+                        matrixState.hiddenFieldKeys.delete( visibilityKey );
+                    else
+                        matrixState.hiddenFieldKeys.add( visibilityKey );
+
+                    renderMatrixTable();
+                };
+
+                labelElement.appendChild( checkbox );
+                labelElement.appendChild( document.createTextNode( " " + field.label ) );
+                fieldPickerContainer.appendChild( labelElement );
+            } );
+        }
+
+        function syncQueryColumnPicker( matrixConfiguration, matrixState ) {
+            const columnPickerContainer = findMatrixElementByIdSuffix( "column-picker" );
+            if ( !columnPickerContainer )
+                return;
+
+            columnPickerContainer.innerHTML = "";
+
+            getAllQueryColumns( matrixConfiguration, matrixState ).forEach( queryColumn => {
+                const labelElement = document.createElement( "label" );
+                labelElement.className = "ldmx-picker-item";
+
+                const checkbox = document.createElement( "input" );
+                checkbox.type = "checkbox";
+                checkbox.checked = !matrixState.hiddenColumnKeys.has( queryColumn.key );
+
+                checkbox.onchange = () => {
+                    if ( checkbox.checked )
+                        matrixState.hiddenColumnKeys.delete( queryColumn.key );
+                    else
+                        matrixState.hiddenColumnKeys.add( queryColumn.key );
+
+                    renderMatrixTable();
+                };
+
+                labelElement.appendChild( checkbox );
+                labelElement.appendChild( document.createTextNode( " " + queryColumn.title ) );
+                columnPickerContainer.appendChild( labelElement );
+            } );
+        }
+
+        function applyToolbarDefaultsFromWidgetParameters( matrixState ) {
+            matrixState.showProject = readBooleanSpan( "showProject" );
+            matrixState.showSpace = readBooleanSpan( "showSpace" );
+            matrixState.showSignatures = readBooleanSpan( "showSignaturesStatus" );
+
+            const showProjectCheckbox = findMatrixElementByDataAttribute( "show-project" );
+            const showSpaceCheckbox = findMatrixElementByDataAttribute( "show-space" );
+            const showSignaturesCheckbox = findMatrixElementByDataAttribute( "show-signatures" );
+
+            if ( showProjectCheckbox )
+                showProjectCheckbox.checked = matrixState.showProject;
+            if ( showSpaceCheckbox )
+                showSpaceCheckbox.checked = matrixState.showSpace;
+            if ( showSignaturesCheckbox )
+                showSignaturesCheckbox.checked = matrixState.showSignatures;
+        }
+
+        function resetMatrixFilters( matrixState ) {
+            matrixState.addedColumns = [];
+            matrixState.hiddenColumnKeys = new Set();
+            matrixState.addedFields = [];
+            matrixState.hiddenFieldKeys = new Set();
+            matrixState.fieldsInitialized = false;
+
+            applyToolbarDefaultsFromWidgetParameters( matrixState );
+
+            const rowFilterInput = findMatrixElementByIdSuffix( "row-filter" );
+            const newColumnTitleInput = findMatrixElementByIdSuffix( "new-col-title" );
+            const newColumnQueryInput = findMatrixElementByIdSuffix( "new-col-query" );
+            const newFieldIdInput = findMatrixElementByIdSuffix( "new-field-id" );
+
+            if ( rowFilterInput )
+                rowFilterInput.value = "";
+            if ( newColumnTitleInput )
+                newColumnTitleInput.value = "";
+            if ( newColumnQueryInput )
+                newColumnQueryInput.value = "";
+            if ( newFieldIdInput )
+                newFieldIdInput.value = "";
+
+            const matrixConfiguration = loadMatrixConfiguration();
+            markDefaultFieldVisibilityInitialized( matrixState );
+            syncFieldColumnPicker( matrixConfiguration, matrixState );
+            syncQueryColumnPicker( matrixConfiguration, matrixState );
+            renderMatrixTable();
+        }
+
+        function initializeToolbarFromWidgetParameters( matrixConfiguration, matrixState ) {
+            const toolbarElement = findMatrixElementByIdSuffix( "toolbar" );
+            if ( !toolbarElement || toolbarElement.dataset.matrixInit )
+                return;
+
+            toolbarElement.dataset.matrixInit = "1";
+            applyToolbarDefaultsFromWidgetParameters( matrixState );
+        }
+
+        // =======================================================================
+        // Events — click, change, input, keydown
+        // =======================================================================
+        function onMatrixRootClick( clickEvent ) {
+            const matrixRoot = clickEvent.currentTarget;
+            if ( !resolveActiveMatrixRoot( matrixRoot ) )
+                return;
+
+            const matrixState = getMatrixState( activeMatrixRoot );
+            const controlElement = clickEvent.target.closest( "[data-ldmx]" );
+            if ( !controlElement || !matrixRoot.contains( controlElement ) )
+                return;
+
+            const matrixConfiguration = loadMatrixConfiguration();
+
+            if ( controlElement.dataset.ldmx === "add-field" ) {
+                clickEvent.preventDefault();
+                addFieldColumnById(
+                    ( findMatrixElementByDataAttribute( "new-field-id" ) || {} ).value,
+                    matrixState,
+                    matrixConfiguration
+                );
+
+                const newFieldIdInput = findMatrixElementByDataAttribute( "new-field-id" );
+                if ( newFieldIdInput )
+                    newFieldIdInput.value = "";
+
+                syncFieldColumnPicker( matrixConfiguration, matrixState );
+                renderMatrixTable();
+            } else if ( controlElement.dataset.ldmx === "add-column" ) {
+                clickEvent.preventDefault();
+
+                const newColumnTitleInput = findMatrixElementByDataAttribute( "new-col-title" );
+                const newColumnQueryInput = findMatrixElementByDataAttribute( "new-col-query" );
+                const columnTitle = newColumnTitleInput ? newColumnTitleInput.value.trim() : "";
+                const columnQuery = newColumnQueryInput ? newColumnQueryInput.value.trim() : "";
+
+                if ( !columnTitle || !columnQuery )
+                    return;
+
+                matrixState.addedColumns.push( {
+                    key: "a" + Date.now(),
+                    title: columnTitle,
+                    query: columnQuery,
+                    builtIn: false
+                } );
+
+                if ( newColumnTitleInput )
+                    newColumnTitleInput.value = "";
+                if ( newColumnQueryInput )
+                    newColumnQueryInput.value = "";
+
+                syncQueryColumnPicker( matrixConfiguration, matrixState );
+                renderMatrixTable();
+            } else if ( controlElement.dataset.ldmx === "reset-filters" ) {
+                clickEvent.preventDefault();
+                resetMatrixFilters( matrixState );
+            }
+        }
+
+        function onMatrixRootChange( changeEvent ) {
+            const matrixRoot = changeEvent.currentTarget;
+            if ( !resolveActiveMatrixRoot( matrixRoot ) )
+                return;
+
+            const matrixState = getMatrixState( activeMatrixRoot );
+            const controlElement = changeEvent.target.closest( "[data-ldmx]" );
+            if ( !controlElement || !matrixRoot.contains( controlElement ) )
+                return;
+
+            if ( controlElement.dataset.ldmx === "show-project" ) {
+                matrixState.showProject = controlElement.checked;
+                renderMatrixTable();
+            } else if ( controlElement.dataset.ldmx === "show-space" ) {
+                matrixState.showSpace = controlElement.checked;
+                renderMatrixTable();
+            } else if ( controlElement.dataset.ldmx === "show-signatures" ) {
+                matrixState.showSignatures = controlElement.checked;
+                renderMatrixTable();
+            }
+        }
+
+        function onMatrixRootInput( inputEvent ) {
+            const matrixRoot = inputEvent.currentTarget;
+            if ( !resolveActiveMatrixRoot( matrixRoot ) )
+                return;
+
+            const controlElement = inputEvent.target.closest( "[data-ldmx]" );
+            if ( controlElement && controlElement.dataset.ldmx === "row-filter" )
+                renderMatrixTable();
+        }
+
+        function onMatrixRootKeydown( keydownEvent ) {
+            const matrixRoot = keydownEvent.currentTarget;
+            if ( !resolveActiveMatrixRoot( matrixRoot ) )
+                return;
+
+            const controlElement = keydownEvent.target.closest( "[data-ldmx]" );
+            if ( !controlElement || controlElement.dataset.ldmx !== "new-field-id" || keydownEvent.key !== "Enter" )
+                return;
+
+            keydownEvent.preventDefault();
+
+            const matrixState = getMatrixState( activeMatrixRoot );
+            const matrixConfiguration = loadMatrixConfiguration();
+
+            addFieldColumnById( controlElement.value, matrixState, matrixConfiguration );
+            controlElement.value = "";
+            syncFieldColumnPicker( matrixConfiguration, matrixState );
+            renderMatrixTable();
+        }
+
+        function bindMatrixRootEventHandlers( matrixRoot ) {
+            if ( !matrixRoot || matrixRoot.dataset.ldmxBound )
+                return;
+
+            matrixRoot.dataset.ldmxBound = "1";
+            matrixRoot.addEventListener( "click", onMatrixRootClick );
+            matrixRoot.addEventListener( "change", onMatrixRootChange );
+            matrixRoot.addEventListener( "input", onMatrixRootInput );
+            matrixRoot.addEventListener( "keydown", onMatrixRootKeydown );
+        }
+
+        // =======================================================================
+        // Render — table draw and boot
+        //
+        // When the boot <img onload="displayMatrix(this)"> fires, JavaScript reads
+        // those spans via loadMatrixConfiguration() and renderMatrixTable() to build
+        // the header and rows the user actually sees.
+        // =======================================================================
+
+        function renderMatrixTable() {
+            if ( !activeMatrixRoot )
+                return;
+
+            const matrixConfiguration = loadMatrixConfiguration();
+            const matrixState = matrixConfiguration.matrixState;
+
+            const rowFilterInput = findMatrixElementByIdSuffix( "row-filter" );
+            const rowFilterText = rowFilterInput ? rowFilterInput.value.trim().toLowerCase() : "";
+            const visibleQueryColumns = getVisibleQueryColumns( matrixConfiguration, matrixState );
+            const visibleFieldColumns = getVisibleFieldColumns( matrixConfiguration, matrixState );
+
+            const headerRowElement = findMatrixElementByIdSuffix( "header-row" );
+            const tableBodyElement = findMatrixElementByIdSuffix( "body" );
+            if ( !headerRowElement || !tableBodyElement )
+                return;
+
+            headerRowElement.innerHTML = "";
+            tableBodyElement.innerHTML = "";
+
+            if ( matrixState.showProject )
+                headerRowElement.appendChild( createTableHeader( "Project", true ) );
+            if ( matrixState.showSpace )
+                headerRowElement.appendChild( createTableHeader( "Space", true ) );
+
+            headerRowElement.appendChild( createTableHeader( "Document", true ) );
+            visibleFieldColumns.forEach( field => headerRowElement.appendChild( createTableHeader( field.label ) ) );
+
+            if ( matrixState.showSignatures )
+                headerRowElement.appendChild( createTableHeader( "Signatures" ) );
+
+            visibleQueryColumns.forEach( queryColumn =>
+                headerRowElement.appendChild( createTableHeader( queryColumn.title ) )
+            );
+
+            matrixConfiguration.documentRows.forEach( documentRow => {
+                if ( rowFilterText && documentRow.searchText.indexOf( rowFilterText ) < 0 )
+                    return;
+
+                const tableRow = document.createElement( "tr" );
+                tableRow.className = "ldmx-row";
+
+                if ( matrixState.showProject )
+                    tableRow.appendChild( createTableCell( documentRow.projectHtml ) );
+                if ( matrixState.showSpace )
+                    tableRow.appendChild( createTableCell( documentRow.spaceHtml ) );
+
+                tableRow.appendChild( createTableCell( documentRow.documentHtml ) );
+                visibleFieldColumns.forEach( field =>
+                    tableRow.appendChild( createTableCell( documentRow.fieldHtmlById[ field.id ] || "—", true ) )
+                );
+
+                if ( matrixState.showSignatures )
+                    tableRow.appendChild( createTableCell( documentRow.signaturesHtml ) );
+
+                visibleQueryColumns.forEach( queryColumn => {
+                    const countCell = createTableCell( "", true );
+
+                    if ( queryColumn.builtIn )
+                        countCell.innerHTML = documentRow.countCellsByColumnKey[ queryColumn.key ] || "";
+                    else {
+                        countCell.textContent = "...";
+                        const combinedQuery = documentRow.rowQuery + " AND (" + queryColumn.query + ")";
+                        fetchWorkItemCount( matrixConfiguration.scopeProjectId, combinedQuery ).then( workItemCount => {
+                            countCell.innerHTML = buildCountCellHtml(
+                                matrixConfiguration.scopeProjectId, documentRow, queryColumn, workItemCount
+                            );
+                        } );
+                    }
+
+                    tableRow.appendChild( countCell );
+                } );
+
+                tableBodyElement.appendChild( tableRow );
+            } );
+        }
+
+        function displayMatrix( fromNode ) {
+            if ( !resolveActiveMatrixRoot( fromNode ) )
+                return;
+
+            const matrixState = getMatrixState( activeMatrixRoot );
+            const matrixConfiguration = loadMatrixConfiguration();
+
+            resetMatrixStateIfWidgetReloaded( {
+                showProject: readBooleanSpan( "showProject" ),
+                showSpace: readBooleanSpan( "showSpace" ),
+                showSignatures: readBooleanSpan( "showSignaturesStatus" )
+            }, matrixState );
+
+            initializeToolbarFromWidgetParameters( matrixConfiguration, matrixState );
+            markDefaultFieldVisibilityInitialized( matrixState );
+            bindMatrixRootEventHandlers( activeMatrixRoot );
+            syncFieldColumnPicker( matrixConfiguration, matrixState );
+            syncQueryColumnPicker( matrixConfiguration, matrixState );
+            renderMatrixTable();
+        }
+
+        function bootAllVisibleMatrixWidgets() {
+            document.querySelectorAll( "[data-livedoc-matrix-root]" ).forEach( matrixRoot => {
+                if ( !isVisibleMatrixRoot( matrixRoot ) )
+                    return;
+
+                const bootImage = matrixRoot.querySelector( '[data-ldmx="boot-img"]' );
+                displayMatrix( bootImage || matrixRoot );
+            } );
+        }
+
+        window.displayMatrix = displayMatrix;
+        window.bootAllVisibleMatrixWidgets = bootAllVisibleMatrixWidgets;
+    </script>
    
-## ==========================================================================
-## LiveDoc Matrix — stylesheet (edit colors/spacing here)
-## Scoped to [data-livedoc-matrix-root] so Polarion pages are not affected.
-## ==========================================================================
-<style>
-/*
-    The square bracket means attribute selector. It is often used to "scope" CSS
-    so styles only apply inside a specific widget/component.
-
-    [data-livedoc-matrix-root] matches <div data-livedoc-matrix-root> or <div data-livedoc-matrix-root="true">
-
-    [data-livedoc-matrix-root] is also a way to say "This is the root/container of my component."
-
-    Imagine, other parts have .toolbar, and this widget, livedoc matrix, also has toolbar. In order to keep the scope
-    within our widget only, we have to use bracketing.
-*/
-[data-livedoc-matrix-root] {
-    --ldmx-accent: #3d6eae;
-    --ldmx-accent-hover: #2f5689;
-    --ldmx-surface: #f4f6f9;
-    --ldmx-border: #c8d2de;
-    --ldmx-text: #1f2937;
-    --ldmx-header-bg: #e3eaf2;
-    --ldmx-row-hover: #eef3f8;
-    --ldmx-row-stripe: #fafbfc;
-    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-    font-size: 12px;
-    color: var(--ldmx-text);
-}
-
-/*
-    What the line of code below means:
-        Find any element with class ldmx-toolbar that is inside an element 
-        with the attribute data-livedoc-matrix-root.
-    
-    Basically:
-        <div data-livedoc-matrix-root>
-            <div class="ldmx-toolbar">
-*/
-[data-livedoc-matrix-root] .ldmx-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px 12px;
-    margin-bottom: 12px;
-    padding: 10px 12px;
-    background: var(--ldmx-surface);
-    border: 1px solid var(--ldmx-border);
-    border-radius: 6px;
-}
-/*
-    flex container's children are laid out in a row by default
-
-    instead of a stack like this:
-        Button 1
-        Button 2
-        Button 3
-
-    It becomes this: Button 1   Button 2   Button 3
-
-    On the other hand, flex-wrap: wrap allows child elements to move
-    to the next line if there's not enough horizontal space already.
-    Instead of overflowing sideways, going beyond the boundary/capacity,
-    it becomes:
-        
-        Button 1   Button 2   Button 3
-        Button 4   Button 5
-    
-
-    FOR THE GAP:
-        Gap has two values:
-
-        gap: row-gap column-gap;
-
-        row gap = vertical gap between rows
-        column gap = horizontal gap between columns
-
-        If you see only one value: gap: 8px;
-        This means both row and column gaps are 8px
-
-
-    MARGINS
-        - add space outside the toolbar
-        if margin-bottom - it adds space outside its container, below it
-    
-    PADDING
-        - adds space inside the container, between its border and contents
-
-    SETTING FOR BOTH:
-        if padding / margin has only one value, e.g. padding: 10px;
-        it means all sides are 10px
-
-        IF TWO VALUES: padding: 10px 12px;
-        it means top/bottom: 10px; left/right = 12px
-
-        IF THREE VALUES: padding: 4px 8px 2px
-        it means = top: 4px, left/right: 8px, bottom: 2px
-
-        FOUR VALUES: remember clockwise = top right bottom left
-
-
-
-        AS for the two hyphens, they are called custom CSS properties, 
-        a syntax CSS uses to recognize custom variables.
-*/
-
-[data-livedoc-matrix-root] .ldmx-toolbar-section {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-}
-[data-livedoc-matrix-root] .ldmx-toolbar-section--grow {
-    flex: 1 1 200px;
-}
-[data-livedoc-matrix-root] .ldmx-toolbar-divider {
-    width: 1px;
-    height: 24px;
-    background: var(--ldmx-border);
-    margin: 0 4px;
-}
-[data-livedoc-matrix-root] .ldmx-input {
-    padding: 5px 8px;
-    border: 1px solid var(--ldmx-border);
-    border-radius: 4px;
-    font-size: 12px;
-    background: #fff;
-}
-[data-livedoc-matrix-root] .ldmx-input--filter { min-width: 200px; }
-[data-livedoc-matrix-root] .ldmx-input--short { width: 120px; }
-[data-livedoc-matrix-root] .ldmx-input--query { width: 180px; }
-[data-livedoc-matrix-root] .ldmx-btn {
-    padding: 5px 12px;
-    border: 1px solid var(--ldmx-accent);
-    border-radius: 4px;
-    background: var(--ldmx-accent);
-    color: #fff;
-    font-size: 12px;
-    cursor: pointer;
-}
-[data-livedoc-matrix-root] .ldmx-btn:hover {
-    background: var(--ldmx-accent-hover);
-    border-color: var(--ldmx-accent-hover);
-}
-[data-livedoc-matrix-root] .ldmx-btn--secondary {
-    background: #fff;
-    color: var(--ldmx-accent);
-}
-[data-livedoc-matrix-root] .ldmx-btn--secondary:hover {
-    background: var(--ldmx-row-hover);
-}
-[data-livedoc-matrix-root] .ldmx-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 8px;
-    border-radius: 4px;
-    cursor: pointer;
-    user-select: none;
-}
-[data-livedoc-matrix-root] .ldmx-toggle:hover {
-    background: rgba(255, 255, 255, 0.7);
-}
-[data-livedoc-matrix-root] .ldmx-picker {
-    display: inline-flex;
-    flex-wrap: wrap;
-    gap: 6px;
-}
-[data-livedoc-matrix-root] .ldmx-picker-item {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 3px 8px;
-    border: 1px solid var(--ldmx-border);
-    border-radius: 12px;
-    background: #fff;
-    cursor: pointer;
-}
-[data-livedoc-matrix-root] .ldmx-table-wrap {
-    overflow-x: auto;
-    border: 1px solid var(--ldmx-border);
-    border-radius: 6px;
-    background: #fff;
-}
-[data-livedoc-matrix-root] .ldmx-table {
-    width: 100%;
-    border-collapse: collapse;
-    empty-cells: show;
-}
-[data-livedoc-matrix-root] .ldmx-header {
-    text-align: center;
-    vertical-align: top;
-    padding: 8px 10px;
-    font-weight: 600;
-    font-size: 11px;
-    background: var(--ldmx-header-bg);
-    border-bottom: 2px solid var(--ldmx-border);
-    border-right: 1px solid var(--ldmx-border);
-    white-space: nowrap;
-}
-[data-livedoc-matrix-root] .ldmx-header--left {
-    text-align: left;
-    min-width: 120px;
-}
-[data-livedoc-matrix-root] .ldmx-cell {
-    text-align: left;
-    vertical-align: top;
-    padding: 6px 10px;
-    font-size: 11px;
-    border-bottom: 1px solid #e5eaf0;
-    border-right: 1px solid #eef1f5;
-}
-[data-livedoc-matrix-root] .ldmx-cell--center {
-    text-align: center;
-}
-[data-livedoc-matrix-root] .ldmx-row:nth-child(even) {
-    background: var(--ldmx-row-stripe);
-}
-[data-livedoc-matrix-root] .ldmx-row:hover {
-    background: var(--ldmx-row-hover);
-}
-[data-livedoc-matrix-root] .ldmx-table a {
-    color: var(--ldmx-accent);
-    text-decoration: none;
-}
-[data-livedoc-matrix-root] .ldmx-table a:hover {
-    text-decoration: underline;
-}
-</style>
-
-<div id="$matrixRootId" data-livedoc-matrix-root="1" class="ldmx-root">
-## --------------------------------------------------------------------------
-## JS toolbar + empty table shell (rows/header filled by displayMatrix())
-## --------------------------------------------------------------------------
-<div id="${matrixRootId}-toolbar" class="ldmx-toolbar">
-
-    <div class="ldmx-toolbar-section ldmx-toolbar-section--grow">
-        <input id="${matrixRootId}-row-filter" class="ldmx-input ldmx-input--filter" data-ldmx="row-filter" type="text" placeholder="Filter rows...">
-    </div>
-
-    <div class="ldmx-toolbar-section">
-        <label class="ldmx-toggle"><input type="checkbox" id="${matrixRootId}-show-project" data-ldmx="show-project"> Project</label>
-        <label class="ldmx-toggle"><input type="checkbox" id="${matrixRootId}-show-space" data-ldmx="show-space"> Space</label>
-        <label class="ldmx-toggle"><input type="checkbox" id="${matrixRootId}-show-signatures" data-ldmx="show-signatures"> Signatures</label>
-    </div>
-
-    <span class="ldmx-toolbar-divider"></span>
-
-    <div class="ldmx-toolbar-section">
-        <span id="${matrixRootId}-field-picker" class="ldmx-picker"></span>
-        <input id="${matrixRootId}-new-field-id" class="ldmx-input ldmx-input--short" data-ldmx="new-field-id" type="text" placeholder="Field id">
-        <button type="button" class="ldmx-btn" id="${matrixRootId}-add-field" data-ldmx="add-field">Add field</button>
-    </div>
-    
-    <span class="ldmx-toolbar-divider"></span>
-    
-    <div class="ldmx-toolbar-section">
-        <span id="${matrixRootId}-column-picker" class="ldmx-picker"></span>
-        <input id="${matrixRootId}-new-col-title" class="ldmx-input ldmx-input--short" data-ldmx="new-col-title" type="text" placeholder="Column title">
-        <input id="${matrixRootId}-new-col-query" class="ldmx-input ldmx-input--query" data-ldmx="new-col-query" type="text" placeholder="Lucene query">
-        <button type="button" class="ldmx-btn" id="${matrixRootId}-add-column" data-ldmx="add-column">Add column</button>
-        <button type="button" class="ldmx-btn ldmx-btn--secondary" id="${matrixRootId}-reset-filters" data-ldmx="reset-filters">Reset</button>
-    </div>
-
-</div>
-
-<div class="ldmx-table-wrap">
-    <table class="polarion-Document-table ldmx-table" id="${matrixRootId}-table">
-        <thead>
-            <tr id="${matrixRootId}-header-row"></tr>
-        </thead>
-        
-        <tbody id="${matrixRootId}-body"></tbody>
-    </table>
-</div>
-
-## --------------------------------------------------------------------------
-## There is no live “Velocity → JavaScript” bridge after render.
-## Velocity runs once on the server and outputs plain HTML + script.
-## JavaScript treats #params spans as the data contract (sample.vm pattern).
-## --------------------------------------------------------------------------
-## Store parameters and row/column data in HTML for JavaScript (#params must stay outside script)
-## --------------------------------------------------------------------------
-<div id="${matrixRootId}-params" style="#if ( $debug ) display:block #else display:none #end">
-    <span id="${matrixRootId}-projectId" value="$esc.html($projectId)"></span>
-    <span id="${matrixRootId}-docsQuery" value="$esc.html($docsQuery)"></span>
-    <span id="${matrixRootId}-columnFields" value="$esc.html($fieldsRaw)"></span>
-    <span id="${matrixRootId}-showProject" value="$parameters.showProject.value()"></span>
-    <span id="${matrixRootId}-showSpace" value="$parameters.showSpace.value()"></span>
-    <span id="${matrixRootId}-showSignaturesStatus" value="$parameters.showSignaturesStatus.value()"></span>
-
-    ## --------------------------------------------------------------------------
-    ## Field catalog — pre-rendered row data (widget columnFields + optional ids for Add field)
-    ## --------------------------------------------------------------------------
-    #set ( $fieldCatalogIndex = 0 )
-    #foreach ( $fieldId in $allFieldIds )
-        #set ( $fieldCatalogIndex = $fieldCatalogIndex + 1 )
-        #set ( $fieldLabel = $fieldId )
-    
-        #if ( $firstDoc != "" )
-            #set ( $fieldLabel = $!firstDoc.fields().get( $fieldId ).label() )
-        #end
-    
-        <span id="${matrixRootId}-fieldCatalogId_${fieldCatalogIndex}" value="$esc.html($fieldId)"></span>
-        <span id="${matrixRootId}-fieldCatalogLabel_${fieldCatalogIndex}" value="$esc.html($fieldLabel)"></span>
-    #end
-    <span id="${matrixRootId}-fieldCatalogCount" value="$fieldCatalogIndex"></span>
-
     ## ==========================================================================
-    ## Additional query columns (title + Lucene query per span pair)
-    ## $esc.html = HTML-escape for safe value attributes (same as encodeHtml in sample.vm)
+    ## LiveDoc Matrix — stylesheet (edit colors/spacing here)
+    ## Scoped to [data-livedoc-matrix-root] so Polarion pages are not affected.
+    ##
+    ## Step 5 (part 1) — Velocity also outputs the page shell (toolbar, empty
+    ## <thead> / <tbody>, CSS), then stops.
     ## ==========================================================================
-    #set ( $columnIndex = 0 )
-    #foreach ( $columnParam in $parameters.columns.get() )
-        #if ( !( $columnParam.title.value() == "" ) && !( $columnParam.query.value() == "" ) )
-            #set ( $columnIndex = $columnIndex + 1 )
-            <span id="${matrixRootId}-columnTitle_${columnIndex}" value="$esc.html($columnParam.title.value())"></span>
-            <span id="${matrixRootId}-columnQuery_${columnIndex}" value="$esc.html($columnParam.query.value())"></span>
-        #end
-    #end
-    <span id="${matrixRootId}-columnCount" value="$columnIndex"></span>
+    <style>
+        /*
+            The square bracket means attribute selector. It is often used to "scope" CSS
+            so styles only apply inside a specific widget/component.
 
-    ## ==========================================================================
-    ## Document rows (prepareRowsMacro logic — serialized for JS)
-    ## ==========================================================================
-    #set ( $rowIndex = 0 )
-    #foreach ( $doc in $docList )
-        #set ( $rowIndex = $rowIndex + 1 )
-        #set ( $docNameWithSpace = $doc.getOldApi().getRelativePath().replace( "_default/", "" ) )
-        #set ( $rowQuery = "(project.id:$projectId AND (NOT type:heading) AND document.id:$q$docNameWithSpace$q)" )
-        #set ( $docSpace = $doc.getOldApi().getModuleFolder() )
-        #set ( $docName = $doc.fields().moduleName().get() )
-        #set ( $rowSearch = $doc.fields().title().get() )
+            [data-livedoc-matrix-root] matches <div data-livedoc-matrix-root> or <div data-livedoc-matrix-root="true">
 
-        #set ( $rowProjectId = $doc.fields().project().projectId() )
-        <span id="${matrixRootId}-rowSearch_${rowIndex}" value="$esc.html($rowSearch)"></span>
-        <span id="${matrixRootId}-rowQuery_${rowIndex}" value="$esc.html($rowQuery)"></span>
-        <span id="${matrixRootId}-rowProjectId_${rowIndex}" value="$esc.html($rowProjectId)"></span>
-        <span id="${matrixRootId}-rowDocSpace_${rowIndex}" value="$esc.html($docSpace)"></span>
-        <span id="${matrixRootId}-rowDocName_${rowIndex}" value="$esc.html($docName)"></span>
+            [data-livedoc-matrix-root] is also a way to say "This is the root/container of my component."
+
+            Imagine, other parts have .toolbar, and this widget, livedoc matrix, also has toolbar. In order to keep the scope
+            within our widget only, we have to use bracketing.
+        */
+        [data-livedoc-matrix-root] {
+            --ldmx-accent: #3d6eae;
+            --ldmx-accent-hover: #2f5689;
+            --ldmx-surface: #f4f6f9;
+            --ldmx-border: #c8d2de;
+            --ldmx-text: #1f2937;
+            --ldmx-header-bg: #e3eaf2;
+            --ldmx-row-hover: #eef3f8;
+            --ldmx-row-stripe: #fafbfc;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 12px;
+            color: var(--ldmx-text);
+        }
+
+        /*
+            What the line of code below means:
+                Find any element with class ldmx-toolbar that is inside an element 
+                with the attribute data-livedoc-matrix-root.
+            
+            Basically:
+                <div data-livedoc-matrix-root>
+                    <div class="ldmx-toolbar">
+        */
+        [data-livedoc-matrix-root] .ldmx-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px 12px;
+            margin-bottom: 12px;
+            padding: 10px 12px;
+            background: var(--ldmx-surface);
+            border: 1px solid var(--ldmx-border);
+            border-radius: 6px;
+        }
+        /*
+            flex container's children are laid out in a row by default
+
+            instead of a stack like this:
+                Button 1
+                Button 2
+                Button 3
+
+            It becomes this: Button 1   Button 2   Button 3
+
+            On the other hand, flex-wrap: wrap allows child elements to move
+            to the next line if there's not enough horizontal space already.
+            Instead of overflowing sideways, going beyond the boundary/capacity,
+            it becomes:
+                
+                Button 1   Button 2   Button 3
+                Button 4   Button 5
+            
+
+            FOR THE GAP:
+                Gap has two values:
+
+                gap: row-gap column-gap;
+
+                row gap = vertical gap between rows
+                column gap = horizontal gap between columns
+
+                If you see only one value: gap: 8px;
+                This means both row and column gaps are 8px
+
+
+            MARGINS
+                - add space outside the toolbar
+                if margin-bottom - it adds space outside its container, below it
+            
+            PADDING
+                - adds space inside the container, between its border and contents
+
+            SETTING FOR BOTH:
+                if padding / margin has only one value, e.g. padding: 10px;
+                it means all sides are 10px
+
+                IF TWO VALUES: padding: 10px 12px;
+                it means top/bottom: 10px; left/right = 12px
+
+                IF THREE VALUES: padding: 4px 8px 2px
+                it means = top: 4px, left/right: 8px, bottom: 2px
+
+                FOUR VALUES: remember clockwise = top right bottom left
+
+
+
+                AS for the two hyphens, they are called custom CSS properties, 
+                a syntax CSS uses to recognize custom variables.
+        */
+
+        [data-livedoc-matrix-root] .ldmx-toolbar-section {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+        }
+
+        [data-livedoc-matrix-root] .ldmx-toolbar-section--grow {
+            flex: 1 1 200px;
+        }
+
+        [data-livedoc-matrix-root] .ldmx-toolbar-divider {
+            width: 1px;
+            height: 24px;
+            background: var(--ldmx-border);
+            margin: 0 4px;
+        }
+
+        [data-livedoc-matrix-root] .ldmx-input {
+            padding: 5px 8px;
+            border: 1px solid var(--ldmx-border);
+            border-radius: 4px;
+            font-size: 12px;
+            background: #fff;
+        }
+
+        [data-livedoc-matrix-root] .ldmx-input--filter {
+            min-width: 200px;
+        }
+
+        [data-livedoc-matrix-root] .ldmx-input--short {
+            width: 120px;
+        }
+
+        [data-livedoc-matrix-root] .ldmx-input--query {
+            width: 180px;
+        }
+
+        [data-livedoc-matrix-root] .ldmx-btn {
+            padding: 5px 12px;
+            border: 1px solid var(--ldmx-accent);
+            border-radius: 4px;
+            background: var(--ldmx-accent);
+            color: #fff;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        [data-livedoc-matrix-root] .ldmx-btn:hover {
+            background: var(--ldmx-accent-hover);
+            border-color: var(--ldmx-accent-hover);
+        }
+
+        [data-livedoc-matrix-root] .ldmx-btn--secondary {
+            background: #fff;
+            color: var(--ldmx-accent);
+        }
+
+        [data-livedoc-matrix-root] .ldmx-btn--secondary:hover {
+            background: var(--ldmx-row-hover);
+        }
+
+        [data-livedoc-matrix-root] .ldmx-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        [data-livedoc-matrix-root] .ldmx-toggle:hover {
+            background: rgba(255, 255, 255, 0.7);
+        }
+
+        [data-livedoc-matrix-root] .ldmx-picker {
+            display: inline-flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        [data-livedoc-matrix-root] .ldmx-picker-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 8px;
+            border: 1px solid var(--ldmx-border);
+            border-radius: 12px;
+            background: #fff;
+            cursor: pointer;
+        }
+
+        [data-livedoc-matrix-root] .ldmx-table-wrap {
+            overflow-x: auto;
+            border: 1px solid var(--ldmx-border);
+            border-radius: 6px;
+            background: #fff;
+        }
+
+        [data-livedoc-matrix-root] .ldmx-table {
+            width: 100%;
+            border-collapse: collapse;
+            empty-cells: show;
+        }
+
+        [data-livedoc-matrix-root] .ldmx-header {
+            text-align: center;
+            vertical-align: top;
+            padding: 8px 10px;
+            font-weight: 600;
+            font-size: 11px;
+            background: var(--ldmx-header-bg);
+            border-bottom: 2px solid var(--ldmx-border);
+            border-right: 1px solid var(--ldmx-border);
+            white-space: nowrap;
+        }
+
+        [data-livedoc-matrix-root] .ldmx-header--left {
+            text-align: left;
+            min-width: 120px;
+        }
+
+        [data-livedoc-matrix-root] .ldmx-cell {
+            text-align: left;
+            vertical-align: top;
+            padding: 6px 10px;
+            font-size: 11px;
+            border-bottom: 1px solid #e5eaf0;
+            border-right: 1px solid #eef1f5;
+        }
+
+        [data-livedoc-matrix-root] .ldmx-cell--center {
+            text-align: center;
+        }
+
+        [data-livedoc-matrix-root] .ldmx-row:nth-child(even) {
+            background: var(--ldmx-row-stripe);
+        }
+
+        [data-livedoc-matrix-root] .ldmx-row:hover {
+            background: var(--ldmx-row-hover);
+        }
+
+        [data-livedoc-matrix-root] .ldmx-table a {
+            color: var(--ldmx-accent);
+            text-decoration: none;
+        }
+
+        [data-livedoc-matrix-root] .ldmx-table a:hover {
+            text-decoration: underline;
+        }
+    </style>
+
+
+    <div id="$matrixRootId" data-livedoc-matrix-root="1" class="ldmx-root">
         ## --------------------------------------------------------------------------
-        ## BUG NOTE: In some projects, the Project column occasionally renders blank and the
-        ## Document column shows the full directory-like path instead of only the document title.
+        ## Step 5 (part 1, continued) — empty table shell; rows/header filled by
+        ## displayMatrix() → loadMatrixConfiguration() → renderMatrixTable()
         ## --------------------------------------------------------------------------
-        <span id="${matrixRootId}-rowProjectHtml_${rowIndex}" value="$esc.html($doc.fields().project().render())"></span>
-        <span id="${matrixRootId}-rowSpaceHtml_${rowIndex}" value="$esc.html($doc.space().render())"></span>
-        <span id="${matrixRootId}-rowDocHtml_${rowIndex}" value="$esc.html($doc.render().withIcon().withLinks(true))"></span>
+        <div id="${matrixRootId}-toolbar" class="ldmx-toolbar">
 
-        #foreach ( $fieldId in $allFieldIds )
-            <span id="${matrixRootId}-rowField_${rowIndex}_${fieldId}" value="$esc.html( $!doc.fields().get( $fieldId ).render() )"></span>
-        #end
+            <div class="ldmx-toolbar-section ldmx-toolbar-section--grow">
+                <input id="${matrixRootId}-row-filter" class="ldmx-input ldmx-input--filter" data-ldmx="row-filter" type="text" placeholder="Filter rows...">
+            </div>
 
-        #set ( $sigHtml = "" )
-        #foreach ( $c in $doc.fields().workflowSignatures() )
-            #if ( !( $c.fields().signatureState().optionId().equals( "obsolete" ) )
-                    && !( $c.fields().signatureState().optionId().equals( "notAvailable" ) ) )
-                #set ( $sigPart = $c.render().htmlFor().forFrame().replace( ", ", "" ) )
-                #set ( $sigHtml = "${sigHtml}<span style='margin:1px;'>$sigPart</span>" )
+            <div class="ldmx-toolbar-section">
+                <label class="ldmx-toggle"><input type="checkbox" id="${matrixRootId}-show-project" data-ldmx="show-project"> Project</label>
+                <label class="ldmx-toggle"><input type="checkbox" id="${matrixRootId}-show-space" data-ldmx="show-space"> Space</label>
+                <label class="ldmx-toggle"><input type="checkbox" id="${matrixRootId}-show-signatures" data-ldmx="show-signatures"> Signatures</label>
+            </div>
+
+            <span class="ldmx-toolbar-divider"></span>
+
+            <div class="ldmx-toolbar-section">
+                <span id="${matrixRootId}-field-picker" class="ldmx-picker"></span>
+                <input id="${matrixRootId}-new-field-id" class="ldmx-input ldmx-input--short" data-ldmx="new-field-id" type="text" placeholder="Field id">
+                <button type="button" class="ldmx-btn" id="${matrixRootId}-add-field" data-ldmx="add-field">Add field</button>
+            </div>
+            
+            <span class="ldmx-toolbar-divider"></span>
+            
+            <div class="ldmx-toolbar-section">
+                <span id="${matrixRootId}-column-picker" class="ldmx-picker"></span>
+                <input id="${matrixRootId}-new-col-title" class="ldmx-input ldmx-input--short" data-ldmx="new-col-title" type="text" placeholder="Column title">
+                <input id="${matrixRootId}-new-col-query" class="ldmx-input ldmx-input--query" data-ldmx="new-col-query" type="text" placeholder="Lucene query">
+                <button type="button" class="ldmx-btn" id="${matrixRootId}-add-column" data-ldmx="add-column">Add column</button>
+                <button type="button" class="ldmx-btn ldmx-btn--secondary" id="${matrixRootId}-reset-filters" data-ldmx="reset-filters">Reset</button>
+            </div>
+        </div>
+
+        <div class="ldmx-table-wrap">
+            <table class="polarion-Document-table ldmx-table" id="${matrixRootId}-table">
+                <thead>
+                    <tr id="${matrixRootId}-header-row"></tr>
+                </thead>
+                
+                <tbody id="${matrixRootId}-body"></tbody>
+            </table>
+        </div>
+
+        ## --------------------------------------------------------------------------
+        ## Step 4 — All of that output goes into a hidden #params div as
+        ## <span id="..." value="..."> elements (field catalog, column defs, row
+        ## count, widget toggles) — this is the data contract for the client.
+        ##
+        ## There is no live “Velocity → JavaScript” bridge after render.
+        ## Velocity runs once on the server and outputs plain HTML + script.
+        ## JavaScript treats #params spans as the data contract (sample.vm pattern).
+        ## --------------------------------------------------------------------------
+        ## Store parameters and row/column data in HTML for JavaScript (#params must stay outside script)
+        ## --------------------------------------------------------------------------
+        <div id="${matrixRootId}-params" style="#if ( $debug ) display:block #else display:none #end">
+            <span id="${matrixRootId}-projectId" value="$esc.html( $projectId )"></span>
+            <span id="${matrixRootId}-docsQuery" value="$esc.html( $docsQuery )"></span>
+            <span id="${matrixRootId}-columnFields" value="$esc.html( $fieldsRaw )"></span>
+            <span id="${matrixRootId}-showProject" value="$parameters.showProject.value()"></span>
+            <span id="${matrixRootId}-showSpace" value="$parameters.showSpace.value()"></span>
+            <span id="${matrixRootId}-showSignaturesStatus" value="$parameters.showSignaturesStatus.value()"></span>
+
+            ## --------------------------------------------------------------------------
+            ## Field catalog — pre-rendered row data (widget columnFields + optional ids for Add field)
+            ## --------------------------------------------------------------------------
+            #set ( $fieldCatalogIndex = 0 )
+            #foreach ( $fieldId in $allFieldIds )
+                #set ( $fieldCatalogIndex = $fieldCatalogIndex + 1 )
+                #set ( $fieldLabel = $fieldId )
+            
+                #if ( $firstDoc != "" )
+                    #set ( $fieldLabel = $!firstDoc.fields().get( $fieldId ).label() )
+                #end
+            
+                <span id="${matrixRootId}-fieldCatalogId_${fieldCatalogIndex}" value="$esc.html( $fieldId )"></span>
+                <span id="${matrixRootId}-fieldCatalogLabel_${fieldCatalogIndex}" value="$esc.html( $fieldLabel )"></span>
             #end
-        #end
-        <span id="${matrixRootId}-rowSignaturesHtml_${rowIndex}" value="$esc.html($sigHtml)"></span>
+            <span id="${matrixRootId}-fieldCatalogCount" value="$fieldCatalogIndex"></span>
 
-        ## ==========================================================================
-        ## Count cells — server-side Lucene count + portal links (precomputed for built-in columns)
-        ## ToDo: Add unresolved comments
-        ## ==========================================================================
-        #set ( $colIdx = 0 )
-        #foreach ( $columnParam in $parameters.columns.get() )
-            #if ( !( $columnParam.title.value() == "" ) && !( $columnParam.query.value() == "" ) )
-                #set ( $colIdx = $colIdx + 1 )
-                #set ( $columnQuery = $columnParam.query.value() )
-                #set ( $cellQuery = "$rowQuery AND ($columnQuery)" )
-                #set ( $workitemCount = $transaction.workItems().count().query( "$cellQuery" ).result() )
-                #set ( $link = $transaction.context().createPortalLink().project( "$projectId" ).workItems().query( "$cellQuery" ).toEncodedRelativeUrl() )
-                #set ( $docLink = $transaction.context().createPortalLink().project( "$projectId" ).document( "$docSpace", "$docName" ).filter( "$cellQuery" ).toEncodedRelativeUrl() )
-                #set ( $cellHtml = "<a href='$link'>$workitemCount</a> / <a href='$docLink'>Doc</a>" )
-                <span id="${matrixRootId}-cellHtml_${rowIndex}_${colIdx}" value="$esc.html($cellHtml)"></span>
+            ## --------------------------------------------------------------------------
+            ## Additional query columns (title + Lucene query per span pair)
+            ## $esc.html = HTML-escape for safe value attributes (same as encodeHtml in sample.vm)
+            ## --------------------------------------------------------------------------
+            #set ( $columnIndex = 0 )
+            #foreach ( $columnParam in $parameters.columns.get() )
+                #if ( !( $columnParam.title.value() == "" ) && !( $columnParam.query.value() == "" ) )
+                    #set ( $columnIndex = $columnIndex + 1 )
+                    <span id="${matrixRootId}-columnTitle_${columnIndex}" value="$esc.html( $columnParam.title.value() )"></span>
+                    <span id="${matrixRootId}-columnQuery_${columnIndex}" value="$esc.html( $columnParam.query.value() )"></span>
+                #end
             #end
-        #end
-    #end
-    <span id="${matrixRootId}-rowCount" value="$rowIndex"></span>
-    #set ( $matrixRenderId = "${projectId}-${rowIndex}-${columnIndex}-${fieldsRaw}" )
-    <span id="${matrixRootId}-matrixRenderId" value="$esc.html($matrixRenderId)"></span>
-    ## IMPORTANT — sample.vm: img onload re-boots widget in view mode when script block is not re-executed
-    <img data-ldmx="boot-img" src="/polarion/ria/images/topicIconsSmall/document.png" onload="displayMatrix(this)">
-</div>
-<script>if ( window.bootAllVisibleMatrixWidgets ) window.bootAllVisibleMatrixWidgets();</script>
-</div>
+            <span id="${matrixRootId}-columnCount" value="$columnIndex"></span>
+
+            ## ==========================================================================
+            ## Step 2 — For each document, #foreach ($doc in $docList) pre-renders
+            ## Polarion HTML for project, space, document link, each field column,
+            ## signatures, and row metadata (title, Lucene query, etc.) using APIs
+            ## like $doc.render() and $doc.fields().get($fieldId).render().
+            ## ==========================================================================
+            #set ( $rowIndex = 0 )
+            #foreach ( $doc in $docList )
+                #set ( $rowIndex = $rowIndex + 1 )
+                #set ( $docNameWithSpace = $doc.getOldApi().getRelativePath().replace( "_default/", "" ) )
+                #set ( $rowQuery = "(project.id:$projectId AND (NOT type:heading) AND document.id:$q$docNameWithSpace$q)" )
+                #set ( $docSpace = $doc.getOldApi().getModuleFolder() )
+                #set ( $docName = $doc.fields().moduleName().get() )
+                #set ( $rowSearch = $doc.fields().title().get() )
+                #set ( $rowProjectId = $doc.fields().project().projectId() )
+                <span id="${matrixRootId}-rowSearch_${rowIndex}" value="$esc.html( $rowSearch )"></span>
+                <span id="${matrixRootId}-rowQuery_${rowIndex}" value="$esc.html( $rowQuery )"></span>
+                <span id="${matrixRootId}-rowProjectId_${rowIndex}" value="$esc.html( $rowProjectId )"></span>
+                <span id="${matrixRootId}-rowDocSpace_${rowIndex}" value="$esc.html( $docSpace )"></span>
+                <span id="${matrixRootId}-rowDocName_${rowIndex}" value="$esc.html( $docName )"></span>
+                <span id="${matrixRootId}-rowProjectHtml_${rowIndex}" value="$esc.html( $doc.fields().project().render() )"></span>
+                <span id="${matrixRootId}-rowSpaceHtml_${rowIndex}" value="$esc.html( $doc.space().render() )"></span>
+                <span id="${matrixRootId}-rowDocHtml_${rowIndex}" value="$esc.html( $doc.render().withIcon().withLinks( true ) )"></span>
+
+                #foreach ( $fieldId in $allFieldIds )
+                    <span id="${matrixRootId}-rowField_${rowIndex}_${fieldId}" value="$esc.html( $!doc.fields().get( $fieldId ).render() )"></span>
+                #end
+
+                #set ( $sigHtml = "" )
+                #foreach ( $c in $doc.fields().workflowSignatures() )
+                    #if ( !( $c.fields().signatureState().optionId().equals( "obsolete" ) )
+                            && !( $c.fields().signatureState().optionId().equals( "notAvailable" ) ) )
+                        #set ( $sigPart = $c.render().htmlFor().forFrame().replace( ", ", "" ) )
+                        #set ( $sigHtml = "${sigHtml}<span style='margin:1px;'>$sigPart</span>" )
+                    #end
+                #end
+                <span id="${matrixRootId}-rowSignaturesHtml_${rowIndex}" value="$esc.html( $sigHtml )"></span>
+
+                ## ==========================================================================
+                ## Step 3 — For each configured query column, Velocity runs
+                ## $transaction.workItems().count() with rowQuery AND columnQuery,
+                ## builds portal links, and stores the count/link HTML in spans like
+                ## ${matrixRootId}-cellHtml_${rowIndex}_${colIdx}.
+                ## ToDo: Add unresolved comments
+                ## ==========================================================================
+                #set ( $colIdx = 0 )
+                #foreach ( $columnParam in $parameters.columns.get() )
+                    #if ( !( $columnParam.title.value() == "" ) && !( $columnParam.query.value() == "" ) )
+                        #set ( $colIdx = $colIdx + 1 )
+                        #set ( $columnQuery = $columnParam.query.value() )
+                        #set ( $cellQuery = "$rowQuery AND ($columnQuery)" )
+                        #set ( $workitemCount = $transaction.workItems().count().query( "$cellQuery" ).result() )
+                        #set ( $link = $transaction.context().createPortalLink().project( "$projectId" ).workItems().query( "$cellQuery" ).toEncodedRelativeUrl() )
+                        #set ( $docLink = $transaction.context().createPortalLink().project( "$projectId" ).document( "$docSpace", "$docName" ).filter( "$cellQuery" ).toEncodedRelativeUrl() )
+                        #set ( $cellHtml = "<a href='$link'>$workitemCount</a> / <a href='$docLink'>Doc</a>" )
+                        <span id="${matrixRootId}-cellHtml_${rowIndex}_${colIdx}" value="$esc.html($cellHtml)"></span>
+                    #end
+                #end
+            #end
+
+            <span id="${matrixRootId}-rowCount" value="$rowIndex"></span>
+            
+            #set ( $matrixRenderId = "${projectId}-${rowIndex}-${columnIndex}-${fieldsRaw}" )
+            
+            <span id="${matrixRootId}-matrixRenderId" value="$esc.html( $matrixRenderId )"></span>
+
+            ## --------------------------------------------------------------------------------------
+            ## Step 5 (part 2) — Boot img onload fires displayMatrix(this); JS then
+            ## reads #params spans and builds the visible table.
+            ## Also re-boots widget in view mode when script block is not re-executed (sample.vm).
+            ## --------------------------------------------------------------------------------------
+            <img data-ldmx="boot-img" src="/polarion/ria/images/topicIconsSmall/document.png" onload="displayMatrix(this)">
+        
+        </div>
+        <script>
+            if ( window.bootAllVisibleMatrixWidgets )
+                window.bootAllVisibleMatrixWidgets();
+        </script>
+    </div>
 #end
