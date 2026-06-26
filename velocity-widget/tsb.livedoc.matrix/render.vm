@@ -27,18 +27,8 @@
 ## ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## ==========================================================================
 
-## ==========================================================================
-## OVERVIEW — tsb.livedoc.matrix — render.vm
-## ==========================================================================
+#set ( $warnSingleProject = "This widget renders a document matrix for <b>single Projects only</b>. Please select a <b>single Project</b> for the <b>Scope parameter</b>." )
 
-## ==========================================================================
-## Global Texts
-## ==========================================================================
-#set ( $warnSingleProject = "This widget provides workitem count for <b>single Projects only</b>. Please select a <b>single Project</b> for the <b>Scope parameter</b>." )
-
-## ==========================================================================
-## Initialize and validate parameters
-## ==========================================================================
 #set ( $allowRendering = true )
 #set ( $projectId = $parameters.dataSet.scope().projectId() )
 #set ( $docsQuery = $parameters.dataSet.getFor().revision("").queryToShow() )
@@ -48,29 +38,12 @@
     #set ( $allowRendering = false )
 #end
 
-#set ( $columnTitles = [] )
-#set ( $columnQueries = [] )
-
-## ==========================================================================
-## Macros
-## ==========================================================================
-
-#macro ( prepareColumnsMacro )
-    #foreach ( $columnParam in $parameters.columns.get() )
-        #if ( !($columnParam.title.value() == "") && !($columnParam.query.value() == "") )
-            #set ( $void = $columnTitles.add($columnParam.title.value()) )
-            #set ( $void = $columnQueries.add($columnParam.query.value()) )
-        #end
-    #end
-#end
-
 #set ( $rowTitles = [] )
 #set ( $rowQueries = [] )
 
 #macro ( prepareRowsMacro )
     #set ( $q = '"' )
     #set ( $docs = $transaction.documents().search().query($docsQuery).sort("project.id space.id title") )
-
     #foreach ( $doc in $docs )
         #set ( $void = $rowTitles.add($doc) )
         #set ( $docNameWithSpace = $doc.getOldApi().getRelativePath().replace("_default/","") )
@@ -78,170 +51,232 @@
     #end
 #end
 
-#macro ( renderTableStartMacro )
-    <table class="polarion-Document-table" style="margin: auto;empty-cells: show;border-collapse: collapse;width: 100%;border: 1px solid #CCCCCC;" id="polarion_wiki macro name=table;params=uid=client2">
-    <tbody>
+#macro ( renderTableMountMacro )
+<table id="widget-table" style="width:100%;table-layout:fixed;"></table>
 #end
 
-#macro ( renderTableEndMacro )
-    </tbody>
-    </table>
+#macro ( headerJsonItem $title $key )
+    #if ( !$firstHeader ),#end
+    #set ( $safeTitle = $esc.javascript("$!title") )
+    #set ( $safeKey = $esc.javascript("$!key") )
+    {
+        "title": "$safeTitle",
+        "key": "$safeKey"
+    }
+    #set ( $firstHeader = false )
 #end
 
-#macro ( renderTableHeaderMacro )
-    <tr>
+#macro ( headersJson )
+[
+    #set ( $firstHeader = true )
+
+    #if ( $rowTitles.size() > 0 )
+        #set ( $firstDoc = $rowTitles.get(0) )
+
         #if ( $parameters.showProject.value() == true )
-            <th style='text-align: left;vertical-align: top;height: 10px;border: 1px solid #CCCCCC;padding: 3px; background-color: #d3d3d3;min-width:120px;'>Project</th>
+            #headerJsonItem( "Project" "project" )
         #end
 
         #if ( $parameters.showSpace.value() == true )
-            <th style='text-align: left;vertical-align: top;height: 10px;border: 1px solid #CCCCCC;padding: 3px; background-color: #d3d3d3;min-width:150px;'>Space</th>
+            #headerJsonItem( "Space" "space" )
         #end
 
-        <th style='text-align: left;vertical-align: top;height: 10px;border: 1px solid #CCCCCC;padding: 3px;background-color: #d3d3d3;'>Document</th>
+        #headerJsonItem( "Document" "documentHtml" )
 
-        ## --------------------------------------------------------------------------
-        ## SIDE NOTE: There should be a separation between the general and specific
-        ## changes in each code blocks. Take a look at the example below:
-        ## Add column field titles is the general purpose, while "get the first document
-        ## in the list is the specific" and "render field label" are the specifics.
-        ## Notice how the comments closely resemble the "#", almost blending in.
-        ## It's a bit difficult to distinguish at a glance. For better readability and
-        ## to easily distinguish it, it's better to create a more noticeable comment
-        ## format for code block specific comments.
-        ##
-        ## For code specific comments, maybe we can put it like this:
-        ## " ------------------------- Split the fields  ------------------------- "
-        ##
-        ## --------------------------------------------------------------------------
+        #foreach ( $fieldIdRaw in $parameters.columnFields.value().split(",") )
+            #set ( $fieldId = $fieldIdRaw.trim() )
+            #if ( !$fieldId.equals("") )
+                #set ( $fieldTitle = "$!firstDoc.fields().get($fieldId).label()" )
+                #if ( "$!fieldTitle" == "" )
+                    #set ( $fieldTitle = "$!firstDoc.fields().get($fieldId).name()" )
+                #end
+                #if ( "$!fieldTitle" == "" )
+                    #set ( $fieldTitle = $fieldId )
+                #end
+                #headerJsonItem( $fieldTitle $fieldId )
+            #end
+        #end
 
-        ## ==========================================================================
-        ## Add column field titles
-        ## ==========================================================================
-        ## split the fields 
-        ## --------------------------------------------------------------------------
+        #if ( $parameters.showSignaturesStatus.value() == true )
+            #headerJsonItem( "Signatures" "signatureHtml" )
+        #end
+    #end
+]
+#end
+
+## ===================================================
+## Functions for importing files (CSS, JS)
+## ===================================================
+
+#macro ( loadWidgetJsResource $js )
+    #loadJsResource($widgetContext.resourceUrl("$js"))
+#end
+
+#macro ( loadJsResource $url )
+    ## ----------------------------------------------------------------------------
+    ## Synchronous XHR fetch and eval — required for Polarion widget resources.
+    ## ----------------------------------------------------------------------------
+    <script type="text/javascript">
+        var xhrObj = new XMLHttpRequest();
+        xhrObj.open('GET', '$url', false);
+        xhrObj.send(null);
+        eval(xhrObj.responseText);
+    </script>
+#end
+
+#macro ( loadWidgetCssResource $css )
+    #loadCssResource( $widgetContext.resourceUrl("$css") )
+#end
+
+#macro ( loadCssResource $url )
+    ## ----------------------------------------------------------------------------
+    ## Synchronous XHR fetch injected into a <style> tag — required for Polarion widget resources.
+    ## ----------------------------------------------------------------------------
+    #set ( $cssId = $widgetContext.generateUniqueElementId() )
+
+    <style id="$cssId"></style>
+
+    <script type="text/javascript">
+        var xhrObj = new XMLHttpRequest();
+        xhrObj.open('GET', '$url', false);
+        xhrObj.send(null);
+        document.getElementById("$cssId").innerHTML = xhrObj.responseText;
+    </script>
+#end
+
+## ===================================================
+## Fetching data using velocity, then putting them 
+## into a JSON object to pass to Javascript.
+## ===================================================
+
+#macro ( rowsJson $rowTitles )
+[
+    ## ----------------------------------------------------------------------------
+    ## Iteration of this is per row. 
+    ## ----------------------------------------------------------------------------
+    #set ( $firstRow = true )
+    #foreach( $rowTitle in $rowTitles )
+
+        ## ----------------------------------------
+        ## Initialize the variables for use later
+        ## ----------------------------------------
         #set ( $fieldsId = $parameters.columnFields.value().split(",") )
 
-        ## --------------------------------------------------------------------------
-        ## get the first document in the list  
-        ## --------------------------------------------------------------------------
-        #set ( $firstDoc = "" )
-        #if ( !($rowTitles.size() == 0) )
-            #set ( $firstDoc = $rowTitles.get(0) )
-        #end
+        #if ( !$firstRow ),#end
+        #set ( $firstRow = false )
 
-        ## --------------------------------------------------------------------------
-        ## render field label  
-        ## --------------------------------------------------------------------------
-        #foreach ( $f in $fieldsId )
-            #set ( $fieldTitle = "" )
-            #if ( $firstDoc == "" )
-                #set ( $fieldTitle = $f )
-            #else
-                #set ( $fieldTitle = $!firstDoc.fields().get($f).label() )
+        #set ( $spaceHtml = "" )
+        #set ( $projectHtml = "" )
+        #set ( $signatureHtml = "" )
+
+        ## ===================================================
+        ## For Project data column
+        ## ===================================================
+        #if ( true == $parameters.showProject.value() )
+            #set ( $projectField = $rowTitle.fields().project() )
+            #if ( $projectField )
+                #set ( $projectHtml = "$!projectField.render()" )
             #end
-
-            <th style='text-align: center;vertical-align: top;height: 10px;border: 1px solid #CCCCCC;padding: 3px; background-color: #d3d3d3;'>$fieldTitle</th>
         #end
 
-        ## ==========================================================================
-        ## Add signature column
-        ## ==========================================================================
+        ## ===================================================
+        ## For Space data column
+        ## ===================================================
+        #if ( true == $parameters.showSpace.value() )
+            #set ( $relativePath = "$!rowTitle.getOldApi().getRelativePath()" )
+            #set ( $spaceHtml = "_default" )
+            #if ( $relativePath.contains("/") )
+                #set ( $spaceHtml = $relativePath.substring(0, $relativePath.indexOf("/")) )
+            #end
+        #end
+
+        #set ( $documentHtml = $rowTitle.render().withIcon().withLinks(true) )
+        
+        ## ===================================================
+        ## For Signature data column
+        ## ===================================================
         #if ( $parameters.showSignaturesStatus.value() == true )
-            <th style='text-align: center;vertical-align: top;height: 10px;border: 1px solid #CCCCCC;padding: 3px; background-color: #d3d3d3;'>Signatures</th>
+            #set ( $workflowSignatures = $rowTitle.fields().workflowSignatures().toArrayList )
+            
+            #foreach( $row in $workflowSignatures )
+                #set ( $signatureStatus = $row.fields().signatureState().optionId() )
+                #if ( !($signatureStatus.equals("obsolete")) && !($signatureStatus.equals("notAvailable")) )
+                    #set ( $renderedSignature = $row.render().htmlFor().forFrame().replace(", ", "") )
+                    #set ( $signatureHtml = "${signatureHtml}<span style='margin: 1px;'>${renderedSignature}</span>" )
+                #end
+            #end
         #end
 
-        ## ==========================================================================
-        ## ToDo: Add unresolved comments title
-        ## ==========================================================================
-        #foreach ( $t in $columnTitles )
-            <th style='text-align: center;vertical-align: top;height: 10px;border: 1px solid #CCCCCC;padding: 3px; background-color: #d3d3d3;'>$t</th>
-        #end
-    </tr>
-#end
-
-#macro ( renderTableRowsMacro )
-    #foreach ( $rowTitle in $rowTitles )
-        #set ( $indexLoop = $velocityCount - 1 )
-        #set ( $rowQuery = "$rowQueries.get($indexLoop)" )
-        #set ( $workitemCount = $transaction.workItems().count().query("$rowQuery").result() )
-
-        <tr>
-            #if ( $parameters.showProject.value() == true )
-                <td style='text-align: left;vertical-align: top;height: 10px;border: 1px solid #CCCCCC;padding: 3px;font-size: 11px;'>$rowTitle.fields().project().render()</td>
+        {
+            "project":      "$esc.javascript( $projectHtml )",  // Contains the rendered Project value. It may include HTML from Polarion.
+            "space":        "$esc.javascript( $spaceHtml )",    // Contains the Space value extracted earlier from the document path, for example _default or Requirements.
+            "documentHtml": "$esc.javascript( $documentHtml )", // Contains the rendered document link, including icon and clickable link HTML.
+            "signatureHtml": "$esc.javascript( $signatureHtml )"
+            ## -----------------------------------------------------------
+            ## Custom fields are flattened onto the row so DataTables can
+            ## read them directly through each header's key.
+            ## -----------------------------------------------------------
+            #foreach ( $fieldIdRaw in $fieldsId )
+                #set ( $fieldId = $fieldIdRaw.trim() )
+                #if ( !$fieldId.equals("") )
+                    #set ( $fieldHtml = "$!rowTitle.fields().get($fieldId).render()" )
+                    , "$esc.javascript($fieldId)": "$esc.javascript($fieldHtml)"
+                #end
             #end
-
-            ## --------------------------------------------------------------------------
-            ## BUG NOTE:
-            ## In some projects, the Project column occasionally renders blank and the Document column instead
-            ## shows the full directory-like path (for example: <project>/<space>/<document>) instead of only the document title.
-            ## --------------------------------------------------------------------------
-
-            #if ( $parameters.showSpace.value() == true )
-                <td style='text-align: left;vertical-align: top;height: 10px;border: 1px solid #CCCCCC;padding: 3px;font-size: 11px;'>$rowTitle.space().render()</td>
-            #end
-
-            <td style='text-align: left;vertical-align: top;height: 10px;border: 1px solid #CCCCCC;padding: 3px;font-size: 11px;'>$rowTitle.render().withIcon().withLinks(true)</td>
-
-            ## ==========================================================================
-            ## Add column fields
-            ## ==========================================================================
-            ## split the fields 
-            ## --------------------------------------------------------------------------
-            #set ( $fieldsId = $parameters.columnFields.value().split(",") )
-
-            ## --------------------------------------------------------------------------
-            ## render field label  
-            ## --------------------------------------------------------------------------
-            #foreach ( $f in $fieldsId )
-                <td style='text-align: center;vertical-align: top;height: 10px;border: 1px solid #CCCCCC;padding: 3px;font-size: 11px;'>
-                $!rowTitle.fields().get($f).render()
-                </td>
-            #end
-
-            ## ==========================================================================
-            ## Add signature column
-            ## ==========================================================================
-            #if ( $parameters.showSignaturesStatus.value() == true )
-                <td style='text-align: left;vertical-align: top;height: 10px;border: 1px solid #CCCCCC;padding: 3px;font-size: 11px;'>
-                    #foreach ( $c in $rowTitle.fields().workflowSignatures() )
-                        #if ( !($c.fields().signatureState().optionId().equals("obsolete")) && !($c.fields().signatureState().optionId().equals("notAvailable")) )
-                            <span style="margin: 1px;">$c.render().htmlFor().forFrame().replace(", ", "")</span>
-                        #end
-                    #end
-                </td>
-            #end
-
-            ## ==========================================================================
-            ## ToDo: Add unresolved comments
-            ## ==========================================================================
-            #foreach ( $columnQuery in $columnQueries )
-                #set ( $cellQuery = "$rowQuery AND ($columnQuery)" )
-
-                <td style='text-align: center;vertical-align: top;height: 10px;border: 1px solid #CCCCCC;padding: 3px;font-size: 11px;'>
-                    #set ( $workitemCount = $transaction.workItems().count().query("$cellQuery").result() )
-                    #set ( $link = $transaction.context().createPortalLink().project("$projectId").workItems().query("$cellQuery").toEncodedRelativeUrl() )
-                    #set ( $docSpace = $rowTitle.getOldApi().getModuleFolder() )
-                    #set ( $docName = $rowTitle.fields().moduleName().get() )
-                    #set ( $docLink = $transaction.context().createPortalLink().project("$projectId").document("$docSpace","$docName").filter("$cellQuery").toEncodedRelativeUrl() )
-
-                    <a href="$link">$workitemCount</a> / <a href="$docLink">Doc</a>
-                </td>
-            #end
-        </tr>
+        }
     #end
+]
 #end
 
-## ==========================================================================
-## Main Code starts here
-## ==========================================================================
+## =========================================
+## Writes Velocity-generated JSON data into
+## JavaScript for DataTables to get and render.
+## =========================================
+#macro ( renderWidgetDataMacro )
+<script type="text/javascript">
+    var widgetData = {
+        headers: #headersJson(),
+        rows: #rowsJson($rowTitles)
+    };
+</script>
+#end
+
+#macro ( initDataTableMacro )
+<script type="text/javascript">
+(function () {
+    var tableEl = document.getElementById('widget-table');
+
+    if (!tableEl || typeof widgetData === 'undefined') {
+        return;
+    }
+
+    var columns = widgetData.headers.map(function (header) {
+        return {
+            title: header.title,
+            data: header.key,
+        };
+    });
+
+    new DataTable(tableEl, {
+        columns: columns,
+        data: widgetData.rows
+    });
+})();
+</script>
+#end
+
+## =================================
+## Main 
+## =================================
 #if ( $allowRendering )
-    #set ( $contextId = $projectService.getProject($projectId).getContextId() )
-    #prepareColumnsMacro()
     #prepareRowsMacro()
 
-    #renderTableStartMacro()
-    #renderTableHeaderMacro()
-    #renderTableRowsMacro()
-    #renderTableEndMacro()
+    #renderTableMountMacro()
+
+    #renderWidgetDataMacro()
+
+    #loadWidgetCssResource("resources/datatables.css")
+    #loadWidgetJsResource("resources/datatables.js")
+
+    #initDataTableMacro()
 #end
