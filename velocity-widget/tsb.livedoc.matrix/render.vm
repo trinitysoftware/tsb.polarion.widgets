@@ -66,6 +66,16 @@
     #set ( $firstHeader = false )
 #end
 
+## ===============================================
+## Creates a JSON Object of all the headers.
+## Project, Space, Document, and Signature do not 
+## need to be rendered. It's okay as is.
+## This macro also calls headerJsonItem for each 
+## data to clean it up in case there are errors 
+## that can't be caught by Javascript
+## (e.g., escaping of certain characters for JS
+## to better understand it, like this: \" \")
+## ===============================================
 #macro ( headersJson )
 [
     #set ( $firstHeader = true )
@@ -148,7 +158,6 @@
 ## Fetching data using velocity, then putting them 
 ## into a JSON object to pass to Javascript.
 ## ===================================================
-
 #macro ( rowsJson $rowTitles )
 [
     ## ----------------------------------------------------------------------------
@@ -231,6 +240,11 @@
 ## =========================================
 ## Writes Velocity-generated JSON data into
 ## JavaScript for DataTables to get and render.
+## The macro below creates a JS Object.
+## remember, headersJson returns an array.
+## so headers can have:
+## headers: ["ID", "Title", "Status", "Severity"]
+## The same goes for rowsJson.
 ## =========================================
 #macro ( renderWidgetDataMacro )
 <script type="text/javascript">
@@ -249,7 +263,15 @@
     if (!tableEl || typeof widgetData === 'undefined') {
         return;
     }
+    /*
+        This creates a columns array from widgetData.headers.
+        For each header in widgetData.headers, it creates a new object like this:
 
+        [
+            { title: "ID", data: "id" },
+            { title: "Name", data: "name" }
+        ]
+    */
     var columns = widgetData.headers.map(function (header) {
         return {
             title: header.title,
