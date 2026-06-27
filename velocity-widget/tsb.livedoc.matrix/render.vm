@@ -38,23 +38,47 @@
     #set ( $allowRendering = false )
 #end
 
+## CR Comment
+## We should think about a better name for rowTitles.. maybe docItems
+## We should think about a better name for rowQueries.. maybe docQueries
 #set ( $rowTitles = [] )
 #set ( $rowQueries = [] )
 
+## CR Comment
+## Missing a vomment
+
 #macro ( prepareRowsMacro )
+    ## CR Comment
+    ## $q should be global for the module
     #set ( $q = '"' )
+
     #set ( $docs = $transaction.documents().search().query($docsQuery).sort("project.id space.id title") )
     #foreach ( $doc in $docs )
+        ## CR Comment
+        ## Why do we need the global rowTitles array if we can use the docs from the transaction query?
         #set ( $void = $rowTitles.add($doc) )
         #set ( $docNameWithSpace = $doc.getOldApi().getRelativePath().replace("_default/","") )
+
+        ## CR Comment
+        ## We should use the project.id:$doc.fields().project().id() .. or something similar. I mean we should take the project id from the doc object.
+        ## this wil be more elegant and will help in the future to transition to a query for multiple projects.
         #set ( $void = $rowQueries.add("(project.id:$projectId AND (NOT type:heading) AND document.id:$q$docNameWithSpace$q)") )
     #end
 #end
 
+## CR Comment
+## Missing a comment
 #macro ( renderTableMountMacro )
-<table id="widget-table" style="width:100%;table-layout:fixed;"></table>
+    ## CR Comment
+    ## widget-table is too generic, if we will use several widgets on the same live report!?
+    ## maybe we should take the table id from the 'widget context' id and concatenate it to datatables-
+    <table id="widget-table" style="width:100%;table-layout:fixed;"></table>
 #end
 
+## CR Comment
+## Missing a comment
+## We should place all the json convertion functions together.. and we shall even 
+## move them to a different velocuity module.
 #macro ( headerJsonItem $title $key )
     #if ( !$firstHeader ),#end
     #set ( $safeTitle = $esc.javascript("$!title") )
@@ -66,6 +90,9 @@
     #set ( $firstHeader = false )
 #end
 
+## CR Comment
+the length of the comment lines should be fix in the entire module
+## taker a look at the header of the module
 ## ===============================================
 ## Creates a JSON Object of all the headers.
 ## Project, Space, Document, and Signature do not 
