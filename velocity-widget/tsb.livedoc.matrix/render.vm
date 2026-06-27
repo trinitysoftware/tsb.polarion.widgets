@@ -52,7 +52,11 @@
     ## $q should be global for the module
     #set ( $q = '"' )
 
+    ## CR Comment
+    ## make sure that the sort is being called, from what I remember the query function is the final function
+    ## that executes the query, maybe the sort should be before the query
     #set ( $docs = $transaction.documents().search().query($docsQuery).sort("project.id space.id title") )
+
     #foreach ( $doc in $docs )
         ## CR Comment
         ## Why do we need the global rowTitles array if we can use the docs from the transaction query?
@@ -91,7 +95,8 @@
 #end
 
 ## CR Comment
-the length of the comment lines should be fix in the entire module
+## the length of the comment lines should be fix in the entire module
+
 ## taker a look at the header of the module
 ## ===============================================
 ## Creates a JSON Object of all the headers.
@@ -104,9 +109,32 @@ the length of the comment lines should be fix in the entire module
 ## to better understand it, like this: \" \")
 ## ===============================================
 #macro ( headersJson )
+
+## CR Comment
+## Still mixing Velocity and json
+## I expect to have a velocity map object to contain all the header keys and values together
+## then you should call the headerJson to convert the map object to a json structure.
+
+## Creating an object map: 
+## #set ($headersMap = $objectFactory.newMap())
+
+## getting a value from the map
+## #set ($value = $headersMap.get("$key"))
+
+## putting a vluae in the map
+## #set ($tmp = $headersMap.put("$key", $value))
+
+## later when you want to loop over the map..
+## #foreach ($k in $headersMap.keySet())
+##   #set ($v = $headersMap.get($k))
+##   #you can also use a size: $headersMap.size()
+## #end
+
 [
     #set ( $firstHeader = true )
 
+    ## CR Comment
+    ## we want to render the header in any case
     #if ( $rowTitles.size() > 0 )
         #set ( $firstDoc = $rowTitles.get(0) )
 
@@ -119,6 +147,11 @@ the length of the comment lines should be fix in the entire module
         #end
 
         #headerJsonItem( "Document" "documentHtml" )
+
+        ## CR Comment
+        ## We should render the header even without documents
+        ## we should be able to get the field prototype from the current project where the report is.
+        ## maybe using trackerProject maybe another service
 
         #foreach ( $fieldIdRaw in $parameters.columnFields.value().split(",") )
             #set ( $fieldId = $fieldIdRaw.trim() )
@@ -137,9 +170,19 @@ the length of the comment lines should be fix in the entire module
         #if ( $parameters.showSignaturesStatus.value() == true )
             #headerJsonItem( "Signatures" "signatureHtml" )
         #end
+
+        ## CR Comment 
+        ## what we are missing here?!?
+        ## ohhh Rambo you mean that I missed the code that I removed!?
+        ## yeh little dev-il, yeh yeh yeh the additional columns
+
     #end
 ]
 #end
+
+## CR Comment 
+## can we move all these functions to a differetn velocity module and just include it from our render.vm !?
+## I dont like that these function are inside our sacred code.
 
 ## ===================================================
 ## Functions for importing files (CSS, JS)
@@ -186,6 +229,9 @@ the length of the comment lines should be fix in the entire module
 ## into a JSON object to pass to Javascript.
 ## ===================================================
 #macro ( rowsJson $rowTitles )
+
+## CR Comment 
+## please think about gathering all the data to an array of velocity maps.
 [
     ## ----------------------------------------------------------------------------
     ## Iteration of this is per row. 
@@ -209,6 +255,11 @@ the length of the comment lines should be fix in the entire module
         ## For Project data column
         ## ===================================================
         #if ( true == $parameters.showProject.value() )
+
+            ## CR Comment
+            ## I think you should use the render() first thing without check the projectField.
+            ## the last one will always have a value even if it is undefined.. however it can never be undefined becuase a document is always within a project.
+
             #set ( $projectField = $rowTitle.fields().project() )
             #if ( $projectField )
                 #set ( $projectHtml = "$!projectField.render()" )
@@ -218,6 +269,9 @@ the length of the comment lines should be fix in the entire module
         ## ===================================================
         ## For Space data column
         ## ===================================================
+        ## CR Comment
+        ## consider using $rowTitle.space().render()
+
         #if ( true == $parameters.showSpace.value() )
             #set ( $relativePath = "$!rowTitle.getOldApi().getRelativePath()" )
             #set ( $spaceHtml = "_default" )
