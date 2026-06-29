@@ -135,6 +135,20 @@
     #set ( $void = $headersMap.put($key, $title) )
 #end
 
+#macro ( headerJson $headersMap )
+[
+    #set ( $index = 0 )
+    #foreach ( $key in $headersMap.keySet() )
+        #if ( $index > 0 ),#end
+        {
+            "title": "$esc.javascript($headersMap.get($key))",
+            "key": "$esc.javascript($key)"
+        }
+        #set ( $index = $index + 1 )
+    #end
+]
+#end
+
 #macro ( headersJson )
     #set ( $headersMap = $objectFactory.newMap() )
 
