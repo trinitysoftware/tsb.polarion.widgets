@@ -27,77 +27,78 @@
 ## ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## ==========================================================================
 
+## ==========================================================================
+## We set and define global functions and variables here.
+## ==========================================================================
+
 #set ( $warnSingleProject = "This widget renders a document matrix for <b>single Projects only</b>. Please select a <b>single Project</b> for the <b>Scope parameter</b>." )
 
 #set ( $allowRendering = true )
 #set ( $projectId = $parameters.dataSet.scope().projectId() )
-#set ( $docsQuery = $parameters.dataSet.getFor().revision("").queryToShow() )
+#set ( $documentQuery = $parameters.dataSet.getFor().revision("").queryToShow() )
+
+## --------------------------------------------------------------------------
+## The #parse directive allows us to import and render another 
+## local template file within your current template.
+## WARNING: the functions here might override functions in this file
+## that have similar names. Align the naming with their file, if possible. 
+## --------------------------------------------------------------------------
+#parse("resources/loadResources.vm")
+
+## --------------------------------------------------------------------------
+## For quotation marks. Global so we can use it later on.
+## --------------------------------------------------------------------------
+#set ( $q = '"' )
+
+## --------------------------------------------------------------------------
+## We use this for the id for the widget table. We have to concatenate it so 
+## we can identify which table to render for a specific widget.
+##
+## generateUniqueElementId is available in Interface RichPageRenderingContext
+## --------------------------------------------------------------------------
+#set( $tableId = $renderContext.generateUniqueElementId() )
 
 #if ( !$projectId )
     $widgetContext.renderWarning("$warnSingleProject")
     #set ( $allowRendering = false )
 #end
 
-## CR Comment
-## We should think about a better name for rowTitles.. maybe docItems
-## We should think about a better name for rowQueries.. maybe docQueries
-#set ( $rowTitles = [] )
-#set ( $rowQueries = [] )
+## --------------------------------------------------------------------------
+## This is for the additional columns. This is where you add a column
+## using docItems, docQueries.
+## --------------------------------------------------------------------------
+#set ( $docItems = [] )
+#set ( $docQueries = [] )
 
 ## CR Comment
 ## Missing a vomment
+## Still add a comment here.
 
 #macro ( prepareRowsMacro )
-    ## CR Comment
-    ## $q should be global for the module
-    #set ( $q = '"' )
-
-    ## CR Comment
-    ## make sure that the sort is being called, from what I remember the query function is the final function
-    ## that executes the query, maybe the sort should be before the query
-    #set ( $docs = $transaction.documents().search().query($docsQuery).sort("project.id space.id title") )
+    ## -----------------------------------------------------------------------
+    ## .sort() happens after the query.
+    ## -----------------------------------------------------------------------
+    #set ( $docs = $transaction.documents().search().query($documentQuery).sort("project.id space.id title") )
 
     #foreach ( $doc in $docs )
         ## CR Comment
         ## Why do we need the global rowTitles array if we can use the docs from the transaction query?
-        #set ( $void = $rowTitles.add($doc) )
+        #set ( $void = $docItem.add($doc) )
         #set ( $docNameWithSpace = $doc.getOldApi().getRelativePath().replace("_default/","") )
 
         ## CR Comment
         ## We should use the project.id:$doc.fields().project().id() .. or something similar. I mean we should take the project id from the doc object.
         ## this wil be more elegant and will help in the future to transition to a query for multiple projects.
-        #set ( $void = $rowQueries.add("(project.id:$projectId AND (NOT type:heading) AND document.id:$q$docNameWithSpace$q)") )
+        #set ( $void = $docQueries.add("(project.id:$projectId AND (NOT type:heading) AND document.id:$q$docNameWithSpace$q)") )
     #end
 #end
 
 ## CR Comment
 ## Missing a comment
 #macro ( renderTableMountMacro )
-    ## CR Comment
-    ## widget-table is too generic, if we will use several widgets on the same live report!?
-    ## maybe we should take the table id from the 'widget context' id and concatenate it to datatables-
-    <table id="widget-table" style="width:100%;table-layout:fixed;"></table>
+    <table id="widget-table-{tableId}" style="width:100%;table-layout:fixed;"></table>
 #end
 
-## CR Comment
-## Missing a comment
-## We should place all the json convertion functions together.. and we shall even 
-## move them to a different velocuity module.
-#macro ( headerJsonItem $title $key )
-    #if ( !$firstHeader ),#end
-    #set ( $safeTitle = $esc.javascript("$!title") )
-    #set ( $safeKey = $esc.javascript("$!key") )
-    {
-        "title": "$safeTitle",
-        "key": "$safeKey"
-    }
-    #set ( $firstHeader = false )
-#end
-
-## CR Comment
-## the length of the comment lines should be fix in the entire module
-
-## taker a look at the header of the module
 ## ===============================================
 ## Creates a JSON Object of all the headers.
 ## Project, Space, Document, and Signature do not 
@@ -108,7 +109,7 @@
 ## (e.g., escaping of certain characters for JS
 ## to better understand it, like this: \" \")
 ## ===============================================
-#macro ( headersJson )
+
 
 ## CR Comment
 ## Still mixing Velocity and json
@@ -130,54 +131,45 @@
 ##   #you can also use a size: $headersMap.size()
 ## #end
 
-[
-    #set ( $firstHeader = true )
+#macro ( headersJson )
+    #set ( $headersMap = $objectFactory.newMap() )
 
-    ## CR Comment
-    ## we want to render the header in any case
-    #if ( $rowTitles.size() > 0 )
-        #set ( $firstDoc = $rowTitles.get(0) )
+    #if ( $docItem.size() > 0 )
+        #set ( $firstDoc = $docItem.get(0) )
 
         #if ( $parameters.showProject.value() == true )
-            #headerJsonItem( "Project" "project" )
+            #putHeader( $headersMap.put("project", "Project") )
         #end
 
         #if ( $parameters.showSpace.value() == true )
-            #headerJsonItem( "Space" "space" )
+            #putHeader( $headersMap.put("space", "Space") )
         #end
 
-        #headerJsonItem( "Document" "documentHtml" )
-
-        ## CR Comment
-        ## We should render the header even without documents
-        ## we should be able to get the field prototype from the current project where the report is.
-        ## maybe using trackerProject maybe another service
+        #putHeader( $headersMap.put("documentHtml", "Document") )
 
         #foreach ( $fieldIdRaw in $parameters.columnFields.value().split(",") )
             #set ( $fieldId = $fieldIdRaw.trim() )
             #if ( !$fieldId.equals("") )
                 #set ( $fieldTitle = "$!firstDoc.fields().get($fieldId).label()" )
+
                 #if ( "$!fieldTitle" == "" )
                     #set ( $fieldTitle = "$!firstDoc.fields().get($fieldId).name()" )
                 #end
+
                 #if ( "$!fieldTitle" == "" )
                     #set ( $fieldTitle = $fieldId )
                 #end
-                #headerJsonItem( $fieldTitle $fieldId )
+
+                #putHeader( $headersMap.put($fieldId, $fieldTitle) )
             #end
         #end
 
         #if ( $parameters.showSignaturesStatus.value() == true )
-            #headerJsonItem( "Signatures" "signatureHtml" )
+            #putHeader( $headersMap.put("signatureHtml", "Signatures") )
         #end
-
-        ## CR Comment 
-        ## what we are missing here?!?
-        ## ohhh Rambo you mean that I missed the code that I removed!?
-        ## yeh little dev-il, yeh yeh yeh the additional columns
-
     #end
-]
+
+    #headerJson( $headersMap )
 #end
 
 ## CR Comment 
@@ -188,47 +180,11 @@
 ## Functions for importing files (CSS, JS)
 ## ===================================================
 
-#macro ( loadWidgetJsResource $js )
-    #loadJsResource($widgetContext.resourceUrl("$js"))
-#end
-
-#macro ( loadJsResource $url )
-    ## ----------------------------------------------------------------------------
-    ## Synchronous XHR fetch and eval — required for Polarion widget resources.
-    ## ----------------------------------------------------------------------------
-    <script type="text/javascript">
-        var xhrObj = new XMLHttpRequest();
-        xhrObj.open('GET', '$url', false);
-        xhrObj.send(null);
-        eval(xhrObj.responseText);
-    </script>
-#end
-
-#macro ( loadWidgetCssResource $css )
-    #loadCssResource( $widgetContext.resourceUrl("$css") )
-#end
-
-#macro ( loadCssResource $url )
-    ## ----------------------------------------------------------------------------
-    ## Synchronous XHR fetch injected into a <style> tag — required for Polarion widget resources.
-    ## ----------------------------------------------------------------------------
-    #set ( $cssId = $widgetContext.generateUniqueElementId() )
-
-    <style id="$cssId"></style>
-
-    <script type="text/javascript">
-        var xhrObj = new XMLHttpRequest();
-        xhrObj.open('GET', '$url', false);
-        xhrObj.send(null);
-        document.getElementById("$cssId").innerHTML = xhrObj.responseText;
-    </script>
-#end
-
 ## ===================================================
 ## Fetching data using velocity, then putting them 
 ## into a JSON object to pass to Javascript.
 ## ===================================================
-#macro ( rowsJson $rowTitles )
+#macro ( rowsJson $docItem )
 
 ## CR Comment 
 ## please think about gathering all the data to an array of velocity maps.
@@ -237,7 +193,7 @@
     ## Iteration of this is per row. 
     ## ----------------------------------------------------------------------------
     #set ( $firstRow = true )
-    #foreach( $rowTitle in $rowTitles )
+    #foreach( $rowTitle in $docItem )
 
         ## ----------------------------------------
         ## Initialize the variables for use later
@@ -331,7 +287,7 @@
 <script type="text/javascript">
     var widgetData = {
         headers: #headersJson(),
-        rows: #rowsJson($rowTitles)
+        rows: #rowsJson($docItem)
     };
 </script>
 #end

@@ -1,0 +1,35 @@
+#macro ( loadWidgetJsResource $js )
+    #loadJsResource($widgetContext.resourceUrl("$js"))
+#end
+
+#macro ( loadJsResource $url )
+    ## ----------------------------------------------------------------------------
+    ## Synchronous XHR fetch and eval — required for Polarion widget resources.
+    ## ----------------------------------------------------------------------------
+    <script type="text/javascript">
+        var xhrObj = new XMLHttpRequest();
+        xhrObj.open('GET', '$url', false);
+        xhrObj.send(null);
+        eval(xhrObj.responseText);
+    </script>
+#end
+
+#macro ( loadWidgetCssResource $css )
+    #loadCssResource( $widgetContext.resourceUrl("$css") )
+#end
+
+#macro ( loadCssResource $url )
+    ## ----------------------------------------------------------------------------
+    ## Synchronous XHR fetch injected into a <style> tag — required for Polarion widget resources.
+    ## ----------------------------------------------------------------------------
+    #set ( $cssId = $widgetContext.generateUniqueElementId() )
+
+    <style id="$cssId"></style>
+
+    <script type="text/javascript">
+        var xhrObj = new XMLHttpRequest();
+        xhrObj.open('GET', '$url', false);
+        xhrObj.send(null);
+        document.getElementById("$cssId").innerHTML = xhrObj.responseText;
+    </script>
+#end
