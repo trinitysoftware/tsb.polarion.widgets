@@ -131,42 +131,33 @@
 ##   #you can also use a size: $headersMap.size()
 ## #end
 
+#macro ( putHeader $headersMap $key $title )
+    #set ( $void = $headersMap.put($key, $title) )
+#end
+
 #macro ( headersJson )
     #set ( $headersMap = $objectFactory.newMap() )
 
-    #if ( $docItem.size() > 0 )
-        #set ( $firstDoc = $docItem.get(0) )
+    #if ( $parameters.showProject.value() == true )
+        #putHeader( $headersMap "project" "Project" )
+    #end
 
-        #if ( $parameters.showProject.value() == true )
-            #putHeader( $headersMap.put("project", "Project") )
+    #if ( $parameters.showSpace.value() == true )
+        #putHeader( $headersMap "space" "Space" )
+    #end
+
+    #putHeader( $headersMap "documentHtml" "Document" )
+
+    #foreach ( $fieldIdRaw in $parameters.columnFields.value().split(",") )
+        #set ( $fieldId = $fieldIdRaw.trim() )
+        #if ( !$fieldId.equals("") )
+            #set ( $fieldTitle = $fieldId.substring(0,1).toUpperCase() + $fieldId.substring(1) )
+            #putHeader( $headersMap $fieldId $fieldTitle )
         #end
+    #end
 
-        #if ( $parameters.showSpace.value() == true )
-            #putHeader( $headersMap.put("space", "Space") )
-        #end
-
-        #putHeader( $headersMap.put("documentHtml", "Document") )
-
-        #foreach ( $fieldIdRaw in $parameters.columnFields.value().split(",") )
-            #set ( $fieldId = $fieldIdRaw.trim() )
-            #if ( !$fieldId.equals("") )
-                #set ( $fieldTitle = "$!firstDoc.fields().get($fieldId).label()" )
-
-                #if ( "$!fieldTitle" == "" )
-                    #set ( $fieldTitle = "$!firstDoc.fields().get($fieldId).name()" )
-                #end
-
-                #if ( "$!fieldTitle" == "" )
-                    #set ( $fieldTitle = $fieldId )
-                #end
-
-                #putHeader( $headersMap.put($fieldId, $fieldTitle) )
-            #end
-        #end
-
-        #if ( $parameters.showSignaturesStatus.value() == true )
-            #putHeader( $headersMap.put("signatureHtml", "Signatures") )
-        #end
+    #if ( $parameters.showSignaturesStatus.value() == true )
+        #putHeader( $headersMap "signatureHtml" "Signatures" )
     #end
 
     #headerJson( $headersMap )
