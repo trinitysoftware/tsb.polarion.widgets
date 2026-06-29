@@ -43,7 +43,7 @@
 ## WARNING: the functions here might override functions in this file
 ## that have similar names. Align the naming with their file, if possible. 
 ## --------------------------------------------------------------------------
-#parse("resources/loadResources.vm")
+#parse("loadResources.vm")
 
 ## --------------------------------------------------------------------------
 ## For quotation marks. Global so we can use it later on.
