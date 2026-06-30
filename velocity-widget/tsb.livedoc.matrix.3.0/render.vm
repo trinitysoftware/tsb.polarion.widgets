@@ -52,7 +52,7 @@
 
 ## ==========================================================================
 ## CR Comment
-## Missing a vomment
+## Missing a comment
 ## ==========================================================================
 
 #macro ( prepareRowsMacro )
@@ -60,32 +60,27 @@
     ## Get the documents selected by the widget parameter.
     ## Sort them by project, space, and title.
     ## ======================================================================
-    #set ( $docs = $transaction.documents().search().query($documentQuery).sort("project.id space.id title") )
+    #set ( $_docs = $transaction.documents().search().query($documentQuery).sort("project.id space.id title") )
 
-    #foreach ( $doc in $docs )
-        ## CR Comment
-        ## Why do we need the global rowTitles array if we can use the docs from the transaction query?
-        
+    #foreach ( $_doc in $_docs )
         ## ==================================================================
         ## Store this document.
         ## Later, this document becomes one table row.
         ## ==================================================================
-        #set ( $void = $docItems.add($doc) )
+        #if (!$doc.isUnresolvable())
+            #set ( $void = $docItems.add($_doc) )
 
-        ## ==================================================================
-        ## Get the document path.
-        ## ==================================================================
-        #set ( $docNameWithSpace = $doc.getOldApi().getRelativePath().replace("_default/","") )
+            ## ==================================================================
+            ## Get the document path.
+            ## ==================================================================
+            #set ( $docNameWithSpace = $_doc.getOldApi().getRelativePath().replace("_default/","") )
 
-        ## ==================================================================
-        ## CR Comment - to be resolved
-        ## We should use the project.id:$doc.fields().project().id() .. or something similar. I mean we should take the project id from the doc object.
-        ## this wil be more elegant and will help in the future to transition to a query for multiple projects.
-        ## 
-        ## Build a work item query for this document.
-        ## It finds non-heading work items inside this document.
-        ## ==================================================================
-        #set ( $void = $docQueries.add("(project.id:$projectId AND (NOT type:heading) AND document.id:$q$docNameWithSpace$q)") )
+            ## ==================================================================
+            ## Build a work item query for this document.
+            ## It finds non-heading work items inside this document.
+            ## ==================================================================
+            #set ( $void = $docQueries.add("(project.id:$_doc.fields().project().projectId() AND (NOT type:heading) AND document.id:$q$docNameWithSpace$q)") )
+        #end
     #end
 #end
 
@@ -110,16 +105,20 @@
     ## value = the text shown in the column header
     ## ======================================================================
     #set ( $headersMap = $objectFactory.newMap() )
+    #set ( $headersKeys = [] )
 
     #if ( true == $parameters.showProject.value() )
         #set ( $void = $headersMap.put("project", "Project") )
+        #set ( $void = $headersKeys.add("project") )
     #end
 
     #if ( true == $parameters.showSpace.value() )
         #set ( $void = $headersMap.put("space", "Space") )
+        #set ( $void = $headersKeys.add("space") )
     #end
 
     #set ( $void = $headersMap.put("documentHtml", "Document") )
+    #set ( $void = $headersKeys.add("documentHtml") )
 
     ## ======================================================================
     ## Custom columns from the widget parameter.
@@ -131,67 +130,24 @@
             ## For now, use the field id as the column title.
             #set ( $fieldTitle = $fieldId )
             #set ( $void = $headersMap.put($fieldId, $fieldTitle) )
+            #set ( $void = $headersKeys.add($fieldId) )
         #end
     #end
 
     #if ( true == $parameters.showSignaturesStatus.value() )
         #set ( $void = $headersMap.put("signatureHtml","Signatures") )
+        #set ( $void = $headersKeys.add("signatureHtml") )
     #end
 
     ## ======================================================================
-    ## CR Comment - to be resolved
-    ## what we are missing here?!?
-    ## ohhh Rambo you mean that I missed the code that I removed!?
-    ## yeh little dev-il, yeh yeh yeh the additional columns
+    ## CR Comment - please comment
     ## ======================================================================
-#end
-
-## ==========================================================================
-## CR Comment - to be resolved
-## can we move all these functions to a differetn velocity module and just include it from our render.vm !?
-## I dont like that these function are inside our sacred code.
-## ==========================================================================
-
-## ==========================================================================
-## Functions for importing files (CSS, JS)
-## 
-## TO BE PUT IN ANOTHER FILE, THEN IMPORTED
-## ==========================================================================
-
-#macro ( loadWidgetJsResource $js )
-    #loadJsResource($widgetContext.resourceUrl("$js"))
-#end
-
-#macro ( loadJsResource $url )
-    ## ======================================================================
-    ## Synchronous XHR fetch and eval — required for Polarion widget resources.
-    ## ======================================================================
-    <script type="text/javascript">
-        var xhrObj = new XMLHttpRequest();
-        xhrObj.open('GET', '$url', false);
-        xhrObj.send(null);
-        eval(xhrObj.responseText);
-    </script>
-#end
-
-#macro ( loadWidgetCssResource $css )
-    #loadCssResource( $widgetContext.resourceUrl("$css") )
-#end
-
-#macro ( loadCssResource $url )
-    ## =======================================================================
-    ## Synchronous XHR fetch injected into a <style> tag — required for Polarion widget resources.
-    ## ======================================================================
-    #set ( $cssId = $widgetContext.generateUniqueElementId() )
-
-    <style id="$cssId"></style>
-
-    <script type="text/javascript">
-        var xhrObj = new XMLHttpRequest();
-        xhrObj.open('GET', '$url', false);
-        xhrObj.send(null);
-        document.getElementById("$cssId").innerHTML = xhrObj.responseText;
-    </script>
+    #foreach ( $columnParam in $parameters.columns.get() )
+        #if ( !($columnParam.title.value() == "") && !($columnParam.query.value() == "") )
+            #set ( $void = $headersMap.put($columnParam.title.value(), $columnParam.title.value()) )
+            #set ( $void = $headersKeys.add($columnParam.title.value()) )
+        #end
+    #end
 #end
 
 ## ==========================================================================
@@ -221,13 +177,16 @@
 
         #if ( true == $parameters.showProject.value() )
             #set ( $projectHtml = "$!docu.fields().project().render()")
+            #set ( $void = $rowsMap.put("project", $projectHtml) )
         #end
 
         #if ( true == $parameters.showSpace.value() )
             #set ( $spaceHtml = "$!docu.space().render()" )
+            #set ( $void = $rowsMap.put("space", $spaceHtml) )
         #end
 
         #set ( $documentHtml = $docu.render().withIcon().withLinks(true) )
+        #set ( $void = $rowsMap.put("documentHtml", $documentHtml) )
 
         #if ( true == $parameters.showSignaturesStatus.value() )
             #set ( $workflowSignatures = $docu.fields().workflowSignatures().toArrayList )
@@ -239,6 +198,8 @@
                     #set ( $signatureHtml = "${signatureHtml}<span style='margin: 1px;'>${renderedSignature}</span>" )
                 #end
             #end
+    
+            #set ( $void = $rowsMap.put("signatureHtml", $signatureHtml) )
         #end
 
         #set ( $fieldsId = $parameters.columnFields.value().split(",") )
@@ -249,14 +210,6 @@
                 #set ( $void = $rowsMap.put($fieldId, $fieldHtml) )
             #end
         #end
-
-        ## ==================================================================
-        ## FOR PUTTING IT IN A MAP
-        ## ==================================================================
-        #set ( $void = $rowsMap.put("project", $projectHtml) )
-        #set ( $void = $rowsMap.put("space", $spaceHtml) )
-        #set ( $void = $rowsMap.put("documentHtml", $documentHtml) )
-        #set ( $void = $rowsMap.put("signatureHtml", $signatureHtml) )
 
         ## ==================================================================
         ## The row is complete.
@@ -359,3 +312,51 @@
     ## Step 5: ask DataTables to render the table.
     #initDataTableMacro()
 #end
+
+## ==========================================================================
+## CR Comment - Everything below should move to tsb.framework.vm
+## ==========================================================================
+
+
+## ==========================================================================
+## Functions for importing files (CSS, JS)
+## 
+## TO BE PUT IN ANOTHER FILE, THEN IMPORTED
+## ==========================================================================
+
+#macro ( loadWidgetJsResource $js )
+    #loadJsResource($widgetContext.resourceUrl("$js"))
+#end
+
+#macro ( loadJsResource $url )
+    ## ======================================================================
+    ## Synchronous XHR fetch and eval — required for Polarion widget resources.
+    ## ======================================================================
+    <script type="text/javascript">
+        var xhrObj = new XMLHttpRequest();
+        xhrObj.open('GET', '$url', false);
+        xhrObj.send(null);
+        eval(xhrObj.responseText);
+    </script>
+#end
+
+#macro ( loadWidgetCssResource $css )
+    #loadCssResource( $widgetContext.resourceUrl("$css") )
+#end
+
+#macro ( loadCssResource $url )
+    ## =======================================================================
+    ## Synchronous XHR fetch injected into a <style> tag — required for Polarion widget resources.
+    ## ======================================================================
+    #set ( $cssId = $widgetContext.generateUniqueElementId() )
+
+    <style id="$cssId"></style>
+
+    <script type="text/javascript">
+        var xhrObj = new XMLHttpRequest();
+        xhrObj.open('GET', '$url', false);
+        xhrObj.send(null);
+        document.getElementById("$cssId").innerHTML = xhrObj.responseText;
+    </script>
+#end
+
