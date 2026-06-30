@@ -27,6 +27,8 @@
 ## ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## ==========================================================================
 
+#import("tsb.framework.vm")
+
 #set ( $warnSingleProject = "This widget renders a document matrix for <b>single Projects only</b>. Please select a <b>single Project</b> for the <b>Scope parameter</b>." )
 
 #set ( $allowRendering = true )
@@ -67,7 +69,7 @@
         ## Store this document.
         ## Later, this document becomes one table row.
         ## ==================================================================
-        #if (!$doc.isUnresolvable())
+        #if (!$_doc.isUnresolvable())
             #set ( $void = $docItems.add($_doc) )
 
             ## ==================================================================
@@ -166,7 +168,7 @@
     ## ======================================================================
     #foreach ( $docu in $docItems )
         #set ( $indexLoop = $velocityCount - 1 )
-        #set ( $docQuery = "$docQueries.get($indexLoop)" )
+        #set ( $docQuery = $docQueries.get($indexLoop) )
 
         ## ==================================================================
         ## This map stores all cells for the current row.
@@ -216,14 +218,14 @@
         
         #foreach ( $columnParam in $parameters.columns.get() )
             #if ( !($columnParam.title.value() == "") && !($columnParam.query.value() == "") )
-                #set ( $cellQuery = "$rowQuery AND ($columnParam.query.value())" )
+                #set ( $cellQuery = "$docQuery AND ($columnParam.query.value())" )
                 #set ( $workitemCount = $transaction.workItems().search().query("$cellQuery").size() )
                 #set ( $trackerLink = $transaction.context().createPortalLink().project("$docu.fields().project().projectId()").workItems().query("$cellQuery").toEncodedRelativeUrl() )
                 #set ( $docSpace = $docu.getOldApi().getModuleFolder() )
                 #set ( $docName = $docu.fields().moduleName().get() )
                 #set ( $docLink = $transaction.context().createPortalLink().project("$docu.fields().project().projectId()").document("$docSpace","$docName").filter("$cellQuery").toEncodedRelativeUrl() )
                
-                #set ( $cellHtml = "<a href=$q$link$q>$workitemCount</a> / <a href=$q$docLink$q>Doc</a>" )
+                #set ( $cellHtml = "<a href=$q$trackerLink$q>$workitemCount</a> / <a href=$q$docLink$q>Doc</a>" )
                 #set ( $void = $rowsMap.put($columnParam.title.value(), $cellHtml) )
             #end
         #end
@@ -236,7 +238,6 @@
     #end
 #end
 
-
 ## =================================
 ## Main 
 ## =================================
@@ -248,137 +249,5 @@
     #prepareHeadersMacro()
     #prepareDataRowsMacro()
 
-    #initDataTableMacro ($widgetTableId $headerKeys $headerMap $dataRows)
-
-    ## Step 3: render the empty table and pass the mapped data to JavaScript.
-
- ##   #renderTableMountMacro()
- ## #renderWidgetDataMacro()
-
-    ## Step 4: load DataTables resources.
-    #loadWidgetCssResource("resources/datatables.css")
-    #loadWidgetJsResource("resources/datatables.js")
-
-    ## Step 5: ask DataTables to render the table.
-##    #initDataTableMacro()
-#end
-
-## ==========================================================================
-## CR Comment - Everything below should move to tsb.framework.vm
-## ==========================================================================
-
-
-## ==========================================================================
-## Functions for importing files (CSS, JS)
-## 
-## TO BE PUT IN ANOTHER FILE, THEN IMPORTED
-## ==========================================================================
-
-#macro ( loadWidgetJsResource $js )
-    #loadJsResource($widgetContext.resourceUrl("$js"))
-#end
-
-#macro ( loadJsResource $url )
-    ## ======================================================================
-    ## Synchronous XHR fetch and eval — required for Polarion widget resources.
-    ## ======================================================================
-    <script type="text/javascript">
-        var xhrObj = new XMLHttpRequest();
-        xhrObj.open('GET', '$url', false);
-        xhrObj.send(null);
-        eval(xhrObj.responseText);
-    </script>
-#end
-
-#macro ( loadWidgetCssResource $css )
-    #loadCssResource( $widgetContext.resourceUrl("$css") )
-#end
-
-#macro ( loadCssResource $url )
-    ## =======================================================================
-    ## Synchronous XHR fetch injected into a <style> tag — required for Polarion widget resources.
-    ## ======================================================================
-    #set ( $cssId = $widgetContext.generateUniqueElementId() )
-
-    <style id="$cssId"></style>
-
-    <script type="text/javascript">
-        var xhrObj = new XMLHttpRequest();
-        xhrObj.open('GET', '$url', false);
-        xhrObj.send(null);
-        document.getElementById("$cssId").innerHTML = xhrObj.responseText;
-    </script>
-#end
-
-#macro ( renderTableMountMacro )
-    ## This is the empty table element.
-    ## DataTables will fill it using widgetData.
-    <table id="$widgetTableId" style="width:100%;table-layout:fixed;"></table>
-#end
-
-
-
-#macro ( renderWidgetDataMacro )
-<script type="text/javascript">
-    // This object is passed to DataTables.
-    // headers stores the columns; rows stores the row data.
-    var widgetData = {
-        headers: [],
-        rows: []
-    };
-
-    // Convert the Velocity headers map into JavaScript header objects.
-    // Example: "space" -> "Space" becomes { key: "space", title: "Space" }.
-    #foreach ( $headerKey in $headersMap.keySet() )
-        widgetData.headers.push({
-            title: "$esc.javascript($headersMap.get($headerKey))",
-            key: "$esc.javascript($headerKey)"
-        });
-    #end
-
-    // Convert each Velocity row map into a JavaScript row object.
-    // Each Velocity row map becomes one JavaScript row object.
-    #foreach ( $rowMap in $dataRows )
-        var rowData = {};
-
-        // Copy every cell from the row map into the JavaScript row object.
-        #foreach ( $rowKey in $rowMap.keySet() )
-            rowData["$esc.javascript($rowKey)"] = "$esc.javascript($rowMap.get($rowKey))";
-        #end
-
-        // This row is ready. Give it to DataTables' row list.
-        widgetData.rows.push(rowData);
-    #end
-</script>
-#end
-
-#macro ( initDataTableMacro )
-<script type="text/javascript">
-(function () {
-    // Find our table shell by its unique id.
-    // The unique id lets this widget find its own table.
-    var tableEl = document.getElementById('$widgetTableId');
-
-    // If the table or data is missing, stop quietly.
-    if (!tableEl || typeof widgetData === 'undefined') {
-        return;
-    }
-
-    // DataTables wants columns in this shape:
-    // { title: "Human label", data: "rowObjectKey" }
-    var columns = widgetData.headers.map(function (header) {
-        return {
-            title: header.title,
-            data: header.key
-        };
-    });
-
-    // Finally: build the interactive table.
-    // DataTables reads each row using the keys from columns.data.
-    new DataTable(tableEl, {
-        columns: columns,
-        data: widgetData.rows
-    });
-})();
-</script>
+    #initDataTableMacro ( $widgetTableId $headersKeys $headersMap $dataRows )
 #end
