@@ -154,7 +154,7 @@
 ## Fetching data using Velocity maps, then passing
 ## those maps to Javascript for DataTables.
 ## ==========================================================================
-#macro ( prepareDataRowsMacro $docItems )
+#macro ( prepareDataRowsMacro )
     ## ======================================================================
     ## $dataRows stores all table rows.
     ## Each $rowsMap inside it stores one table row.
@@ -165,6 +165,9 @@
     ## Create one row map for each document.
     ## ======================================================================
     #foreach ( $docu in $docItems )
+        #set ( $indexLoop = $velocityCount - 1 )
+        #set ( $docQuery = "$docQueries.get($indexLoop)" )
+
         ## ==================================================================
         ## This map stores all cells for the current row.
         ## key = column id, value = rendered cell content.
@@ -210,6 +213,20 @@
                 #set ( $void = $rowsMap.put($fieldId, $fieldHtml) )
             #end
         #end
+        
+        #foreach ( $columnParam in $parameters.columns.get() )
+            #if ( !($columnParam.title.value() == "") && !($columnParam.query.value() == "") )
+                #set ( $cellQuery = "$rowQuery AND ($columnParam.query.value())" )
+                #set ( $workitemCount = $transaction.workItems().search().query("$cellQuery").size() )
+                #set ( $trackerLink = $transaction.context().createPortalLink().project("$docu.fields().project().projectId()").workItems().query("$cellQuery").toEncodedRelativeUrl() )
+                #set ( $docSpace = $docu.getOldApi().getModuleFolder() )
+                #set ( $docName = $docu.fields().moduleName().get() )
+                #set ( $docLink = $transaction.context().createPortalLink().project("$docu.fields().project().projectId()").document("$docSpace","$docName").filter("$cellQuery").toEncodedRelativeUrl() )
+               
+                #set ( $cellHtml = "<a href=$q$link$q>$workitemCount</a> / <a href=$q$docLink$q>Doc</a>" )
+                #set ( $void = $rowsMap.put($columnParam.title.value(), $cellHtml) )
+            #end
+        #end
 
         ## ==================================================================
         ## The row is complete.
@@ -219,11 +236,87 @@
     #end
 #end
 
+
+## =================================
+## Main 
+## =================================
+#if ( $allowRendering )
+    ## Step 1: collect documents.
+    #prepareRowsMacro()
+
+    ## Step 2: build header and row maps.
+    #prepareHeadersMacro()
+    #prepareDataRowsMacro()
+
+    #initDataTableMacro ($widgetTableId $headerKeys $headerMap $dataRows)
+
+    ## Step 3: render the empty table and pass the mapped data to JavaScript.
+
+ ##   #renderTableMountMacro()
+ ## #renderWidgetDataMacro()
+
+    ## Step 4: load DataTables resources.
+    #loadWidgetCssResource("resources/datatables.css")
+    #loadWidgetJsResource("resources/datatables.js")
+
+    ## Step 5: ask DataTables to render the table.
+##    #initDataTableMacro()
+#end
+
+## ==========================================================================
+## CR Comment - Everything below should move to tsb.framework.vm
+## ==========================================================================
+
+
+## ==========================================================================
+## Functions for importing files (CSS, JS)
+## 
+## TO BE PUT IN ANOTHER FILE, THEN IMPORTED
+## ==========================================================================
+
+#macro ( loadWidgetJsResource $js )
+    #loadJsResource($widgetContext.resourceUrl("$js"))
+#end
+
+#macro ( loadJsResource $url )
+    ## ======================================================================
+    ## Synchronous XHR fetch and eval — required for Polarion widget resources.
+    ## ======================================================================
+    <script type="text/javascript">
+        var xhrObj = new XMLHttpRequest();
+        xhrObj.open('GET', '$url', false);
+        xhrObj.send(null);
+        eval(xhrObj.responseText);
+    </script>
+#end
+
+#macro ( loadWidgetCssResource $css )
+    #loadCssResource( $widgetContext.resourceUrl("$css") )
+#end
+
+#macro ( loadCssResource $url )
+    ## =======================================================================
+    ## Synchronous XHR fetch injected into a <style> tag — required for Polarion widget resources.
+    ## ======================================================================
+    #set ( $cssId = $widgetContext.generateUniqueElementId() )
+
+    <style id="$cssId"></style>
+
+    <script type="text/javascript">
+        var xhrObj = new XMLHttpRequest();
+        xhrObj.open('GET', '$url', false);
+        xhrObj.send(null);
+        document.getElementById("$cssId").innerHTML = xhrObj.responseText;
+    </script>
+#end
+
 #macro ( renderTableMountMacro )
     ## This is the empty table element.
     ## DataTables will fill it using widgetData.
     <table id="$widgetTableId" style="width:100%;table-layout:fixed;"></table>
 #end
+
+
 
 #macro ( renderWidgetDataMacro )
 <script type="text/javascript">
@@ -289,74 +382,3 @@
 })();
 </script>
 #end
-
-## =================================
-## Main 
-## =================================
-#if ( $allowRendering )
-    ## Step 1: collect documents.
-    #prepareRowsMacro()
-
-    ## Step 2: build header and row maps.
-    #prepareHeadersMacro()
-    #prepareDataRowsMacro($docItems)
-
-    ## Step 3: render the empty table and pass the mapped data to JavaScript.
-    #renderTableMountMacro()
-    #renderWidgetDataMacro()
-
-    ## Step 4: load DataTables resources.
-    #loadWidgetCssResource("resources/datatables.css")
-    #loadWidgetJsResource("resources/datatables.js")
-
-    ## Step 5: ask DataTables to render the table.
-    #initDataTableMacro()
-#end
-
-## ==========================================================================
-## CR Comment - Everything below should move to tsb.framework.vm
-## ==========================================================================
-
-
-## ==========================================================================
-## Functions for importing files (CSS, JS)
-## 
-## TO BE PUT IN ANOTHER FILE, THEN IMPORTED
-## ==========================================================================
-
-#macro ( loadWidgetJsResource $js )
-    #loadJsResource($widgetContext.resourceUrl("$js"))
-#end
-
-#macro ( loadJsResource $url )
-    ## ======================================================================
-    ## Synchronous XHR fetch and eval — required for Polarion widget resources.
-    ## ======================================================================
-    <script type="text/javascript">
-        var xhrObj = new XMLHttpRequest();
-        xhrObj.open('GET', '$url', false);
-        xhrObj.send(null);
-        eval(xhrObj.responseText);
-    </script>
-#end
-
-#macro ( loadWidgetCssResource $css )
-    #loadCssResource( $widgetContext.resourceUrl("$css") )
-#end
-
-#macro ( loadCssResource $url )
-    ## =======================================================================
-    ## Synchronous XHR fetch injected into a <style> tag — required for Polarion widget resources.
-    ## ======================================================================
-    #set ( $cssId = $widgetContext.generateUniqueElementId() )
-
-    <style id="$cssId"></style>
-
-    <script type="text/javascript">
-        var xhrObj = new XMLHttpRequest();
-        xhrObj.open('GET', '$url', false);
-        xhrObj.send(null);
-        document.getElementById("$cssId").innerHTML = xhrObj.responseText;
-    </script>
-#end
-
