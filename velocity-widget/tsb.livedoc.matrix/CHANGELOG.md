@@ -99,3 +99,43 @@ Documentation and formatting pass for readability and maintainability. No new wi
 - [FIX] Restored `findMatrixElementByDataAttribute()` — the function body was dropped when section comments were moved, breaking toolbar control lookup.
 - [FIX] Restored the complete `readSpanValue()` function wrapper — an orphaned function body caused a JavaScript syntax error that stopped the entire `<script>` block and prevented the matrix from rendering.
 - [FIX] Kept `$transaction.context().createPortalLink().project(…).workItems().query(…).toEncodedRelativeUrl()` and the matching `.document(…).filter(…).toEncodedRelativeUrl()` assignments on single lines; Velocity does not support splitting method chains across lines.
+
+## Version 3.0 
+
+### 2026-06-30
+
+- [ENHANCEMENT] Split DataTables rendering helpers out of `render.vm` and into `velocity-scripts/tsb.framework.vm`.
+- [ENHANCEMENT] Replaced the old `#parse("loadResources.vm")` usage with `#import("tsb.framework.vm")`.
+- [ENHANCEMENT] Moved widget resource loading macros (`loadWidgetCssResource`, `loadWidgetJsResource`, `loadCssResource`, `loadJsResource`) into the shared framework file.
+- [ENHANCEMENT] Moved `renderWidgetDataMacro()` and `initDataTableMacro()` into the shared framework file so `render.vm` prepares data and the framework renders the table.
+- [ENHANCEMENT] Replaced manual JSON array generation in `headersJson()` and `rowsJson()` with Velocity maps and lists: `$headersMap`, `$headersKeys`, and `$dataRows`.
+- [ENHANCEMENT] Added `prepareHeadersMacro()` to build table headers before passing them to DataTables.
+- [ENHANCEMENT] Added `prepareDataRowsMacro()` to build one Velocity row map per LiveDoc before passing rows to DataTables.
+- [ENHANCEMENT] Added support for configured additional query columns from the repeatable `columns` parameter.
+- [ENHANCEMENT] Added work item count links and filtered `Doc` links for each additional query column cell.
+- [ENHANCEMENT] Generated a unique table id with `$widgetContext.generateUniqueElementId()` so multiple widget instances can render on the same page without sharing `widget-table`.
+- [FIX] Changed document collection from the broken `$docItem.add($doc)` reference to `$docItems.add($_doc)`.
+- [FIX] Skipped unresolvable documents before adding them to the matrix row list.
+- [FIX] Built each document work item query with the project id from the document object instead of the outer `$projectId`.
+- [FIX] Rendered the Project value directly with `docu.fields().project().render()` instead of checking a separate project field variable.
+- [FIX] Rendered the Space value with `docu.space().render()` instead of manually parsing the old API relative path.
+- [FIX] Kept signature rendering filtered to skip `obsolete` and `notAvailable` states.
+- [FIX] Removed inline JavaScript object comments from manually generated row JSON by moving row data into Velocity maps before JavaScript conversion.
+- [FIX] Resolved old CR comments about mixing Velocity and JSON by keeping the data in Velocity maps until `renderWidgetDataMacro()` converts it for DataTables.
+- [FIX] Resolved old CR comments about moving JSON/resource helper functions out of `render.vm` by moving them to `tsb.framework.vm`.
+
+### 2026-07-01
+
+Documentation update only. No widget behavior changes and no code fixes.
+
+- [DOCS] Replaced the root `README.md` opening description with a specific repository description for `tsb.livedoc.matrix`.
+- [DOCS] Updated the root widget table from one generic widget row to two current entries: `TSB LiveDoc Matrix 3.0` and `TSB Velocity Framework`.
+- [DOCS] Added `velocity-scripts/tsb.framework.vm` to the root README because `render.vm` imports it.
+- [DOCS] Added a root `Contents` table with exact paths for widget files, DataTables resources, license, changelog, icon, and shared framework macros.
+- [DOCS] Updated root deployment steps to zip `velocity-widget/tsb.livedoc.matrix/` contents and include `resources/` at the archive root.
+- [DOCS] Updated the root repository layout to include `velocity-scripts/`, `icon.png`, and `resources/datatables.css` / `resources/datatables.js`.
+- [DOCS] Added a root widget parameter table for `dataSet`, `showProject`, `showSpace`, `showSignaturesStatus`, `columnFields`, and `columns`.
+- [DOCS] Replaced widget README metadata from old trial values (`trial-widget-5`, `trial5`, `trials`) to current values (`tsb.livedoc.matrix`, `TSB LiveDoc Matrix 3.0`, `Trinity`).
+- [DOCS] Replaced outdated widget README rendering notes for `headersJson()` and `rowsJson($rowTitles)` with the current `initDataTableMacro()` flow from `tsb.framework.vm`.
+- [DOCS] Added widget README sections for current contents, parameters, rendering flow, rendered columns, additional query columns, and deployment.
+- [DOCS] Added shared macro usage notes to both README files: macro files must be placed in `/.polarion/pages/scripts/velocity` before they can be imported and used by widget files.

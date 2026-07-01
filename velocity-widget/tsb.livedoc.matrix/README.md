@@ -1,82 +1,86 @@
-# trial-widget-5
+# TSB LiveDoc Matrix 3.0
 
-Trial Polarion Velocity widget for rendering a LiveDoc document matrix with DataTables.
+Polarion Velocity widget for rendering a LiveDoc matrix with DataTables.
 
 | Property | Value |
 |----------|-------|
-| Widget folder | `trial-widget-5` |
-| Label | `trial5` |
-| Tags | `trials` |
+| Widget id | `tsb.livedoc.matrix` |
+| Widget folder | `velocity-widget/tsb.livedoc.matrix/` |
+| Label | `TSB LiveDoc Matrix 3.0` |
+| Tags | `Trinity` |
 
-## Current Rendering Flow
+## Contents
 
-1. Velocity reads widget parameters and fetches documents from the configured `dataSet`.
-2. Velocity builds `widgetData.headers` with `headersJson()`.
-3. Velocity builds `widgetData.rows` with `rowsJson($rowTitles)`.
-4. `resources/datatables.css` and `resources/datatables.js` are loaded through widget resource XHR helpers.
-5. `initDataTableMacro()` instantiates DataTables with:
+| Path | Description |
+|------|-------------|
+| [`render.vm`](render.vm) | Builds the LiveDoc rows, table headers, document field cells, signature cells, and additional query-count cells. |
+| [`parameters.vm`](parameters.vm) | Defines the Data Set parameter, display toggles, document field list, and additional query columns. |
+| [`description.vm`](description.vm) | Describes the widget parameters in Polarion. |
+| [`details.vm`](details.vm) | Describes the widget in Polarion. |
+| [`dependencies.vm`](dependencies.vm) | Widget dependency file. It is currently empty except for the license header. |
+| [`widget.properties`](widget.properties) | Defines the Polarion widget label and tags. |
+| [`resources/datatables.css`](resources/datatables.css) | DataTables stylesheet loaded by `tsb.framework.vm`. |
+| [`resources/datatables.js`](resources/datatables.js) | DataTables script loaded by `tsb.framework.vm`. |
+| [`icon.png`](icon.png) | Widget icon. |
+| [`CHANGELOG.md`](CHANGELOG.md) | Change history for this widget. |
+| [`LICENSE`](LICENSE) | BSD 3-Clause license. |
+| [`../../velocity-scripts/tsb.framework.vm`](../../velocity-scripts/tsb.framework.vm) | Shared macros imported by `render.vm`. |
 
-```javascript
-new DataTable(tableEl, {
-    columns: columns,
-    data: widgetData.rows
-});
-```
+## Parameters
 
-## Data Contract
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `dataSet` | None | Selects the Polarion project scope and LiveDoc document query. Rendering requires one project. |
+| `showProject` | `true` | Adds the Project column. |
+| `showSpace` | `true` | Adds the Space column. |
+| `showSignaturesStatus` | `true` | Adds the Signatures column. Obsolete and not available signatures are skipped. |
+| `columnFields` | `status,updated` | Comma-separated document field IDs rendered as table columns. |
+| `columns` | Empty | Repeatable additional columns. Each entry has a title and Lucene query. |
 
-`headersJson()` outputs DataTables column metadata:
+## Rendering Flow
 
-```javascript
-[
-    { "title": "Project", "key": "project" },
-    { "title": "Document", "key": "documentHtml" },
-    { "title": "Status", "key": "status" }
-]
-```
+1. `render.vm` imports `tsb.framework.vm`.
+2. `render.vm` reads `dataSet.scope().projectId()` and stops with a warning if no project is selected.
+3. `render.vm` searches documents using the Data Set document query.
+4. Each resolved LiveDoc becomes one table row.
+5. Header and row maps are built in Velocity.
+6. `initDataTableMacro()` converts the maps to `widgetData.headers` and `widgetData.rows`.
+7. `resources/datatables.css` and `resources/datatables.js` are loaded through widget resource XHR helpers.
+8. DataTables renders the table.
 
-`rowsJson($rowTitles)` outputs row objects using matching keys:
+## Rendered Columns
 
-```javascript
-[
-    {
-        "project": "...rendered project HTML...",
-        "documentHtml": "...rendered document link HTML...",
-        "status": "...rendered field HTML..."
-    }
-]
-```
+| Column | Source |
+|--------|--------|
+| Project | `docu.fields().project().render()` |
+| Space | `docu.space().render()` |
+| Document | `docu.render().withIcon().withLinks(true)` |
+| Document fields | `docu.fields().get($fieldId).render()` for each field in `columnFields` |
+| Signatures | `docu.fields().workflowSignatures().toArrayList` |
+| Additional query columns | Work item count and `Doc` link for each configured Lucene query |
 
-DataTables maps each column with:
+## Additional Query Columns
 
-```javascript
-{
-    title: header.title,
-    data: header.key
-}
-```
+Each configured entry in `columns` must have:
 
-## Rendered Values
+| Field | Description |
+|-------|-------------|
+| `title` | Column header text. |
+| `query` | Lucene query appended to the document work item query. |
 
-Row cell values are rendered by Velocity before they are passed to JavaScript.
+Each cell in an additional query column shows:
 
-- Project uses `fields().project().render()`.
-- Document uses `render().withIcon().withLinks(true)`.
-- Configured custom fields use `fields().get($fieldId).render()`.
-- Signatures use `workflowSignatures().toArrayList`, skip `obsolete` and `notAvailable`, and append rendered signature HTML into `signatureHtml`.
+- A linked work item count.
+- A `Doc` link to the same query filtered in the LiveDoc.
 
-## Supported Parameters
+## Deployment
 
-| Parameter | Behavior |
-|-----------|----------|
-| `dataSet` | Provides project scope and document query. Rendering requires a single project. |
-| `showProject` | Adds the Project column and `project` row value. |
-| `showSpace` | Adds the Space column and `space` row value. |
-| `showSignaturesStatus` | Adds the Signatures column and `signatureHtml` row value. |
-| `columnFields` | Comma-separated document field IDs rendered as additional columns. |
+Zip the contents of this folder and upload the zip in Polarion Administration under Velocity Widgets.
 
-## Notes
+The zip root must contain `render.vm`, `parameters.vm`, `widget.properties`, and `resources/`.
 
-- The table mount is `<table id="widget-table" style="width:100%;table-layout:fixed;"></table>`.
-- DataTables creates the visible table from `widgetData.headers` and `widgetData.rows`.
-- Widget-local JS/CSS resources are loaded by XHR because Polarion widget resources are not loaded with normal `<script src>` / `<link href>` tags.
+## Shared macros
+
+To use macros from another Velocity file in Polarion, place the macro file in `/.polarion/pages/scripts/velocity`.
+
+After the file is in that directory, import it from the widget file. This widget imports `tsb.framework.vm` from `render.vm` and can then use the macros defined in that file.

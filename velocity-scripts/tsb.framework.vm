@@ -1,13 +1,19 @@
 ## ==========================================================================
-## Functions for importing files (CSS, JS)
-## 
-## TO BE PUT IN ANOTHER FILE, THEN IMPORTED
+## Shared macros for loading widget resources and rendering DataTables output.
+## Import this file from a widget render file before calling these macros.
 ## ==========================================================================
 
+## ==========================================================================
+## Resolve a widget-local JavaScript resource URL, then load the script.
+## ==========================================================================
 #macro ( loadWidgetJsResource $js )
     #loadJsResource($widgetContext.resourceUrl("$js"))
 #end
 
+## ==========================================================================
+## Load JavaScript from a URL and execute it in the page.
+## Polarion widget resources require this XHR loading pattern.
+## ==========================================================================
 #macro ( loadJsResource $url )
     ## ======================================================================
     ## Synchronous XHR fetch and eval — required for Polarion widget resources.
@@ -20,10 +26,17 @@
     </script>
 #end
 
+## ==========================================================================
+## Resolve a widget-local CSS resource URL, then load the stylesheet.
+## ==========================================================================
 #macro ( loadWidgetCssResource $css )
     #loadCssResource( $widgetContext.resourceUrl("$css") )
 #end
 
+## ==========================================================================
+## Load CSS from a URL and inject it into a generated <style> element.
+## Polarion widget resources require this XHR loading pattern.
+## ==========================================================================
 #macro ( loadCssResource $url )
     ## =======================================================================
     ## Synchronous XHR fetch injected into a <style> tag — required for Polarion widget resources.
@@ -40,6 +53,10 @@
     </script>
 #end
 
+## ==========================================================================
+## Convert Velocity header and row maps into JavaScript data for DataTables.
+## The server prepares the maps; this macro serializes them for the client.
+## ==========================================================================
 #macro ( renderWidgetDataMacro $headersMap $headersKeys $dataRows )
 <script type="text/javascript">
     // This object is passed to DataTables.
@@ -74,6 +91,10 @@
 </script>
 #end
 
+## ==========================================================================
+## Render the table shell, load DataTables assets, and initialize DataTables.
+## The caller provides the table id, ordered headers, and prepared row data.
+## ==========================================================================
 #macro ( initDataTableMacro $widgetTableId $headersKeys $headersMap $dataRows)
     ## ===================================================
     ## This is the empty table element.
@@ -81,8 +102,14 @@
     ## ===================================================
     <table id="$widgetTableId" style="width:100%;table-layout:fixed;"></table>
 
+    ## ===================================================
+    ## Write the prepared server data into JavaScript.
+    ## ===================================================
     #renderWidgetDataMacro( $headersMap $headersKeys $dataRows )
 
+    ## ===================================================
+    ## Load widget-local DataTables assets.
+    ## ===================================================
     #loadWidgetCssResource("resources/datatables.css")
     #loadWidgetJsResource("resources/datatables.js")
 

@@ -27,227 +27,197 @@
 ## ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## ==========================================================================
 
-## ==========================================================================
-## We set and define global functions and variables here.
-## ==========================================================================
+#import("tsb.framework.vm")
 
+## ==========================================================================
+## Warning shown when the Data Set does not resolve to one project.
+## This widget builds document and work item links in one project context.
+## ==========================================================================
 #set ( $warnSingleProject = "This widget renders a document matrix for <b>single Projects only</b>. Please select a <b>single Project</b> for the <b>Scope parameter</b>." )
 
+## ==========================================================================
+## Read the selected project and document query from the Data Set parameter.
+## $allowRendering is turned off when the required project scope is missing.
+## ==========================================================================
 #set ( $allowRendering = true )
 #set ( $projectId = $parameters.dataSet.scope().projectId() )
 #set ( $documentQuery = $parameters.dataSet.getFor().revision("").queryToShow() )
 
-## --------------------------------------------------------------------------
-## The #parse directive allows us to import and render another 
-## local template file within your current template.
-## WARNING: the functions here might override functions in this file
-## that have similar names. Align the naming with their file, if possible. 
-## --------------------------------------------------------------------------
-#parse("loadResources.vm")
-
-## --------------------------------------------------------------------------
-## For quotation marks. Global so we can use it later on.
-## --------------------------------------------------------------------------
-#set ( $q = '"' )
-
-## --------------------------------------------------------------------------
-## We use this for the id for the widget table. We have to concatenate it so 
-## we can identify which table to render for a specific widget.
-##
-## generateUniqueElementId is available in Interface RichPageRenderingContext
-## --------------------------------------------------------------------------
-#set( $tableId = $renderContext.generateUniqueElementId() )
-
+## ==========================================================================
+## Stop rendering early when the Data Set does not select a single project.
+## ==========================================================================
 #if ( !$projectId )
     $widgetContext.renderWarning("$warnSingleProject")
     #set ( $allowRendering = false )
 #end
 
-## --------------------------------------------------------------------------
-## This is for the additional columns. This is where you add a column
-## using docItems, docQueries.
-## --------------------------------------------------------------------------
+## ==========================================================================
+## $docItems stores the LiveDocs found by the document query.
+## $docQueries stores the matching work item query for each LiveDoc.
+## Both lists use the same index so each document can find its own query later.
+## ==========================================================================
 #set ( $docItems = [] )
 #set ( $docQueries = [] )
 
-## CR Comment
-## Missing a vomment
-## Still add a comment here.
+## ==========================================================================
+## $q keeps double quotes readable when building Lucene query strings.
+## $widgetTableId gives this widget instance its own table element.
+## ==========================================================================
+#set ( $q = '"' )
+#set ( $tableUniqueId = $widgetContext.generateUniqueElementId() )
+#set ( $widgetTableId = "widget-table-${tableUniqueId}" )
 
+## ==========================================================================
+## Collect LiveDocs and build one work item query per LiveDoc.
+## The row-building step uses the collected documents and matching queries.
+## ==========================================================================
 #macro ( prepareRowsMacro )
-    ## -----------------------------------------------------------------------
-    ## .sort() happens after the query.
-    ## -----------------------------------------------------------------------
-    #set ( $docs = $transaction.documents().search().query($documentQuery).sort("project.id space.id title") )
+    ## ======================================================================
+    ## Get the documents selected by the widget parameter.
+    ## Sort them by project, space, and title.
+    ## ======================================================================
+    #set ( $_docs = $transaction.documents().search().query($documentQuery).sort("project.id space.id title") )
 
-    #foreach ( $doc in $docs )
-        ## CR Comment
-        ## Why do we need the global rowTitles array if we can use the docs from the transaction query?
-        #set ( $void = $docItem.add($doc) )
-        #set ( $docNameWithSpace = $doc.getOldApi().getRelativePath().replace("_default/","") )
+    #foreach ( $_doc in $_docs )
+        ## ==================================================================
+        ## Skip unresolved documents because their fields and links cannot be
+        ## rendered safely. Resolved documents become table rows.
+        ## ==================================================================
+        #if (!$_doc.isUnresolvable())
+            #set ( $void = $docItems.add($_doc) )
 
-        ## CR Comment
-        ## We should use the project.id:$doc.fields().project().id() .. or something similar. I mean we should take the project id from the doc object.
-        ## this wil be more elegant and will help in the future to transition to a query for multiple projects.
-        #set ( $void = $docQueries.add("(project.id:$projectId AND (NOT type:heading) AND document.id:$q$docNameWithSpace$q)") )
+            ## ==================================================================
+            ## Get the document id used by work item document queries.
+            ## Polarion stores the default space with an "_default/" prefix.
+            ## ==================================================================
+            #set ( $docNameWithSpace = $_doc.getOldApi().getRelativePath().replace("_default/","") )
+
+            ## ==================================================================
+            ## Build a work item query for this document.
+            ## It finds non-heading work items inside this document.
+            ## ==================================================================
+            #set ( $void = $docQueries.add("(project.id:$_doc.fields().project().projectId() AND (NOT type:heading) AND document.id:$q$docNameWithSpace$q)") )
+        #end
     #end
 #end
 
-## CR Comment
-## Missing a comment
-#macro ( renderTableMountMacro )
-    <table id="widget-table-{tableId}" style="width:100%;table-layout:fixed;"></table>
-#end
-
-## ===============================================
-## Creates a JSON Object of all the headers.
-## Project, Space, Document, and Signature do not 
-## need to be rendered. It's okay as is.
-## This macro also calls headerJsonItem for each 
-## data to clean it up in case there are errors 
-## that can't be caught by Javascript
-## (e.g., escaping of certain characters for JS
-## to better understand it, like this: \" \")
-## ===============================================
-
-
-## CR Comment
-## Still mixing Velocity and json
-## I expect to have a velocity map object to contain all the header keys and values together
-## then you should call the headerJson to convert the map object to a json structure.
-
-## Creating an object map: 
-## #set ($headersMap = $objectFactory.newMap())
-
-## getting a value from the map
-## #set ($value = $headersMap.get("$key"))
-
-## putting a vluae in the map
-## #set ($tmp = $headersMap.put("$key", $value))
-
-## later when you want to loop over the map..
-## #foreach ($k in $headersMap.keySet())
-##   #set ($v = $headersMap.get($k))
-##   #you can also use a size: $headersMap.size()
-## #end
-
-#macro ( putHeader $headersMap $key $title )
-    #set ( $void = $headersMap.put($key, $title) )
-#end
-
-#macro ( headerJson $headersMap )
-[
-    #set ( $index = 0 )
-    #foreach ( $key in $headersMap.keySet() )
-        #if ( $index > 0 ),#end
-        {
-            "title": "$esc.javascript($headersMap.get($key))",
-            "key": "$esc.javascript($key)"
-        }
-        #set ( $index = $index + 1 )
-    #end
-]
-#end
-
-#macro ( headersJson )
+## ==========================================================================
+## Build the DataTables column definitions in Velocity maps.
+## $headersKeys preserves display order because map iteration order is not used.
+## ==========================================================================
+#macro ( prepareHeadersMacro )
+    ## ======================================================================
+    ## This map stores the table columns.
+    ## key = the id used by JavaScript/DataTables
+    ## value = the text shown in the column header
+    ## ======================================================================
     #set ( $headersMap = $objectFactory.newMap() )
 
-    #if ( $parameters.showProject.value() == true )
-        #putHeader( $headersMap "project" "Project" )
+    ## ======================================================================
+    ## Used to track the order of columns when rendering, since map is unordered.
+    ## ======================================================================
+    #set ( $headersKeys = [] )
+
+    #if ( true == $parameters.showProject.value() )
+        #set ( $void = $headersMap.put("project", "Project") )
+        #set ( $void = $headersKeys.add("project") )
     #end
 
-    #if ( $parameters.showSpace.value() == true )
-        #putHeader( $headersMap "space" "Space" )
+    #if ( true == $parameters.showSpace.value() )
+        #set ( $void = $headersMap.put("space", "Space") )
+        #set ( $void = $headersKeys.add("space") )
     #end
 
-    #putHeader( $headersMap "documentHtml" "Document" )
+    #set ( $void = $headersMap.put("documentHtml", "Document") )
+    #set ( $void = $headersKeys.add("documentHtml") )
 
+    ## ======================================================================
+    ## Custom columns from the widget parameter.
+    ## Example: "status,severity" becomes two table columns.
+    ## ======================================================================
     #foreach ( $fieldIdRaw in $parameters.columnFields.value().split(",") )
         #set ( $fieldId = $fieldIdRaw.trim() )
         #if ( !$fieldId.equals("") )
-            #set ( $fieldTitle = $fieldId.substring(0,1).toUpperCase() + $fieldId.substring(1) )
-            #putHeader( $headersMap $fieldId $fieldTitle )
+            ## For now, use the field id as the column title.
+            #set ( $fieldTitle = $fieldId )
+            #set ( $void = $headersMap.put($fieldId, $fieldTitle) )
+            #set ( $void = $headersKeys.add($fieldId) )
         #end
     #end
 
-    #if ( $parameters.showSignaturesStatus.value() == true )
-        #putHeader( $headersMap "signatureHtml" "Signatures" )
+    #if ( true == $parameters.showSignaturesStatus.value() )
+        #set ( $void = $headersMap.put("signatureHtml","Signatures") )
+        #set ( $void = $headersKeys.add("signatureHtml") )
     #end
 
-    #headerJson( $headersMap )
+    ## ==================================================================
+    ## This is for user-defined query-count columns in the matrix.
+    ## Lets user create columns with defined queries from Lucene
+    ## ==================================================================
+    #foreach ( $columnParam in $parameters.columns.get() )
+        #if ( !($columnParam.title.value() == "") && !($columnParam.query.value() == "") )
+            #set ( $void = $headersMap.put($columnParam.title.value(), $columnParam.title.value()) )
+            #set ( $void = $headersKeys.add($columnParam.title.value()) )
+        #end
+    #end
 #end
 
-## CR Comment 
-## can we move all these functions to a differetn velocity module and just include it from our render.vm !?
-## I dont like that these function are inside our sacred code.
+## ==========================================================================
+## Fetching data using Velocity maps, then passing
+## those maps to Javascript for DataTables.
+## ==========================================================================
+#macro ( prepareDataRowsMacro )
+    ## ======================================================================
+    ## $dataRows stores all table rows.
+    ## Each $rowsMap inside it stores one table row.
+    ## ======================================================================
+    #set ( $dataRows = [] )
 
-## ===================================================
-## Functions for importing files (CSS, JS)
-## ===================================================
+    ## ======================================================================
+    ## Create one row map for each document.
+    ## ======================================================================
+    #foreach ( $docu in $docItems )
+        #set ( $indexLoop = $velocityCount - 1 )
+        #set ( $docQuery = $docQueries.get($indexLoop) )
 
-## ===================================================
-## Fetching data using velocity, then putting them 
-## into a JSON object to pass to Javascript.
-## ===================================================
-#macro ( rowsJson $docItem )
-
-## CR Comment 
-## please think about gathering all the data to an array of velocity maps.
-[
-    ## ----------------------------------------------------------------------------
-    ## Iteration of this is per row. 
-    ## ----------------------------------------------------------------------------
-    #set ( $firstRow = true )
-    #foreach( $rowTitle in $docItem )
-
-        ## ----------------------------------------
-        ## Initialize the variables for use later
-        ## ----------------------------------------
-        #set ( $fieldsId = $parameters.columnFields.value().split(",") )
-
-        #if ( !$firstRow ),#end
-        #set ( $firstRow = false )
+        ## ==================================================================
+        ## This map stores all cells for the current row.
+        ## key = column id, value = rendered cell content.
+        ## ==================================================================
+        #set ( $rowsMap = $objectFactory.newMap() )
 
         #set ( $spaceHtml = "" )
         #set ( $projectHtml = "" )
         #set ( $signatureHtml = "" )
 
-        ## ===================================================
-        ## For Project data column
-        ## ===================================================
+        ## ==================================================================
+        ## Add the Project cell when the Project column is enabled.
+        ## ==================================================================
         #if ( true == $parameters.showProject.value() )
-
-            ## CR Comment
-            ## I think you should use the render() first thing without check the projectField.
-            ## the last one will always have a value even if it is undefined.. however it can never be undefined becuase a document is always within a project.
-
-            #set ( $projectField = $rowTitle.fields().project() )
-            #if ( $projectField )
-                #set ( $projectHtml = "$!projectField.render()" )
-            #end
+            #set ( $projectHtml = "$!docu.fields().project().render()")
+            #set ( $void = $rowsMap.put("project", $projectHtml) )
         #end
 
-        ## ===================================================
-        ## For Space data column
-        ## ===================================================
-        ## CR Comment
-        ## consider using $rowTitle.space().render()
-
+        ## ==================================================================
+        ## Add the Space cell when the Space column is enabled.
+        ## ==================================================================
         #if ( true == $parameters.showSpace.value() )
-            #set ( $relativePath = "$!rowTitle.getOldApi().getRelativePath()" )
-            #set ( $spaceHtml = "_default" )
-            #if ( $relativePath.contains("/") )
-                #set ( $spaceHtml = $relativePath.substring(0, $relativePath.indexOf("/")) )
-            #end
+            #set ( $spaceHtml = "$!docu.space().render()" )
+            #set ( $void = $rowsMap.put("space", $spaceHtml) )
         #end
 
-        #set ( $documentHtml = $rowTitle.render().withIcon().withLinks(true) )
-        
-        ## ===================================================
-        ## For Signature data column
-        ## ===================================================
-        #if ( $parameters.showSignaturesStatus.value() == true )
-            #set ( $workflowSignatures = $rowTitle.fields().workflowSignatures().toArrayList )
+        ## ==================================================================
+        ## Add the Document cell. This contains Polarion-rendered link HTML.
+        ## ==================================================================
+        #set ( $documentHtml = $docu.render().withIcon().withLinks(true) )
+        #set ( $void = $rowsMap.put("documentHtml", $documentHtml) )
+
+        ## ==================================================================
+        ## Add the Signatures cell when enabled.
+        ## Only active signature states are shown.
+        ## ==================================================================
+        #if ( true == $parameters.showSignaturesStatus.value() )
+            #set ( $workflowSignatures = $docu.fields().workflowSignatures().toArrayList )
             
             #foreach( $row in $workflowSignatures )
                 #set ( $signatureStatus = $row.fields().signatureState().optionId() )
@@ -256,77 +226,50 @@
                     #set ( $signatureHtml = "${signatureHtml}<span style='margin: 1px;'>${renderedSignature}</span>" )
                 #end
             #end
+    
+            #set ( $void = $rowsMap.put("signatureHtml", $signatureHtml) )
         #end
 
-        {
-            "project":      "$esc.javascript( $projectHtml )",  // Contains the rendered Project value. It may include HTML from Polarion.
-            "space":        "$esc.javascript( $spaceHtml )",    // Contains the Space value extracted earlier from the document path, for example _default or Requirements.
-            "documentHtml": "$esc.javascript( $documentHtml )", // Contains the rendered document link, including icon and clickable link HTML.
-            "signatureHtml": "$esc.javascript( $signatureHtml )"
-            ## -----------------------------------------------------------
-            ## Custom fields are flattened onto the row so DataTables can
-            ## read them directly through each header's key.
-            ## -----------------------------------------------------------
-            #foreach ( $fieldIdRaw in $fieldsId )
-                #set ( $fieldId = $fieldIdRaw.trim() )
-                #if ( !$fieldId.equals("") )
-                    #set ( $fieldHtml = "$!rowTitle.fields().get($fieldId).render()" )
-                    , "$esc.javascript($fieldId)": "$esc.javascript($fieldHtml)"
-                #end
+        ## ==================================================================
+        ## Add one cell for each configured document field id.
+        ## ==================================================================
+        #set ( $fieldsId = $parameters.columnFields.value().split(",") )
+        #foreach ( $fieldIdRaw in $fieldsId )
+            #set ( $fieldId = $fieldIdRaw.trim() )
+            #if ( !$fieldId.equals("") )
+                #set ( $fieldHtml = "$!docu.fields().get($fieldId).render()" )
+                #set ( $void = $rowsMap.put($fieldId, $fieldHtml) )
             #end
-        }
+        #end
+        
+        ## ==================================================================
+        ## This is for user-defined query-count columns in the matrix.
+        ## Lets user create columns with defined queries from Lucene
+        ## ==================================================================
+        #foreach ( $columnParam in $parameters.columns.get() )
+            #if ( !($columnParam.title.value() == "") && !($columnParam.query.value() == "") )
+                ## ==========================================================
+                ## Count matching work items and build links to the tracker
+                ## result and filtered document view.
+                ## ==========================================================
+                #set ( $cellQuery = "$docQuery AND ($columnParam.query.value())" )
+                #set ( $workitemCount = $transaction.workItems().search().query("$cellQuery").size() )
+                #set ( $trackerLink = $transaction.context().createPortalLink().project("$docu.fields().project().projectId()").workItems().query("$cellQuery").toEncodedRelativeUrl() )
+                #set ( $docSpace = $docu.getOldApi().getModuleFolder() )
+                #set ( $docName = $docu.fields().moduleName().get() )
+                #set ( $docLink = $transaction.context().createPortalLink().project("$docu.fields().project().projectId()").document("$docSpace","$docName").filter("$cellQuery").toEncodedRelativeUrl() )
+               
+                #set ( $cellHtml = "<a href=$q$trackerLink$q>$workitemCount</a> / <a href=$q$docLink$q>Doc</a>" )
+                #set ( $void = $rowsMap.put($columnParam.title.value(), $cellHtml) )
+            #end
+        #end
+
+        ## ==================================================================
+        ## The row is complete.
+        ## Add it to the list of all rows.
+        ## ==================================================================
+        #set ( $void = $dataRows.add($rowsMap) )
     #end
-]
-#end
-
-## =========================================
-## Writes Velocity-generated JSON data into
-## JavaScript for DataTables to get and render.
-## The macro below creates a JS Object.
-## remember, headersJson returns an array.
-## so headers can have:
-## headers: ["ID", "Title", "Status", "Severity"]
-## The same goes for rowsJson.
-## =========================================
-#macro ( renderWidgetDataMacro )
-<script type="text/javascript">
-    var widgetData = {
-        headers: #headersJson(),
-        rows: #rowsJson($docItem)
-    };
-</script>
-#end
-
-#macro ( initDataTableMacro )
-<script type="text/javascript">
-(function () {
-    var tableEl = document.getElementById('widget-table');
-
-    if (!tableEl || typeof widgetData === 'undefined') {
-        return;
-    }
-    /*
-        This creates a columns array from widgetData.headers.
-        For each header in widgetData.headers, it creates a new object like this:
-
-        [
-            { title: "ID", data: "id" },
-            { title: "Name", data: "name" }
-        ]
-    */
-    var columns = widgetData.headers.map(function (header) {
-        return {
-            title: header.title,
-            data: header.key,
-        };
-    });
-
-    new DataTable(tableEl, {
-        columns: columns,
-        data: widgetData.rows
-    });
-})();
-</script>
 #end
 
 ## =================================
@@ -335,12 +278,8 @@
 #if ( $allowRendering )
     #prepareRowsMacro()
 
-    #renderTableMountMacro()
+    #prepareHeadersMacro()
+    #prepareDataRowsMacro()
 
-    #renderWidgetDataMacro()
-
-    #loadWidgetCssResource("resources/datatables.css")
-    #loadWidgetJsResource("resources/datatables.js")
-
-    #initDataTableMacro()
+    #initDataTableMacro ( $widgetTableId $headersKeys $headersMap $dataRows )
 #end
