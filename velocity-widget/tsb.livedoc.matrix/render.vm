@@ -139,6 +139,12 @@
         #set ( $fieldId = $fieldIdRaw.trim() )
         #if ( !$fieldId.equals("") )
             ## For now, use the field id as the column title.
+
+            
+            ## ======================================================================
+            ## CR Comment
+            ## If we have docs  #set ( $fieldTitle = $!firstDoc.fields().get($f).label()
+            ## ======================================================================
             #set ( $fieldTitle = $fieldId )
             #set ( $void = $headersMap.put($fieldId, $fieldTitle) )
             #set ( $void = $headersKeys.add($fieldId) )
