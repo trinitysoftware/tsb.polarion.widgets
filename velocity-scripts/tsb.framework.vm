@@ -59,15 +59,19 @@
 ## ==========================================================================
 #macro ( renderWidgetDataMacro $headersMap $headersKeys $dataRows )
 <script type="text/javascript">
+    // ======================================================================
     // This object is passed to DataTables.
     // headers stores the columns; rows stores the row data.
+    // ======================================================================
     var widgetData = {
         headers: [],
         rows: []
     };
 
+    // ======================================================================
     // Convert the Velocity headers map into JavaScript header objects.
     // Example: "space" -> "Space" becomes { key: "space", title: "Space" }.
+    // ======================================================================
     #foreach ( $headerKey in $headersKeys)
         widgetData.headers.push({
             title: "$esc.javascript($headersMap.get($headerKey))",
@@ -75,17 +79,23 @@
         });
     #end
 
+    // ======================================================================
     // Convert each Velocity row map into a JavaScript row object.
     // Each Velocity row map becomes one JavaScript row object.
+    // ======================================================================
     #foreach ( $rowMap in $dataRows )
         var rowData = {};
 
+        // ==================================================================
         // Copy every cell from the row map into the JavaScript row object.
+        // ==================================================================
         #foreach ( $rowKey in $rowMap.keySet() )
             rowData["$esc.javascript($rowKey)"] = "$esc.javascript($rowMap.get($rowKey))";
         #end
 
+        // ==================================================================
         // This row is ready. Give it to DataTables' row list.
+        // ==================================================================
         widgetData.rows.push(rowData);
     #end
 </script>
@@ -95,37 +105,32 @@
 ## Render the table shell, load DataTables assets, and initialize DataTables.
 ## The caller provides the table id, ordered headers, and prepared row data.
 ## ==========================================================================
-#macro ( initDataTableMacro $widgetTableId $headersKeys $headersMap $dataRows)
-    ## ===================================================
+#macro ( initDataTableMacro $divId $widgetTableId $headersKeys $headersMap $dataRows)
+    ## ======================================================================
     ## This is the empty table element.
     ## DataTables will fill it using widgetData.
-    ## ===================================================
-    <table id="$widgetTableId" style="width:100%;table-layout:fixed;"></table>
-
-    ## ===================================================
+    ## ======================================================================
+    <div class = "custom-widget-wrapper" id="$divId">
+        <table id="$widgetTableId" style="width:100%;table-layout:fixed;"></table>
+    </div>
+    ## ======================================================================
     ## Write the prepared server data into JavaScript.
-    ## ===================================================
+    ## ======================================================================
     #renderWidgetDataMacro( $headersMap $headersKeys $dataRows )
-
-    ## ===================================================
-    ## Load widget-local DataTables assets.
-    ## ===================================================
-    #loadWidgetCssResource("resources/datatables.css")
-    #loadWidgetJsResource("resources/datatables.js")
 
     <script type="text/javascript">
     (function () {
+        // ==================================================================
         // Find our table shell by its unique id.
         // The unique id lets this widget find its own table.
+        // ==================================================================
+        var divEl = document.getElementById('$divId');
         var tableEl = document.getElementById('$widgetTableId');
 
-        // If the table or data is missing, stop quietly.
-        if (!tableEl || typeof widgetData === 'undefined') {
-            return;
-        }
-
+        // ==================================================================
         // DataTables wants columns in this shape:
         // { title: "Human label", data: "rowObjectKey" }
+        // ==================================================================
         var columns = widgetData.headers.map(function (header) {
             return {
                 title: header.title,
@@ -133,11 +138,41 @@
             };
         });
 
-        // Finally: build the interactive table.
+        // ==================================================================
         // DataTables reads each row using the keys from columns.data.
+        // ==================================================================
         new DataTable(tableEl, {
             columns: columns,
-            data: widgetData.rows
+            data: widgetData.rows,
+            fixedHeader: {
+                header: true,
+                headerOffset: 48
+            },
+            
+            scrollX: true,                      // horizontal scroller (required for FixedColumns)
+
+            layout: {
+                topStart: 'pageLength',
+                topEnd: {
+                    buttons: ['csvHtml5'],
+                    search: {}
+                }
+            }
+        });
+        
+        new TableEffects(divEl, {
+            header: {
+                backgroundColor: "rgb(31, 41, 55)",
+                color: "rgb(255, 255, 255)"
+            },
+            rows: {
+                backgroundColor: "rgb(255, 255, 255)",
+                alternateBackgroundColor: "rgb(248, 250, 252)"
+            },
+            hover: {
+                backgroundColor: "rgb(219, 234, 254)",
+                color: "rgb(17, 24, 39)"
+            }
         });
     })();
     </script>

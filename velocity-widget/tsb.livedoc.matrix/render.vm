@@ -61,11 +61,18 @@
 
 ## ==========================================================================
 ## $q keeps double quotes readable when building Lucene query strings.
+## 
 ## $widgetTableId gives this widget instance its own table element.
 ## ==========================================================================
 #set ( $q = '"' )
 #set ( $tableUniqueId = $widgetContext.generateUniqueElementId() )
 #set ( $widgetTableId = "widget-table-${tableUniqueId}" )
+
+## ==========================================================================
+## This is the id used for the div that encloses the widget table.
+## Used for styling the table. 
+## ==========================================================================
+#set ( $divId = $widgetContext.generateUniqueElementId() )
 
 ## ==========================================================================
 ## Collect LiveDocs and build one work item query per LiveDoc.
@@ -86,16 +93,16 @@
         #if (!$_doc.isUnresolvable())
             #set ( $void = $docItems.add($_doc) )
 
-            ## ==================================================================
+            ## ==============================================================
             ## Get the document id used by work item document queries.
             ## Polarion stores the default space with an "_default/" prefix.
-            ## ==================================================================
+            ## ==============================================================
             #set ( $docNameWithSpace = $_doc.getOldApi().getRelativePath().replace("_default/","") )
 
-            ## ==================================================================
+            ## ==============================================================
             ## Build a work item query for this document.
             ## It finds non-heading work items inside this document.
-            ## ==================================================================
+            ## ==============================================================
             #set ( $void = $docQueries.add("(project.id:$_doc.fields().project().projectId() AND (NOT type:heading) AND document.id:$q$docNameWithSpace$q)") )
         #end
     #end
@@ -135,17 +142,19 @@
     ## Custom columns from the widget parameter.
     ## Example: "status,severity" becomes two table columns.
     ## ======================================================================
+    ###set ( $firstDoc = "" )
+    ###set ( $firstDoc = $docItems.get(0) )
+
     #foreach ( $fieldIdRaw in $parameters.columnFields.value().split(",") )
         #set ( $fieldId = $fieldIdRaw.trim() )
-        #if ( !$fieldId.equals("") )
-            ## For now, use the field id as the column title.
 
-            
-            ## ======================================================================
-            ## CR Comment
-            ## If we have docs  #set ( $fieldTitle = $!firstDoc.fields().get($f).label()
-            ## ======================================================================
-            #set ( $fieldTitle = $fieldId )
+        #if ( !$fieldId.equals("") )
+            #if ( $docItems.size() > 0 )
+                #set ( $fieldTitle = "$!docItems.get(0).fields().get($fieldId).label()" )
+            #else
+                #set ( $fieldTitle = $fieldId )
+            #end
+
             #set ( $void = $headersMap.put($fieldId, $fieldTitle) )
             #set ( $void = $headersKeys.add($fieldId) )
         #end
@@ -156,10 +165,10 @@
         #set ( $void = $headersKeys.add("signatureHtml") )
     #end
 
-    ## ==================================================================
+    ## ======================================================================
     ## This is for user-defined query-count columns in the matrix.
     ## Lets user create columns with defined queries from Lucene
-    ## ==================================================================
+    ## ======================================================================
     #foreach ( $columnParam in $parameters.columns.get() )
         #if ( !($columnParam.title.value() == "") && !($columnParam.query.value() == "") )
             #set ( $void = $headersMap.put($columnParam.title.value(), $columnParam.title.value()) )
@@ -278,14 +287,27 @@
     #end
 #end
 
-## =================================
+## ==========================================================================
 ## Main 
-## =================================
+## ==========================================================================
 #if ( $allowRendering )
     #prepareRowsMacro()
 
     #prepareHeadersMacro()
     #prepareDataRowsMacro()
 
-    #initDataTableMacro ( $widgetTableId $headersKeys $headersMap $dataRows )
+    ## ======================================================================
+    ## Load widget-local DataTables assets.
+    ## ======================================================================
+    #loadWidgetCssResource("resources/datatables.css")
+    #loadWidgetJsResource("resources/datatables.js")
+
+    ## ======================================================================
+    ## Load files for changing the effects or changing
+    ## the design of the table.
+    ## ======================================================================
+    #loadWidgetJsResource("resources/tableEffects.js")
+    #loadWidgetCssResource("resources/tableEffects.css")
+
+    #initDataTableMacro ( $divId $widgetTableId $headersKeys $headersMap $dataRows )
 #end
