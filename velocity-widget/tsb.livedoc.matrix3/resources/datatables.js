@@ -117163,13 +117163,7 @@ $.extend(FixedHeader.prototype, {
 		this.s.dt.off('.dtfc');
 		$('body').off('.dtfc');
 		$(window).off(this.s.namespace);
-		
-		// ==================================================================
-		// CHANGED FOR TSB.LIVEDOC.MATRIX COLUMN HEADERS
-		// ==================================================================
-		if (this._scrollCapture) {
-			document.removeEventListener('scroll', this._scrollCapture, true);
-		}
+
 		// Remove clones of FC blockers
 		if (dom.header.rightBlocker) {
 			dom.header.rightBlocker.remove();
@@ -117302,15 +117296,6 @@ $.extend(FixedHeader.prototype, {
 				}, 50)
 			);
 
-		
-		// ==================================================================
-		// CHANGED FOR TSB.LIVEDOC.MATRIX COLUMN HEADERS
-		// ==================================================================
-		// Polarion scrolls nested panels; capture scroll on document (does not bubble).
-		this._scrollCapture = DataTable.util.throttle(function () {
-			that._scroll();
-		}, 16);
-		document.addEventListener('scroll', this._scrollCapture, true);
 		var autoHeader = $('.fh-fixedHeader');
 		if (!this.c.headerOffset && autoHeader.length) {
 			this.c.headerOffset = autoHeader.outerHeight();
@@ -117810,38 +117795,45 @@ $.extend(FixedHeader.prototype, {
 		var bodyWidth = scrollEnabled
 			? scrollBody.outerWidth()
 			: position.tbodyWidth;
-		
-		// =========================================================================
-		// CHANGED FOR TSB.LIVEDOC.MATRIX
-		// =========================================================================
-		if (this.c.header) {
-			var headerOffset = this.c.headerOffset;
-			// var theadTop = this.dom.thead[0].getBoundingClientRect().top;
-			var headerMeasure = (this.dom.header.placeholder && this.dom.header.placeholder.length)
-				? this.dom.header.placeholder[0]
-				: this.dom.thead[0];
-			var theadTop = headerMeasure.getBoundingClientRect().top;
-			var tbodyBottom = this.dom.tbody[0].getBoundingClientRect().bottom;
-			var tableLeft = this.s.dt.table().node().getBoundingClientRect().left;
 
-			if (!this.s.enable || !position.visible) {
+		if (this.c.header) {
+			if (!this.s.enable) {
 				headerMode = 'in-place';
 			}
-			else if (theadTop >= headerOffset) {
+			// The header is in it's normal place if the body top is lower than
+			//  the scroll of the window plus the headerOffset and the height of the header
+			else if (
+				!position.visible ||
+				windowTop + this.c.headerOffset + position.theadHeight <=
+					bodyTop
+			) {
 				headerMode = 'in-place';
 			}
-			else if (tbodyBottom > headerOffset + position.theadHeight) {
+			// The header should be floated if
+			else if (
+				// The scrolling plus the header offset plus the height of the header is lower than the top of the body
+				windowTop + this.c.headerOffset + position.theadHeight >
+					bodyTop &&
+				// And the scrolling at the top plus the header offset is above the bottom of the body
+				windowTop + this.c.headerOffset + position.theadHeight <
+					bodyBottom
+			) {
 				headerMode = 'in';
 
-				if (this.dom.header.floatingParent === undefined) {
+				// Further to the above, If the scrolling plus the header offset plus the header height is lower
+				// than the bottom of the table a shuffle is required so have to force the calculation
+				if (
+					windowTop + this.c.headerOffset + position.theadHeight >
+						bodyBottom ||
+					this.dom.header.floatingParent === undefined
+				) {
 					forceChange = true;
 				}
 				else {
 					var child = this.dom.header.floatingParent
 						.css({
-							top: headerOffset,
-							position: 'fixed',
-							left: tableLeft
+							top: this.c.headerOffset,
+							position: 'fixed'
 						})
 						.children()
 						.eq(0);
@@ -117851,6 +117843,7 @@ $.extend(FixedHeader.prototype, {
 					}
 				}
 			}
+			// Anything else and the view is below the table
 			else {
 				headerMode = 'below';
 			}

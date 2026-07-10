@@ -110,22 +110,22 @@
     ## This is the empty table element.
     ## DataTables will fill it using widgetData.
     ## ======================================================================
-    <div class = "custom-widget-wrapper" id="$divId">
-        <table id="$widgetTableId" style="width:100%;table-layout:fixed;"></table>
-    </div>
+    <table id="$widgetTableId" class="display nowrap"></table>
+    
+    #set ( $h = "#")
+    #set ( $forId = "${h}${widgetTableId}" )
+
     ## ======================================================================
     ## Write the prepared server data into JavaScript.
     ## ======================================================================
     #renderWidgetDataMacro( $headersMap $headersKeys $dataRows )
-
     <script type="text/javascript">
     (function () {
         // ==================================================================
         // Find our table shell by its unique id.
         // The unique id lets this widget find its own table.
         // ==================================================================
-        var divEl = document.getElementById('$divId');
-        var tableEl = document.getElementById('$widgetTableId');
+        var tableSelector = "$esc.javascript($forId)";
 
         // ==================================================================
         // DataTables wants columns in this shape:
@@ -138,29 +138,32 @@
             };
         });
 
-        // ==================================================================
-        // DataTables reads each row using the keys from columns.data.
-        // ==================================================================
-        new DataTable(tableEl, {
+        var dt = new DataTable(tableSelector, {
             columns: columns,
             data: widgetData.rows,
+
             fixedHeader: {
                 header: true,
                 headerOffset: 48
             },
-            
-            scrollX: true,                      // horizontal scroller (required for FixedColumns)
+            scrollX: true,
+            pageLength: 50,
+            responsive: true,
 
             layout: {
                 topStart: 'pageLength',
                 topEnd: {
-                    buttons: ['csvHtml5'],
+                    buttons: ['copy','csvHtml5', 'excel'],
                     search: {}
                 }
             }
         });
-        
-        new TableEffects(divEl, {
+
+        window.addEventListener("scroll", () => {
+            dt.fixedHeader.adjust();
+        });
+
+        new TableEffects(tableSelector, {
             header: {
                 backgroundColor: "rgb(31, 41, 55)",
                 color: "rgb(255, 255, 255)"
