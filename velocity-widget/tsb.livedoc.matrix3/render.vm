@@ -237,11 +237,16 @@
             #foreach( $row in $workflowSignatures )
                 #set ( $signatureStatus = $row.fields().signatureState().optionId() )
                 #if ( !($signatureStatus.equals("obsolete")) && !($signatureStatus.equals("notAvailable")) )
-                    #set ( $renderedSignature = $row.render().htmlFor().forFrame().replace(", ", "") )
-                    #set ( $signatureHtml = "${signatureHtml}<span style='margin: 1px;'>${renderedSignature}</span>" )
+					#set ($sigsHtml = "<b>$row.fields().signatureState().render().withIcon(false) - $row.label()</b><br>")
+					#set ($signatureHtml = "${signatureHtml}<br>${sigsHtml}" )
+					
+					#foreach($s in $row.fields().signatures().toArrayList())
+						#set ($renderedSig = "<b>$s.fields().signedBy().render()</b> - $s.fields().verdict().render().withIcon(false) - $s.fields().verdictTime().render()")
+						#set ($signatureHtml = "${signatureHtml}<br>${renderedSig}" )
+					#end
                 #end
             #end
-    
+
             #set ( $void = $rowsMap.put("signatureHtml", $signatureHtml) )
         #end
 

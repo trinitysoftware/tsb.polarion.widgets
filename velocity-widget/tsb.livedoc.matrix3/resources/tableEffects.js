@@ -47,10 +47,10 @@ window.TableEffects = class TableEffects {
     setVar(name, value) {
         if (value) {
             this.tableEl.style.setProperty(name, value);
-        }
 
-        if (this.containerEl) {
-            this.containerEl.style.setProperty(name, value);
+            if (this.containerEl) {
+                this.containerEl.style.setProperty(name, value);
+            }
         }
     }
 }

@@ -110,7 +110,7 @@
     ## This is the empty table element.
     ## DataTables will fill it using widgetData.
     ## ======================================================================
-    <table id="$widgetTableId" class="display nowrap"></table>
+    <table id="$widgetTableId" class="stripe row-border order-column nowrap"></table>
     
     #set ( $h = "#")
     #set ( $forId = "${h}${widgetTableId}" )
@@ -146,12 +146,12 @@
                 header: true,
                 headerOffset: 48
             },
-            scrollX: true,
-            pageLength: 50,
-            responsive: true,
+
+            paging:false,
+            scrollY: '60vh',
+            autoWidth: true,
 
             layout: {
-                topStart: 'pageLength',
                 topEnd: {
                     buttons: ['copy','csvHtml5', 'excel'],
                     search: {}
