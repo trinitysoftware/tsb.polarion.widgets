@@ -105,7 +105,7 @@
 ## Render the table shell, load DataTables assets, and initialize DataTables.
 ## The caller provides the table id, ordered headers, and prepared row data.
 ## ==========================================================================
-#macro ( initDataTableMacro $divId $widgetTableId $headersKeys $headersMap $dataRows)
+#macro ( initDataTableMacro $widgetTableId $headersKeys $headersMap $dataRows)
     ## ======================================================================
     ## This is the empty table element.
     ## DataTables will fill it using widgetData.
@@ -138,14 +138,9 @@
             };
         });
 
-        var dt = new DataTable(tableSelector, {
+        new DataTable(tableSelector, {
             columns: columns,
             data: widgetData.rows,
-
-            fixedHeader: {
-                header: true,
-                headerOffset: 48
-            },
 
             paging:false,
             scrollY: '60vh',
@@ -159,10 +154,6 @@
             }
         });
 
-        window.addEventListener("scroll", () => {
-            dt.fixedHeader.adjust();
-        });
-
         new TableEffects(tableSelector, {
             header: {
                 backgroundColor: "rgb(31, 41, 55)",
@@ -171,10 +162,6 @@
             rows: {
                 backgroundColor: "rgb(255, 255, 255)",
                 alternateBackgroundColor: "rgb(248, 250, 252)"
-            },
-            hover: {
-                backgroundColor: "rgb(219, 234, 254)",
-                color: "rgb(17, 24, 39)"
             }
         });
     })();

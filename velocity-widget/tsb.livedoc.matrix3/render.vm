@@ -314,5 +314,5 @@
     #loadWidgetJsResource("resources/tableEffects.js")
     #loadWidgetCssResource("resources/tableEffects.css")
 
-    #initDataTableMacro ( $divId $widgetTableId $headersKeys $headersMap $dataRows )
+    #initDataTableMacro ( $widgetTableId $headersKeys $headersMap $dataRows )
 #end

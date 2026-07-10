@@ -18,13 +18,7 @@ window.TableEffects = class TableEffects {
     }
 
     init() {
-        this.containerEl = this.tableEl.closest(".dt-container");
-
         this.tableEl.classList.add("tsb-table-effects");
-
-        if (this.containerEl) {
-            this.containerEl.classList.add("tsb-table-effects");
-        }
 
         this.applyVariables();
     }
@@ -47,10 +41,6 @@ window.TableEffects = class TableEffects {
     setVar(name, value) {
         if (value) {
             this.tableEl.style.setProperty(name, value);
-
-            if (this.containerEl) {
-                this.containerEl.style.setProperty(name, value);
-            }
         }
     }
 }

@@ -20,23 +20,7 @@
     background-color: var(--tsb-row-alt-bg);
 }
 
-.tsb-table-effects tbody tr:hover {
-    background-color: var(--tsb-row-hover-bg);
-    color: var(--tsb-row-hover-color);
-}
-
-.tsb-table-effects tbody tr:hover td {
-    background-color: var(--tsb-row-hover-bg);
-    color: var(--tsb-row-hover-color);
-}
-
 .tsb-table-effects thead th {
     background-color: var(--tsb-header-bg);
     color: var(--tsb-header-color);
-    /* overflow-x: hidden; */
-}
-
-.tsb-table-effects div.dt-scroll-head {
-    background-color: var(--tsb-header-bg);
-    position: sticky;
 }
