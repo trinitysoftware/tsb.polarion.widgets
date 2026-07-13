@@ -27,7 +27,7 @@
 ## ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## ==========================================================================
 
-#import("tsb.framework3.vm")
+#import("tsb.framework.vm")
 
 ## ==========================================================================
 ## Warning shown when the Data Set does not resolve to one project.
