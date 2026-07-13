@@ -139,3 +139,11 @@ Documentation update only. No widget behavior changes and no code fixes.
 - [DOCS] Replaced outdated widget README rendering notes for `headersJson()` and `rowsJson($rowTitles)` with the current `initDataTableMacro()` flow from `tsb.framework.vm`.
 - [DOCS] Added widget README sections for current contents, parameters, rendering flow, rendered columns, additional query columns, and deployment.
 - [DOCS] Added shared macro usage notes to both README files: macro files must be placed in `/.polarion/pages/scripts/velocity` before they can be imported and used by widget files.
+
+### 2026-07-10
+- [FIX] Removed use of sticky headers in Datatables; code failed to render
+- [FIX] Removed hover effects in rows in Table Effects
+- [FIX] Created additional Datatables configuration to: `paging:false, scrollY: '60vh', autoWidth: true`
+- [FIX] Removed icons in Signature fields 
+- [FIX] Removed the nesting div that uses $divId for the table in tsb.framework.vm
+- [FIX] Removed the use of $divId
