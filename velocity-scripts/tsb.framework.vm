@@ -110,7 +110,7 @@
     ## This is the empty table element.
     ## DataTables will fill it using widgetData.
     ## ======================================================================
-    <table id="$widgetTableId" class="stripe row-border order-column nowrap"></table>
+    <table id="$widgetTableId" class="stripe hover row-border order-column nowrap"></table>
     
     #set ( $h = "#")
     #set ( $forId = "${h}${widgetTableId}" )
@@ -145,6 +145,7 @@
             paging:false,
             scrollY: '60vh',
             autoWidth: true,
+            fixedHeader: true,
 
             layout: {
                 topEnd: {
