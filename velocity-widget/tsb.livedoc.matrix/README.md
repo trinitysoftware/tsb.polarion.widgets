@@ -44,8 +44,8 @@ Polarion Velocity widget for rendering a LiveDoc matrix with DataTables.
 3. `render.vm` searches documents using the Data Set document query.
 4. Each resolved LiveDoc becomes one table row.
 5. Header and row maps are built in Velocity.
-6. `initDataTableMacro()` converts the maps to `widgetData.headers` and `widgetData.rows`.
-7. `resources/datatables.css` and `resources/datatables.js` are loaded through widget resource XHR helpers.
+6. `resources/datatables.css` and `resources/datatables.js` are loaded through widget resource XHR helpers.
+7. `prepareHeadersMacro` and `prepareDataRowsMacro` create a map and array of data using Velocity to pass onto datatables for rendering through `#initDataTableMacro ( $widgetTableId $headersKeys $headersMap $dataRows )`. 
 8. DataTables renders the table.
 
 ## Rendered Columns
@@ -81,6 +81,10 @@ The zip root must contain `render.vm`, `parameters.vm`, `widget.properties`, and
 
 ## Shared macros
 
-To use macros from another Velocity file in Polarion, place the macro file in `/.polarion/pages/scripts/velocity`.
+**This widget uses shared macros by importing `/velocity-scripts/tsb.framework.vm`.**
 
-After the file is in that directory, import it from the widget file. This widget imports `tsb.framework.vm` from `render.vm` and can then use the macros defined in that file.
+To use macros from another Velocity file in Polarion, place the macro file in `/.polarion/pages/scripts/velocity` in the **Repository Browser**.
+
+If you cannot access **Repository Browser** yet, navigate to `Administration` -> `Portal` -> `Topics` -> `Create New Topics Configuration`, then add `<topic id="repository_browser"/>`. Click Save. Navigate back to the project, then create this directory: `/.polarion/pages/scripts/velocity`, and add the shared macro file there.
+
+After the file is in that directory, import it from the widget file. For this widget, `render.vm` imports `tsb.framework.vm` and can then use the macros defined in that file.

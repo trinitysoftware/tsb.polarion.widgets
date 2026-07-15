@@ -28,12 +28,6 @@ Polarion Velocity widget source for `tsb.livedoc.matrix`.
 | [`velocity-widget/tsb.livedoc.matrix/README.md`](velocity-widget/tsb.livedoc.matrix/README.md) | Widget-specific notes. |
 | [`velocity-scripts/tsb.framework.vm`](velocity-scripts/tsb.framework.vm) | Shared Velocity macros used by `render.vm` to load widget resources and initialize DataTables. |
 
-## Requirements
-
-- Polarion ALM with Velocity Widgets enabled.
-- The widget folder or zip name must match the widget id: `tsb.livedoc.matrix`.
-- The Data Set scope must select one Polarion project. The widget shows a warning if no project is selected.
-
 ## Deploy the widget
 
 1. Zip the contents of [`velocity-widget/tsb.livedoc.matrix/`](velocity-widget/tsb.livedoc.matrix/).
@@ -84,6 +78,10 @@ Edit the `.vm` files in [`velocity-widget/tsb.livedoc.matrix/`](velocity-widget/
 
 ## Shared macros
 
-To use macros from another Velocity file in Polarion, place the macro file in `/.polarion/pages/scripts/velocity`.
+To use macros from another Velocity file in Polarion, place the macro file in `/.polarion/pages/scripts/velocity` in the **Repository Browser**.
+
+If you cannot access **Repository Browser** yet, navigate to `Administration` -> `Portal` -> `Topics` -> `Create New Topics Configuration`, then add `<topic id="repository_browser"/>`. Click Save. Navigate back to the project, then create this directory: `/.polarion/pages/scripts/velocity`, and add the shared macro file there.
 
 After the file is in that directory, import it from the widget file. For this widget, `render.vm` imports `tsb.framework.vm` and can then use the macros defined in that file.
+
+
