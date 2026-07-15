@@ -1,0 +1,170 @@
+## ==========================================================================
+## Shared macros for loading widget resources and rendering DataTables output.
+## Import this file from a widget render file before calling these macros.
+## ==========================================================================
+
+## ==========================================================================
+## Resolve a widget-local JavaScript resource URL, then load the script.
+## ==========================================================================
+#macro ( loadWidgetJsResource $js )
+    #loadJsResource($widgetContext.resourceUrl("$js"))
+#end
+
+## ==========================================================================
+## Load JavaScript from a URL and execute it in the page.
+## Polarion widget resources require this XHR loading pattern.
+## ==========================================================================
+#macro ( loadJsResource $url )
+    ## ======================================================================
+    ## Synchronous XHR fetch and eval — required for Polarion widget resources.
+    ## ======================================================================
+    <script type="text/javascript">
+        var xhrObj = new XMLHttpRequest();
+        xhrObj.open('GET', '$url', false);
+        xhrObj.send(null);
+        eval(xhrObj.responseText);
+    </script>
+#end
+
+## ==========================================================================
+## Resolve a widget-local CSS resource URL, then load the stylesheet.
+## ==========================================================================
+#macro ( loadWidgetCssResource $css )
+    #loadCssResource( $widgetContext.resourceUrl("$css") )
+#end
+
+## ==========================================================================
+## Load CSS from a URL and inject it into a generated <style> element.
+## Polarion widget resources require this XHR loading pattern.
+## ==========================================================================
+#macro ( loadCssResource $url )
+    ## =======================================================================
+    ## Synchronous XHR fetch injected into a <style> tag — required for Polarion widget resources.
+    ## ======================================================================
+    #set ( $cssId = $widgetContext.generateUniqueElementId() )
+
+    <style id="$cssId"></style>
+
+    <script type="text/javascript">
+        var xhrObj = new XMLHttpRequest();
+        xhrObj.open('GET', '$url', false);
+        xhrObj.send(null);
+        document.getElementById("$cssId").innerHTML = xhrObj.responseText;
+    </script>
+#end
+
+## ==========================================================================
+## Convert Velocity header and row maps into JavaScript data for DataTables.
+## The server prepares the maps; this macro serializes them for the client.
+## ==========================================================================
+#macro ( renderWidgetDataMacro $headersMap $headersKeys $dataRows )
+<script type="text/javascript">
+    // ======================================================================
+    // This object is passed to DataTables.
+    // headers stores the columns; rows stores the row data.
+    // ======================================================================
+    var widgetData = {
+        headers: [],
+        rows: []
+    };
+
+    // ======================================================================
+    // Convert the Velocity headers map into JavaScript header objects.
+    // Example: "space" -> "Space" becomes { key: "space", title: "Space" }.
+    // ======================================================================
+    #foreach ( $headerKey in $headersKeys)
+        widgetData.headers.push({
+            title: "$esc.javascript($headersMap.get($headerKey))",
+            key: "$esc.javascript($headerKey)"
+        });
+    #end
+
+    // ======================================================================
+    // Convert each Velocity row map into a JavaScript row object.
+    // Each Velocity row map becomes one JavaScript row object.
+    // ======================================================================
+    #foreach ( $rowMap in $dataRows )
+        var rowData = {};
+
+        // ==================================================================
+        // Copy every cell from the row map into the JavaScript row object.
+        // ==================================================================
+        #foreach ( $rowKey in $rowMap.keySet() )
+            rowData["$esc.javascript($rowKey)"] = "$esc.javascript($rowMap.get($rowKey))";
+        #end
+
+        // ==================================================================
+        // This row is ready. Give it to DataTables' row list.
+        // ==================================================================
+        widgetData.rows.push(rowData);
+    #end
+</script>
+#end
+
+## ==========================================================================
+## Render the table shell, load DataTables assets, and initialize DataTables.
+## The caller provides the table id, ordered headers, and prepared row data.
+## ==========================================================================
+#macro ( initDataTableMacro $widgetTableId $headersKeys $headersMap $dataRows)
+    ## ======================================================================
+    ## This is the empty table element.
+    ## DataTables will fill it using widgetData.
+    ## ======================================================================
+    <table id="$widgetTableId" class="stripe hover row-border order-column nowrap"></table>
+    
+    #set ( $h = "#")
+    #set ( $forId = "${h}${widgetTableId}" )
+
+    ## ======================================================================
+    ## Write the prepared server data into JavaScript.
+    ## ======================================================================
+    #renderWidgetDataMacro( $headersMap $headersKeys $dataRows )
+    <script type="text/javascript">
+    (function () {
+        // ==================================================================
+        // Find our table shell by its unique id.
+        // The unique id lets this widget find its own table.
+        // ==================================================================
+        var tableSelector = "$esc.javascript($forId)";
+
+        // ==================================================================
+        // DataTables wants columns in this shape:
+        // { title: "Human label", data: "rowObjectKey" }
+        // ==================================================================
+        var columns = widgetData.headers.map(function (header) {
+            return {
+                title: header.title,
+                data: header.key
+            };
+        });
+
+        new DataTable(tableSelector, {
+            columns: columns,
+            data: widgetData.rows,
+
+            paging:false,
+            scrollY: '60vh',
+            autoWidth: true,
+            fixedHeader: true,
+
+            layout: {
+                topEnd: {
+                    buttons: ['copy','csvHtml5', 'excel'],
+                    search: {}
+                }
+            }
+        });
+
+        new TableEffects(tableSelector, {
+            header: {
+                backgroundColor: "rgb(31, 41, 55)",
+                color: "rgb(255, 255, 255)"
+            },
+            rows: {
+                backgroundColor: "rgb(255, 255, 255)",
+                alternateBackgroundColor: "rgb(248, 250, 252)"
+            }
+        });
+    })();
+    </script>
+#end

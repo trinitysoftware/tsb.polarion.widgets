@@ -1,0 +1,24 @@
+.tsb-table-effects {
+    --tsb-header-bg: #1f2937;
+    --tsb-header-color: #ffffff;
+    --tsb-row-bg: #ffffff;
+    --tsb-row-alt-bg: #f8fafc;
+}
+
+.tsb-table-effects thead th {
+    background-color: var(--tsb-header-bg);
+    color: var(--tsb-header-color);
+}
+
+.tsb-table-effects tbody tr {
+    background-color: var(--tsb-row-bg);
+}
+
+.tsb-table-effects tbody tr:nth-child(even) {
+    background-color: var(--tsb-row-alt-bg);
+}
+
+.tsb-table-effects thead th {
+    background-color: var(--tsb-header-bg);
+    color: var(--tsb-header-color);
+}
