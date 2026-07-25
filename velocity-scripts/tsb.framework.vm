@@ -129,18 +129,64 @@
 
         // ==================================================================
         // DataTables wants columns in this shape:
-        // { title: "Human label", data: "rowObjectKey" }
+        // { title: "Human label", data: "rowObjectKey", name: "stableColumnName" }
+        // 
+        // title = the text shown in the column header.
+        // data = the key used to read the value from each row object.
+        // name = the stable id used by DataTables ordering configuration.
         // ==================================================================
         var columns = widgetData.headers.map(function (header) {
             return {
                 title: header.title,
-                data: header.key
+                data: header.key,
+                name: header.key
             };
         });
+
+        // ==================================================================
+        // Define the preferred initial row order.
+        // Project and Space keep multi-project results grouped by Polarion
+        // structure. Document gives a stable order inside each group.
+        // ==================================================================
+        var defaultSortKeys = ['project', 'space', 'documentHtml'];
+        
+
+        // ==================================================================
+        // Keep only default sort columns that are present in this table.
+        // This prevents DataTables from trying to sort by a column that the
+        // current widget configuration did not render.
+        // ==================================================================
+        var defaultOrder = defaultSortKeys
+            .filter(function (key) {
+                return widgetData.headers.some(function (header) {
+                    return header.key === key;
+                });
+            })
+            
+
+            // ==============================================================
+            // Convert the existing sort keys into DataTables' named ordering
+            // format. The order of this array defines sort priority.
+            // ==============================================================
+            .map(function (key) {
+                return {
+                    name: key,
+                    dir: 'asc'
+                };
+            });
 
         new DataTable(tableSelector, {
             columns: columns,
             data: widgetData.rows,
+            
+            // ==============================================================
+            // Enable DataTables ordering explicitly.
+            // orderMulti allows users to add secondary and tertiary sorts 
+            // manually with Shift + click on column headers.
+            // ==============================================================
+            ordering: true,
+            orderMulti: true,
+            order: defaultOrder.length ? defaultOrder : [],
 
             paging:false,
             scrollY: '60vh',
