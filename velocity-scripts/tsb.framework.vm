@@ -103,9 +103,10 @@
 
 ## ==========================================================================
 ## Render the table shell, load DataTables assets, and initialize DataTables.
-## The caller provides the table id, ordered headers, and prepared row data.
+## The caller provides the table id, ordered headers, prepared row data, and
+## table settings collected from the widget properties panel.
 ## ==========================================================================
-#macro ( initDataTableMacro $widgetTableId $headersKeys $headersMap $dataRows)
+#macro ( initDataTableMacro $widgetTableId $headersKeys $headersMap $dataRows $tableSettings )
     ## ======================================================================
     ## This is the empty table element.
     ## DataTables will fill it using widgetData.
@@ -126,11 +127,39 @@
         // The unique id lets this widget find its own table.
         // ==================================================================
         var tableSelector = "$esc.javascript($forId)";
+        var tableNode = document.querySelector(tableSelector);
+
+        // ==================================================================
+        // Polarion replaces the widget markup when a user clicks Apply.
+        // FixedHeader renders its floating header outside that markup, so it
+        // must be destroyed explicitly when the original table is removed.
+        //
+        // Remove disconnected matrix instances before creating this one.
+        // This also covers a re-render that occurs before MutationObserver has
+        // delivered its removal notification.
+        // ==================================================================
+        var tableInstances = window.tsbLiveDocMatrixTableInstances =
+            window.tsbLiveDocMatrixTableInstances || [];
+
+        for (var instanceIndex = tableInstances.length - 1; instanceIndex >= 0; instanceIndex--) {
+            var existingInstance = tableInstances[instanceIndex];
+
+            if (!document.documentElement.contains(existingInstance.container)) {
+                existingInstance.destroy();
+            }
+        }
+
+        // ==================================================================
+        // Read table display settings.
+        // ==================================================================
+        var tableHeight = "$esc.javascript($tableSettings.get("tableHeight"))";
+        var showExportButtons = $tableSettings.get("showExportButtons");
+        var showSearchBar = $tableSettings.get("showSearchBar");
 
         // ==================================================================
         // DataTables wants columns in this shape:
         // { title: "Human label", data: "rowObjectKey", name: "stableColumnName" }
-        // 
+        //
         // title = the text shown in the column header.
         // data = the key used to read the value from each row object.
         // name = the stable id used by DataTables ordering configuration.
@@ -149,7 +178,6 @@
         // structure. Document gives a stable order inside each group.
         // ==================================================================
         var defaultSortKeys = ['project', 'space', 'documentHtml'];
-        
 
         // ==================================================================
         // Keep only default sort columns that are present in this table.
@@ -162,7 +190,6 @@
                     return header.key === key;
                 });
             })
-            
 
             // ==============================================================
             // Convert the existing sort keys into DataTables' named ordering
@@ -175,41 +202,104 @@
                 };
             });
 
-        new DataTable(tableSelector, {
+        var topEndLayout = {};
+
+        if (showExportButtons) {
+            topEndLayout.buttons = ['copy', 'csvHtml5', 'excel'];
+        }
+
+        if (showSearchBar) {
+            topEndLayout.search = {};
+        }
+
+        var dataTable = new DataTable(tableNode, {
             columns: columns,
             data: widgetData.rows,
-            
+
             // ==============================================================
             // Enable DataTables ordering explicitly.
-            // orderMulti allows users to add secondary and tertiary sorts 
+            // orderMulti allows users to add secondary and tertiary sorts
             // manually with Shift + click on column headers.
             // ==============================================================
             ordering: true,
             orderMulti: true,
             order: defaultOrder.length ? defaultOrder : [],
 
-            paging:false,
-            scrollY: '60vh',
+            paging: false,
+            scrollY: tableHeight,
             autoWidth: true,
             fixedHeader: true,
 
+            // ==============================================================
+            // Show the entry count above the table. Set bottomStart to null
+            // so DataTables does not render the same information below it.
+            // ==============================================================
             layout: {
-                topEnd: {
-                    buttons: ['copy','csvHtml5', 'excel'],
-                    search: {}
-                }
+                topStart: 'info',
+                topEnd: topEndLayout,
+                bottomStart: null
             }
         });
 
-        new TableEffects(tableSelector, {
+        var tableContainer = dataTable.table().container();
+
+        new TableEffects(tableContainer, {
             header: {
-                backgroundColor: "rgb(31, 41, 55)",
-                color: "rgb(255, 255, 255)"
+                backgroundColor: "$esc.javascript($tableSettings.get("headerBackgroundColor"))",
+                color: "$esc.javascript($tableSettings.get("headerTextColor"))"
             },
             rows: {
-                backgroundColor: "rgb(255, 255, 255)",
-                alternateBackgroundColor: "rgb(248, 250, 252)"
+                backgroundColor: "$esc.javascript($tableSettings.get("rowBackgroundColor"))",
+                alternateBackgroundColor: "$esc.javascript($tableSettings.get("alternateRowBackgroundColor"))"
             }
+        });
+
+        // ==================================================================
+        // Track this DataTable for the lifetime of its rendered widget.
+        // Destroying the DataTable invokes FixedHeader's own cleanup and
+        // removes the floating header that FixedHeader appends to the page.
+        // ==================================================================
+        var tableInstance = {
+            container: tableContainer,
+            dataTable: dataTable,
+            observer: null,
+            destroyed: false,
+            destroy: function () {
+                if (this.destroyed) {
+                    return;
+                }
+
+                this.destroyed = true;
+
+                if (this.observer) {
+                    this.observer.disconnect();
+                }
+
+                var registeredIndex = tableInstances.indexOf(this);
+                if (registeredIndex !== -1) {
+                    tableInstances.splice(registeredIndex, 1);
+                }
+
+                this.dataTable.destroy(true);
+            }
+        };
+
+        tableInstances.push(tableInstance);
+
+        // ==================================================================
+        // Polarion does not call DataTables when it removes widget markup.
+        // Observe the page so the table can clean up as soon as its generated
+        // DataTables container is no longer attached to the document.
+        // ==================================================================
+        tableInstance.observer = new MutationObserver(function () {
+            if (!document.documentElement.contains(tableContainer)) {
+                tableInstance.destroy();
+            }
+        });
+
+        tableInstance.observer.observe(document.documentElement, {
+            childList: true,
+            subtree: true
         });
     })();
     </script>

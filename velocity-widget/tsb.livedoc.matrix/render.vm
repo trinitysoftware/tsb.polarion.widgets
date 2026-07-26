@@ -293,6 +293,26 @@
 #end
 
 ## ==========================================================================
+## Build DataTables settings from widget parameters.
+## Translate user-facing widget parameters into a smaller settings map so
+## the shared framework does not need to know every widget parameter.
+## ==========================================================================
+#macro ( prepareTableSettingsMacro )
+    ## ======================================================================
+    ## $tableSettings stores only values needed by DataTables and TableEffects.
+    ## ======================================================================
+    #set ( $tableSettings = $objectFactory.newMap() )
+
+    #set ( $void = $tableSettings.put("tableHeight", $parameters.tableHeight.value()) )
+    #set ( $void = $tableSettings.put("headerBackgroundColor", $parameters.headerBackgroundColor.value()) )
+    #set ( $void = $tableSettings.put("headerTextColor", $parameters.headerTextColor.value()) )
+    #set ( $void = $tableSettings.put("rowBackgroundColor", $parameters.rowBackgroundColor.value()) )
+    #set ( $void = $tableSettings.put("alternateRowBackgroundColor", $parameters.alternateRowBackgroundColor.value()) )
+    #set ( $void = $tableSettings.put("showExportButtons", $parameters.showExportButtons.value()) )
+    #set ( $void = $tableSettings.put("showSearchBar", $parameters.showSearchBar.value()) )
+#end
+
+## ==========================================================================
 ## Main 
 ## ==========================================================================
 #if ( $allowRendering )
@@ -300,6 +320,7 @@
 
     #prepareHeadersMacro()
     #prepareDataRowsMacro()
+    #prepareTableSettingsMacro()
 
     ## ======================================================================
     ## Load widget-local DataTables assets.
@@ -314,5 +335,5 @@
     #loadWidgetJsResource("resources/tableEffects.js")
     #loadWidgetCssResource("resources/tableEffects.css")
 
-    #initDataTableMacro ( $widgetTableId $headersKeys $headersMap $dataRows )
+    #initDataTableMacro ( $widgetTableId $headersKeys $headersMap $dataRows $tableSettings)
 #end

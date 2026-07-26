@@ -54,6 +54,19 @@ $parameters.put("showSpace", $factory.bool("Show Space").value(true).build())
 $parameters.put("columnFields", $factory.string("Show Fields as Columns").value("status,updated").build())
 
 ## ==========================================================================
+## Build DataTables display and behavior parameters.
+## These let users adjust table presentation from the widget properties
+## panel without changing Velocity or JavaScript files.
+## ==========================================================================
+$parameters.put("tableHeight", $factory.string("Table Height").value("60vh").build())
+$parameters.put("headerBackgroundColor", $factory.string("Header Background Color").value("#ffffff").build())
+$parameters.put("headerTextColor", $factory.string("Header Text Color").value("#111827").build())
+$parameters.put("rowBackgroundColor", $factory.string("Row Background Color").value("#ffffff").build())
+$parameters.put("alternateRowBackgroundColor", $factory.string("Alternate Row Background Color").value("#f8fafc").build())
+$parameters.put("showExportButtons", $factory.bool("Show Export Buttons").value(true).build())
+$parameters.put("showSearchBar", $factory.bool("Show Search Bar").value(true).build())
+
+## ==========================================================================
 ## Build Additional Column workitem queries
 ## ==========================================================================
 #set ( $title = $factory.string("Title").build() )

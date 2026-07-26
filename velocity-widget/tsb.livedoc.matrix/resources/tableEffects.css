@@ -1,24 +1,48 @@
 .tsb-table-effects {
-    --tsb-header-bg: #1f2937;
-    --tsb-header-color: #ffffff;
+    --tsb-header-bg: #ffffff;
+    --tsb-header-color: #111827;
     --tsb-row-bg: #ffffff;
     --tsb-row-alt-bg: #f8fafc;
 }
 
-.tsb-table-effects thead th {
+.tsb-table-effects table.dataTable thead th,
+.tsb-table-effects table.dataTable thead td,
+.tsb-table-effects div.dt-scroll-head table.dataTable thead th,
+.tsb-table-effects div.dt-scroll-head table.dataTable thead td {
     background-color: var(--tsb-header-bg);
     color: var(--tsb-header-color);
 }
 
-.tsb-table-effects tbody tr {
+.tsb-table-effects table.dataTable thead th .dt-column-order,
+.tsb-table-effects table.dataTable thead td .dt-column-order,
+.tsb-table-effects table.dataTable thead th .dt-column-order::before,
+.tsb-table-effects table.dataTable thead th .dt-column-order::after,
+.tsb-table-effects table.dataTable thead td .dt-column-order::before,
+.tsb-table-effects table.dataTable thead td .dt-column-order::after {
+    color: var(--tsb-header-color);
+    opacity: 1;
+}
+
+.tsb-table-effects div.dt-scroll-body table.dataTable > thead,
+.tsb-table-effects div.dt-scroll-body table.dataTable > thead > tr,
+.tsb-table-effects div.dt-scroll-body table.dataTable > thead > tr > th,
+.tsb-table-effects div.dt-scroll-body table.dataTable > thead > tr > td,
+.tsb-table-effects div.dt-scroll-body table.dataTable > thead .dt-scroll-sizing {
+    height: 0 !important;
+    max-height: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    border-top-width: 0 !important;
+    border-bottom-width: 0 !important;
+    overflow: hidden !important;
+    line-height: 0 !important;
+    font-size: 0 !important;
+}
+
+.tsb-table-effects table.dataTable tbody tr {
     background-color: var(--tsb-row-bg);
 }
 
-.tsb-table-effects tbody tr:nth-child(even) {
+.tsb-table-effects table.dataTable tbody tr:nth-child(even) {
     background-color: var(--tsb-row-alt-bg);
-}
-
-.tsb-table-effects thead th {
-    background-color: var(--tsb-header-bg);
-    color: var(--tsb-header-color);
 }
