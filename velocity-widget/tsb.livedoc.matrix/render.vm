@@ -271,6 +271,8 @@
                 ## ==========================================================
                 ## Count matching work items and build links to the tracker
                 ## result and filtered document view.
+                ## Zero counts receive a dedicated CSS class.
+                ## The class applies only to additional-column count links.
                 ## ==========================================================
                 #set ( $cellQuery = "$docQuery AND ($columnParam.query.value())" )
                 #set ( $workitemCount = $transaction.workItems().search().query("$cellQuery").size() )
@@ -278,8 +280,15 @@
                 #set ( $docSpace = $docu.getOldApi().getModuleFolder() )
                 #set ( $docName = $docu.fields().moduleName().get() )
                 #set ( $docLink = $transaction.context().createPortalLink().project("$docu.fields().project().projectId()").document("$docSpace","$docName").filter("$cellQuery").toEncodedRelativeUrl() )
-               
-                #set ( $cellHtml = "<a href=$q$trackerLink$q>$workitemCount</a> / <a href=$q$docLink$q>Doc</a>" )
+
+                #set ( $countClassAttribute = "" )
+                #if ( $workitemCount == 0 )
+                    #set ( $countClassAttribute = " class=${q}tsb-additional-column-zero${q}" )
+                #end
+
+                #set ( $countHtml = "<a$countClassAttribute href=$q$trackerLink$q>$workitemCount</a>" )
+                #set ( $documentLinkHtml = "<a href=$q$docLink$q>Doc</a>" )
+                #set ( $cellHtml = "$countHtml / $documentLinkHtml" )
                 #set ( $void = $rowsMap.put($columnParam.title.value(), $cellHtml) )
             #end
         #end

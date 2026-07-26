@@ -152,4 +152,19 @@ Documentation update only. No widget behavior changes and no code fixes.
 - [FIX] Changed and reuploaded the datatables to include the libraries: `jQuery 3.7.0, JSZip 3.10.1, pdfmake 0.2.7, DataTables 2.3.8, Buttons 3.2.6, Column visibility 3.2.6, HTML5 export 3.2.6, Print view 3.2.6, ColumnControl 1.2.1, FixedHeader 4.0.6, SearchBuilder 1.8.4, SearchPanes 2.3.5`, resulting to a resolved conflict in fixedHeader
 - [ENHANCEMENT] Added back the fixedHeader in the `tsb.framework.vm`
 - [ENHANCEMENT] Added hover in the table class, resulting to `<table id="$widgetTableId" class="stripe hover row-border order-column nowrap">`
-- [DOCS] Changed the documentation  
+- [DOCS] Changed the documentation
+
+## Version 4.0
+
+### 2026-07-25
+
+- [ENHANCEMENT] Enabled DataTables multi-column sorting with default ordering by Project, Space, and Document.
+
+### 2026-07-26
+
+- [ENHANCEMENT] Added widget properties for table height, header colors, row colors, export buttons, and the search bar.
+- [ENHANCEMENT] Moved the DataTables entry count above the table.
+- [ENHANCEMENT] Highlighted zero work item counts in red across all additional query columns.
+- [FIX] Applied configured header colors consistently to the visible header and sorting indicators.
+- [FIX] Destroyed disconnected DataTables instances during widget rerenders to prevent stray FixedHeader elements.
+- [FIX] Updated the widget label to `TSB LiveDoc Matrix 4.0`.

@@ -3,6 +3,7 @@
     --tsb-header-color: #111827;
     --tsb-row-bg: #ffffff;
     --tsb-row-alt-bg: #f8fafc;
+    --tsb-zero-value-color: #990000;
 }
 
 .tsb-table-effects table.dataTable thead th,
@@ -45,4 +46,9 @@
 
 .tsb-table-effects table.dataTable tbody tr:nth-child(even) {
     background-color: var(--tsb-row-alt-bg);
+}
+
+/* Highlight only zero counts in additional query columns. */
+.tsb-table-effects table.dataTable tbody a.tsb-additional-column-zero {
+    color: var(--tsb-zero-value-color);
 }
