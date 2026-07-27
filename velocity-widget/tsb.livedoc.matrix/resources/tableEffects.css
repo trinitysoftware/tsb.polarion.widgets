@@ -54,6 +54,12 @@
     flex: 0 0 12px;
 }
 
+/* Keep the scrolling header and body on DataTables' shared column widths. */
+.tsb-table-effects div.dt-scroll-head table.dataTable,
+.tsb-table-effects div.dt-scroll-body > table.dataTable {
+    table-layout: fixed;
+}
+
 /* Replace the funnel with ColumnControl's check mark when a filter is active. */
 .tsb-table-effects table.dataTable thead
     button.dtcc-button_filterDropdown.dtcc-button_active {

@@ -180,5 +180,6 @@ Documentation update only. No widget behavior changes and no code fixes.
 - [ENHANCEMENT] Preserved continuous typing and input focus while column filters redraw the table.
 - [ENHANCEMENT] Left-aligned additional query-column headers and values with the other table content.
 - [FIX] Recalculated DataTables column widths after Polarion resizes the widget.
+- [FIX] Applied fixed table layout to keep DataTables scroll-header and body columns aligned during widget editing and redraws.
 - [FIX] Limited internal sizing-header cleanup to the DataTables master table.
 - [DOCS] Updated the documented DataTables macro signature for column filter metadata and table settings.
