@@ -319,6 +319,8 @@
     #set ( $void = $tableSettings.put("alternateRowBackgroundColor", $parameters.alternateRowBackgroundColor.value()) )
     #set ( $void = $tableSettings.put("showExportButtons", $parameters.showExportButtons.value()) )
     #set ( $void = $tableSettings.put("showSearchBar", $parameters.showSearchBar.value()) )
+    #set ( $void = $tableSettings.put("enablePaging", $parameters.enablePaging.value()) )
+    #set ( $void = $tableSettings.put("rowsPerPage", $parameters.rowsPerPage.value()) )
 #end
 
 ## ==========================================================================

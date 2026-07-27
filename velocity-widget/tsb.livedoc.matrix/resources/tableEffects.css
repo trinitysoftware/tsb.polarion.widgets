@@ -4,6 +4,9 @@
     --tsb-row-bg: #ffffff;
     --tsb-row-alt-bg: #f8fafc;
     --tsb-zero-value-color: #990000;
+    --tsb-paging-hover-bg: #315f7d;
+    --tsb-paging-hover-border: #244960;
+    --tsb-paging-active-bg: #244960;
 }
 
 .tsb-table-effects table.dataTable thead th,
@@ -24,11 +27,12 @@
     opacity: 1;
 }
 
-.tsb-table-effects div.dt-scroll-body table.dataTable > thead,
-.tsb-table-effects div.dt-scroll-body table.dataTable > thead > tr,
-.tsb-table-effects div.dt-scroll-body table.dataTable > thead > tr > th,
-.tsb-table-effects div.dt-scroll-body table.dataTable > thead > tr > td,
-.tsb-table-effects div.dt-scroll-body table.dataTable > thead .dt-scroll-sizing {
+/* Hide only the master table's internal sizing header. */
+.tsb-table-effects div.dt-scroll-body > table.dataTable[id] > thead,
+.tsb-table-effects div.dt-scroll-body > table.dataTable[id] > thead > tr,
+.tsb-table-effects div.dt-scroll-body > table.dataTable[id] > thead > tr > th,
+.tsb-table-effects div.dt-scroll-body > table.dataTable[id] > thead > tr > td,
+.tsb-table-effects div.dt-scroll-body > table.dataTable[id] > thead .dt-scroll-sizing {
     height: 0 !important;
     max-height: 0 !important;
     padding-top: 0 !important;
@@ -51,4 +55,21 @@
 /* Highlight only zero counts in additional query columns. */
 .tsb-table-effects table.dataTable tbody a.tsb-additional-column-zero {
     color: var(--tsb-zero-value-color);
+}
+
+/* Use a restrained corporate-blue interaction state for pagination. */
+.tsb-table-effects.dt-container .dt-paging
+    .dt-paging-button:hover:not(.disabled):not(.current) {
+    color: #ffffff !important;
+    border-color: var(--tsb-paging-hover-border);
+    background: var(--tsb-paging-hover-bg);
+    box-shadow: none;
+}
+
+.tsb-table-effects.dt-container .dt-paging
+    .dt-paging-button:active:not(.disabled):not(.current) {
+    color: #ffffff !important;
+    border-color: var(--tsb-paging-hover-border);
+    background: var(--tsb-paging-active-bg);
+    box-shadow: none;
 }

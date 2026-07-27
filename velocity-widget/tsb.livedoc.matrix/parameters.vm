@@ -58,13 +58,22 @@ $parameters.put("columnFields", $factory.string("Show Fields as Columns").value(
 ## These let users adjust table presentation from the widget properties
 ## panel without changing Velocity or JavaScript files.
 ## ==========================================================================
-$parameters.put("tableHeight", $factory.string("Table Height").value("60vh").build())
-$parameters.put("headerBackgroundColor", $factory.string("Header Background Color").value("#ffffff").build())
-$parameters.put("headerTextColor", $factory.string("Header Text Color").value("#111827").build())
-$parameters.put("rowBackgroundColor", $factory.string("Row Background Color").value("#ffffff").build())
-$parameters.put("alternateRowBackgroundColor", $factory.string("Alternate Row Background Color").value("#f8fafc").build())
-$parameters.put("showExportButtons", $factory.bool("Show Export Buttons").value(true).build())
-$parameters.put("showSearchBar", $factory.bool("Show Search Bar").value(true).build())
+$parameters.put("tableHeight", $factory.string("Table Height").value("60vh").dependencyTarget(true).build())
+$parameters.put("headerBackgroundColor", $factory.string("Header Background Color").value("#ffffff").dependencyTarget(true).build())
+$parameters.put("headerTextColor", $factory.string("Header Text Color").value("#111827").dependencyTarget(true).build())
+$parameters.put("rowBackgroundColor", $factory.string("Row Background Color").value("#ffffff").dependencyTarget(true).build())
+$parameters.put("alternateRowBackgroundColor", $factory.string("Alternate Row Background Color").value("#f8fafc").dependencyTarget(true).build())
+$parameters.put("showExportButtons", $factory.bool("Show Export Buttons").value(true).dependencyTarget(true).build())
+$parameters.put("showSearchBar", $factory.bool("Show Search Bar").value(true).dependencyTarget(true).build())
+
+## Paging remains disabled by default.
+## Rows Per Page applies only when paging is enabled.
+$parameters.put("enablePaging", $factory.bool("Enable Paging").value(false).dependencySource(true).dependencyTarget(true).build())
+$parameters.put("rowsPerPage", $factory.integer("Rows Per Page").value(10).dependencyTarget(true).build())
+
+## Reset Table Settings is a one-time dependency trigger.
+## It restores only table presentation and behavior parameters.
+$parameters.put("resetTableSettings", $factory.bool("Reset Table Settings").value(false).dependencySource(true).dependencyTarget(true).build())
 
 ## ==========================================================================
 ## Build Additional Column workitem queries
