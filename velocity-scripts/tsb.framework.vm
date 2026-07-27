@@ -57,7 +57,7 @@
 ## Convert Velocity header and row maps into JavaScript data for DataTables.
 ## The server prepares the maps; this macro serializes them for the client.
 ## ==========================================================================
-#macro ( renderWidgetDataMacro $headersMap $headersKeys $dataRows )
+#macro ( renderWidgetDataMacro $headersMap $headersKeys $headerFilterTypesMap $dataRows )
 <script type="text/javascript">
     // ======================================================================
     // This object is passed to DataTables.
@@ -75,7 +75,8 @@
     #foreach ( $headerKey in $headersKeys)
         widgetData.headers.push({
             title: "$esc.javascript($headersMap.get($headerKey))",
-            key: "$esc.javascript($headerKey)"
+            key: "$esc.javascript($headerKey)",
+            filterType: "$esc.javascript($headerFilterTypesMap.get($headerKey))"
         });
     #end
 
@@ -106,12 +107,25 @@
 ## The caller provides the table id, ordered headers, prepared row data, and
 ## table settings collected from the widget properties panel.
 ## ==========================================================================
-#macro ( initDataTableMacro $widgetTableId $headersKeys $headersMap $dataRows $tableSettings )
+#macro ( initDataTableMacro $widgetTableId $headersKeys $headersMap $headerFilterTypesMap $dataRows $tableSettings )
     ## ======================================================================
     ## This is the empty table element.
     ## DataTables will fill it using widgetData.
     ## ======================================================================
-    <table id="$widgetTableId" class="stripe hover row-border order-column nowrap"></table>
+    <table id="$widgetTableId" class="stripe hover row-border order-column nowrap">
+        ## ==================================================================
+        ## Render the header cells before DataTables starts.
+        ## ColumnControl otherwise creates a control-only header row that
+        ## disables DataTables sorting when the table shell is empty.
+        ## ==================================================================
+        <thead>
+            <tr>
+                #foreach ( $headerKey in $headersKeys )
+                    <th></th>
+                #end
+            </tr>
+        </thead>
+    </table>
     
     #set ( $h = "#")
     #set ( $forId = "${h}${widgetTableId}" )
@@ -119,7 +133,7 @@
     ## ======================================================================
     ## Write the prepared server data into JavaScript.
     ## ======================================================================
-    #renderWidgetDataMacro( $headersMap $headersKeys $dataRows )
+    #renderWidgetDataMacro( $headersMap $headersKeys $headerFilterTypesMap $dataRows )
     <script type="text/javascript">
     (function () {
         // ==================================================================
@@ -175,11 +189,33 @@
         // name = the stable id used by DataTables ordering configuration.
         // ==================================================================
         var columns = widgetData.headers.map(function (header) {
-            return {
+            var column = {
                 title: header.title,
                 data: header.key,
                 name: header.key
             };
+
+            // ==============================================================
+            // Additional query columns display links such as "0 / Doc", but
+            // their filters must compare the underlying integer count.
+            // Orthogonal rendering preserves the links for display while
+            // supplying the raw count for searching, sorting, and type checks.
+            // ==============================================================
+            if (header.filterType === 'number') {
+                column.type = 'num';
+                column.render = function (data, type, row) {
+                    if (type === 'display') {
+                        return data;
+                    }
+
+                    var filterValueKey = '__tsbFilterValue_' + header.key;
+                    var filterValue = parseInt(row[filterValueKey], 10);
+
+                    return isNaN(filterValue) ? 0 : filterValue;
+                };
+            }
+
+            return column;
         });
 
         // ==================================================================
@@ -222,6 +258,16 @@
             topEndLayout.search = {};
         }
 
+        // ==================================================================
+        // ColumnControl does not provide a funnel icon in the downloaded
+        // bundle. Register a Lucide-style funnel for the filter dropdown.
+        // ==================================================================
+        DataTable.ColumnControl.icons.filter =
+            '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" ' +
+            'viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+            'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>';
+
         var dataTable = new DataTable(tableNode, {
             columns: columns,
             data: widgetData.rows,
@@ -234,6 +280,22 @@
             ordering: true,
             orderMulti: true,
             order: defaultOrder.length ? defaultOrder : [],
+
+            // ==============================================================
+            // Add a compact filter dropdown to every displayed column.
+            // ColumnControl chooses text or numeric conditions from the
+            // filter type supplied by the server-rendered column definition.
+            // Multiple active column filters are combined by DataTables.
+            // ==============================================================
+            columnControl: [{
+                extend: 'dropdown',
+                icon: 'filter',
+                text: 'Filter',
+                className: 'filterDropdown',
+                content: [{
+                    extend: 'search'
+                }]
+            }],
 
             // ==============================================================
             // Paging remains disabled by default to preserve existing widget
@@ -253,7 +315,40 @@
             // so DataTables does not render the same information below it.
             // ==============================================================
             layout: {
-                topStart: 'info',
+                topStart: [
+                    'info',
+                    {
+                        buttons: [{
+                            text: 'Clear filters',
+                            className: 'tsb-clear-filters',
+                            enabled: false,
+                            init: function (dt) {
+                                var clearFiltersButton = this;
+
+                                // ==========================================
+                                // Enable the action only while at least one
+                                // ColumnControl filter is active.
+                                // ==========================================
+                                dt.on('draw.tsbClearFilters', function () {
+                                    var hasColumnFilter = false;
+
+                                    dt.columns().every(function () {
+                                        if (this.search.fixed('dtcc') ||
+                                            this.search.fixed('dtcc-list')) {
+                                            hasColumnFilter = true;
+                                        }
+                                    });
+
+                                    clearFiltersButton.enable(hasColumnFilter);
+                                });
+                            },
+                            action: function (event, dt) {
+                                dt.columns().columnControl.searchClear();
+                                dt.draw();
+                            }
+                        }]
+                    }
+                ],
                 topEnd: topEndLayout,
                 bottomStart: null,
                 bottomEnd: null,
@@ -262,6 +357,65 @@
         });
 
         var tableContainer = dataTable.table().container();
+
+        // ==================================================================
+        // ColumnControl redraws the scrolling table for every input event.
+        // Polarion can move the dropdown during that redraw and interrupt
+        // typing. Wait until typing pauses, then apply one search and restore
+        // focus only when the user was still working in the same input.
+        // ==================================================================
+        var columnFilterInputTimers = new Map();
+
+        function handleColumnFilterInput(event) {
+            var filterInput = event.target;
+
+            if (event.tsbColumnFilterCommit ||
+                filterInput.tagName !== 'INPUT' ||
+                !filterInput.closest('div.dtcc-search')) {
+                return;
+            }
+
+            event.stopImmediatePropagation();
+
+            if (columnFilterInputTimers.has(filterInput)) {
+                window.clearTimeout(columnFilterInputTimers.get(filterInput));
+            }
+
+            columnFilterInputTimers.set(filterInput, window.setTimeout(function () {
+                var restoreFocus = document.activeElement === filterInput;
+
+                columnFilterInputTimers.delete(filterInput);
+
+                if (!document.documentElement.contains(filterInput)) {
+                    return;
+                }
+
+                if (restoreFocus) {
+                    dataTable.one('draw', function () {
+                        window.requestAnimationFrame(function () {
+                            if (document.documentElement.contains(filterInput)) {
+                                filterInput.focus({
+                                    preventScroll: true
+                                });
+                                filterInput.setSelectionRange(
+                                    filterInput.value.length,
+                                    filterInput.value.length
+                                );
+                            }
+                        });
+                    });
+                }
+
+                var filterEvent = new Event('input', {
+                    bubbles: true
+                });
+
+                filterEvent.tsbColumnFilterCommit = true;
+                filterInput.dispatchEvent(filterEvent);
+            }, 300));
+        }
+
+        tableContainer.addEventListener('input', handleColumnFilterInput, true);
 
         new TableEffects(tableContainer, {
             header: {
@@ -304,6 +458,17 @@
                 if (this.adjustmentFrame !== null) {
                     window.cancelAnimationFrame(this.adjustmentFrame);
                 }
+
+                tableContainer.removeEventListener(
+                    'input',
+                    handleColumnFilterInput,
+                    true
+                );
+
+                columnFilterInputTimers.forEach(function (timerId) {
+                    window.clearTimeout(timerId);
+                });
+                columnFilterInputTimers.clear();
 
                 var registeredIndex = tableInstances.indexOf(this);
                 if (registeredIndex !== -1) {

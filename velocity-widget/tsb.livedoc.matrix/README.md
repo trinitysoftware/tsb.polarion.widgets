@@ -45,7 +45,7 @@ Polarion Velocity widget for rendering a LiveDoc matrix with DataTables.
 4. Each resolved LiveDoc becomes one table row.
 5. Header and row maps are built in Velocity.
 6. `resources/datatables.css` and `resources/datatables.js` are loaded through widget resource XHR helpers.
-7. `prepareHeadersMacro` and `prepareDataRowsMacro` create a map and array of data using Velocity to pass onto datatables for rendering through `#initDataTableMacro ( $widgetTableId $headersKeys $headersMap $dataRows )`. 
+7. `prepareHeadersMacro` and `prepareDataRowsMacro` create maps and arrays of data using Velocity to pass onto DataTables for rendering through `#initDataTableMacro ( $widgetTableId $headersKeys $headersMap $headerFilterTypesMap $dataRows $tableSettings )`.
 8. DataTables renders the table.
 
 ## Rendered Columns

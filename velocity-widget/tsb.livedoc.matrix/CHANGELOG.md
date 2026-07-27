@@ -168,3 +168,17 @@ Documentation update only. No widget behavior changes and no code fixes.
 - [FIX] Applied configured header colors consistently to the visible header and sorting indicators.
 - [FIX] Destroyed disconnected DataTables instances during widget rerenders to prevent stray FixedHeader elements.
 - [FIX] Updated the widget label to `TSB LiveDoc Matrix 4.0`.
+
+### 2026-07-27
+
+- [ENHANCEMENT] Added optional paging with a configurable rows-per-page value that defaults to `10` and remains hidden while paging is disabled.
+- [ENHANCEMENT] Added a reset control for restoring table presentation and behavior settings to their defaults.
+- [ENHANCEMENT] Centered pagination controls and added corporate-blue hover and active states.
+- [ENHANCEMENT] Added per-column filter dropdowns with text conditions and numeric conditions for additional query-count columns.
+- [ENHANCEMENT] Added funnel and active-filter indicators, retained column sorting controls, and positioned both controls consistently across all columns.
+- [ENHANCEMENT] Added a `Clear filters` action beside the DataTables entry count.
+- [ENHANCEMENT] Preserved continuous typing and input focus while column filters redraw the table.
+- [ENHANCEMENT] Left-aligned additional query-column headers and values with the other table content.
+- [FIX] Recalculated DataTables column widths after Polarion resizes the widget.
+- [FIX] Limited internal sizing-header cleanup to the DataTables master table.
+- [DOCS] Updated the documented DataTables macro signature for column filter metadata and table settings.

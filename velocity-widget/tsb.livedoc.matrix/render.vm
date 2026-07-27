@@ -121,21 +121,30 @@
     #set ( $headersMap = $objectFactory.newMap() )
 
     ## ======================================================================
+    ## This map identifies the filter type for each displayed column.
+    ## Computed query columns use numeric filtering; other columns use text.
+    ## ======================================================================
+    #set ( $headerFilterTypesMap = $objectFactory.newMap() )
+
+    ## ======================================================================
     ## Used to track the order of columns when rendering, since map is unordered.
     ## ======================================================================
     #set ( $headersKeys = [] )
 
     #if ( true == $parameters.showProject.value() )
         #set ( $void = $headersMap.put("project", "Project") )
+        #set ( $void = $headerFilterTypesMap.put("project", "text") )
         #set ( $void = $headersKeys.add("project") )
     #end
 
     #if ( true == $parameters.showSpace.value() )
         #set ( $void = $headersMap.put("space", "Space") )
+        #set ( $void = $headerFilterTypesMap.put("space", "text") )
         #set ( $void = $headersKeys.add("space") )
     #end
 
     #set ( $void = $headersMap.put("documentHtml", "Document") )
+    #set ( $void = $headerFilterTypesMap.put("documentHtml", "text") )
     #set ( $void = $headersKeys.add("documentHtml") )
 
     ## ======================================================================
@@ -156,12 +165,14 @@
             #end
 
             #set ( $void = $headersMap.put($fieldId, $fieldTitle) )
+            #set ( $void = $headerFilterTypesMap.put($fieldId, "text") )
             #set ( $void = $headersKeys.add($fieldId) )
         #end
     #end
 
     #if ( true == $parameters.showSignaturesStatus.value() )
         #set ( $void = $headersMap.put("signatureHtml","Signatures") )
+        #set ( $void = $headerFilterTypesMap.put("signatureHtml", "text") )
         #set ( $void = $headersKeys.add("signatureHtml") )
     #end
 
@@ -172,6 +183,7 @@
     #foreach ( $columnParam in $parameters.columns.get() )
         #if ( !($columnParam.title.value() == "") && !($columnParam.query.value() == "") )
             #set ( $void = $headersMap.put($columnParam.title.value(), $columnParam.title.value()) )
+            #set ( $void = $headerFilterTypesMap.put($columnParam.title.value(), "number") )
             #set ( $void = $headersKeys.add($columnParam.title.value()) )
         #end
     #end
@@ -290,6 +302,13 @@
                 #set ( $documentLinkHtml = "<a href=$q$docLink$q>Doc</a>" )
                 #set ( $cellHtml = "$countHtml / $documentLinkHtml" )
                 #set ( $void = $rowsMap.put($columnParam.title.value(), $cellHtml) )
+
+                ## ==========================================================
+                ## Keep the raw count separate from the rendered links.
+                ## DataTables uses this value for numeric filtering.
+                ## ==========================================================
+                #set ( $filterValueKey = "__tsbFilterValue_${columnParam.title.value()}" )
+                #set ( $void = $rowsMap.put($filterValueKey, $workitemCount) )
             #end
         #end
 
@@ -346,5 +365,5 @@
     #loadWidgetJsResource("resources/tableEffects.js")
     #loadWidgetCssResource("resources/tableEffects.css")
 
-    #initDataTableMacro ( $widgetTableId $headersKeys $headersMap $dataRows $tableSettings)
+    #initDataTableMacro ( $widgetTableId $headersKeys $headersMap $headerFilterTypesMap $dataRows $tableSettings )
 #end
