@@ -33,31 +33,10 @@
 ## ==========================================================================
 
 ## ==========================================================================
-## Reset table presentation and behavior parameters.
-## The reset trigger returns to false after restoring the defaults.
-## ==========================================================================
-#set ( $enablePagingParameter = $parameters.enablePaging )
-#set ( $rowsPerPageParameter = $parameters.rowsPerPage )
-#set ( $resetTableSettingsParameter = $parameters.resetTableSettings )
-
-#if ( $resetTableSettingsParameter.value() )
-    #set ( $void = $parameters.tableHeight.set().value("60vh") )
-    #set ( $void = $parameters.headerBackgroundColor.set().value("#ffffff") )
-    #set ( $void = $parameters.headerTextColor.set().value("#111827") )
-    #set ( $void = $parameters.rowBackgroundColor.set().value("#ffffff") )
-    #set ( $void = $parameters.alternateRowBackgroundColor.set().value("#f8fafc") )
-    #set ( $void = $parameters.showExportButtons.set().value(true) )
-    #set ( $void = $parameters.showSearchBar.set().value(true) )
-    #set ( $void = $enablePagingParameter.set().value(false) )
-    #set ( $void = $rowsPerPageParameter.set().value(10) )
-    #set ( $void = $resetTableSettingsParameter.set().value(false) )
-    #set ( $pagingEnabled = false )
-#else
-    #set ( $pagingEnabled = $enablePagingParameter.value() )
-#end
-
-## ==========================================================================
 ## Update dependent paging parameters.
 ## Rows Per Page is visible only when Enable Paging is selected.
 ## ==========================================================================
+#set ( $enablePagingParameter = $parameters.enablePaging )
+#set ( $rowsPerPageParameter = $parameters.rowsPerPage )
+#set ( $pagingEnabled = $enablePagingParameter.value() )
 #set ( $void = $rowsPerPageParameter.visuals().setVisible($pagingEnabled) )

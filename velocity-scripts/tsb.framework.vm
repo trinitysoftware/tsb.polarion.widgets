@@ -57,7 +57,7 @@
 ## Convert Velocity header and row maps into JavaScript data for DataTables.
 ## The server prepares the maps; this macro serializes them for the client.
 ## ==========================================================================
-#macro ( renderWidgetDataMacro $headersMap $headersKeys $headerFilterTypesMap $dataRows )
+#macro ( renderWidgetDataMacro $headersMap $headersKeys $headerFilterTypesMap $headerFilterOptionsMap $dataRows )
 <script type="text/javascript">
     // ======================================================================
     // This object is passed to DataTables.
@@ -72,12 +72,28 @@
     // Convert the Velocity headers map into JavaScript header objects.
     // Example: "space" -> "Space" becomes { key: "space", title: "Space" }.
     // ======================================================================
-    #foreach ( $headerKey in $headersKeys)
-        widgetData.headers.push({
+    #foreach ( $headerKey in $headersKeys )
+        var headerData = {
             title: "$esc.javascript($headersMap.get($headerKey))",
             key: "$esc.javascript($headerKey)",
-            filterType: "$esc.javascript($headerFilterTypesMap.get($headerKey))"
-        });
+            filterType: "$esc.javascript($headerFilterTypesMap.get($headerKey))",
+            filterOptions: []
+        };
+
+        // ==================================================================
+        // Catalog options come from Polarion configuration, not table rows.
+        // This keeps valid choices visible when no current row uses them.
+        // ==================================================================
+        #if ( $headerFilterOptionsMap.containsKey($headerKey) )
+            #foreach ( $filterOption in $headerFilterOptionsMap.get($headerKey) )
+                headerData.filterOptions.push({
+                    label: "$esc.javascript($filterOption)",
+                    value: "$esc.javascript($filterOption)"
+                });
+            #end
+        #end
+
+        widgetData.headers.push(headerData);
     #end
 
     // ======================================================================
@@ -107,7 +123,7 @@
 ## The caller provides the table id, ordered headers, prepared row data, and
 ## table settings collected from the widget properties panel.
 ## ==========================================================================
-#macro ( initDataTableMacro $widgetTableId $headersKeys $headersMap $headerFilterTypesMap $dataRows $tableSettings )
+#macro ( initDataTableMacro $widgetTableId $headersKeys $headersMap $headerFilterTypesMap $headerFilterOptionsMap $dataRows $tableSettings )
     ## ======================================================================
     ## This is the empty table element.
     ## DataTables will fill it using widgetData.
@@ -133,7 +149,7 @@
     ## ======================================================================
     ## Write the prepared server data into JavaScript.
     ## ======================================================================
-    #renderWidgetDataMacro( $headersMap $headersKeys $headerFilterTypesMap $dataRows )
+    #renderWidgetDataMacro( $headersMap $headersKeys $headerFilterTypesMap $headerFilterOptionsMap $dataRows )
     <script type="text/javascript">
     (function () {
         // ==================================================================
@@ -181,6 +197,194 @@
         }
 
         // ==================================================================
+        // Register a checklist that filters against a separate row property.
+        // The visible cell text remains available to the global search bar,
+        // while catalog and count dropdowns use their dedicated raw values.
+        // DataTables' CheckList helper retains the standard dropdown design.
+        // ==================================================================
+        DataTable.ColumnControl.content.tsbOptionList = {
+            defaults: {
+                options: [],
+                rowDataKey: '',
+                valueMode: 'raw'
+            },
+            init: function (config) {
+                var control = this;
+                var dataTableApi = control.dt();
+                var columnIndex = control.idx();
+                var checkList = new DataTable.ColumnControl.CheckList(
+                    dataTableApi,
+                    control,
+                    {
+                        search: false,
+                        select: true
+                    }
+                );
+
+                function getRowFilterValue(rowData) {
+                    var value = rowData[config.rowDataKey];
+
+                    if (config.valueMode === 'numberCategory') {
+                        value = parseInt(value, 10);
+                        value = isNaN(value) ? 0 : value;
+
+                        return value === 0
+                            ? 'Zero values'
+                            : 'Non-zero values';
+                    }
+
+                    return value || '';
+                }
+
+                function setActiveState(active) {
+                    if (!config._parents) {
+                        return;
+                    }
+
+                    config._parents.forEach(function (button) {
+                        button.activeList(
+                            control.unique() + 'optionList',
+                            active
+                        );
+                    });
+                }
+
+                function applyOptionFilter(redraw) {
+                    var selectedValues = checkList.values();
+                    var column = dataTableApi.column(columnIndex);
+                    var active = selectedValues.length > 0;
+
+                    if (active) {
+                        column.search.fixed(
+                            'tsb-option-list',
+                            function (searchValue, rowData) {
+                                return selectedValues.includes(
+                                    getRowFilterValue(rowData)
+                                );
+                            }
+                        );
+                    } else {
+                        column.search.fixed('tsb-option-list', '');
+                    }
+
+                    setActiveState(active);
+
+                    if (redraw) {
+                        dataTableApi.draw();
+                    }
+                }
+
+                checkList
+                    .searchListener(dataTableApi)
+                    .handler(function (event, button, buttons, redraw) {
+                        if (button) {
+                            button.active(!button.active());
+                        }
+
+                        applyOptionFilter(redraw);
+                    })
+                    .add(config.options);
+
+                return checkList.element();
+            }
+        };
+
+        // ==================================================================
+        // Register an inclusive date-range control for Updated columns.
+        // Native date inputs provide calendar pickers without another library.
+        // The fixed search participates in DataTables drawing and cleanup.
+        // ==================================================================
+        DataTable.ColumnControl.content.tsbDateRange = {
+            defaults: {},
+            init: function (config) {
+                var control = this;
+                var dataTableApi = control.dt();
+                var columnIndex = control.idx();
+                var eventNamespace = '.tsbDateRange' + columnIndex;
+                var container = document.createElement('div');
+                var fromLabel = document.createElement('label');
+                var fromInput = document.createElement('input');
+                var toLabel = document.createElement('label');
+                var toInput = document.createElement('input');
+
+                container.className = 'tsb-date-range';
+                fromLabel.textContent = 'From';
+                toLabel.textContent = 'To';
+                fromInput.type = 'date';
+                toInput.type = 'date';
+                fromInput.setAttribute('aria-label', 'Updated from');
+                toInput.setAttribute('aria-label', 'Updated to');
+                fromLabel.appendChild(fromInput);
+                toLabel.appendChild(toInput);
+                container.appendChild(fromLabel);
+                container.appendChild(toLabel);
+
+                function setActiveState(active) {
+                    if (!config._parents) {
+                        return;
+                    }
+
+                    config._parents.forEach(function (button) {
+                        button.activeList(
+                            control.unique() + 'dateRange',
+                            active
+                        );
+                    });
+                }
+
+                function applyDateRange(redraw) {
+                    var fromDate = fromInput.value;
+                    var toDate = toInput.value;
+                    var column = dataTableApi.column(columnIndex);
+                    var active = Boolean(fromDate || toDate);
+
+                    if (active) {
+                        column.search.fixed(
+                            'tsb-date-range',
+                            function (searchValue, rowData) {
+                                var value = rowData[config.rowDataKey] || '';
+
+                                return (!fromDate || value >= fromDate) &&
+                                    (!toDate || value <= toDate);
+                            }
+                        );
+                    } else {
+                        column.search.fixed('tsb-date-range', '');
+                    }
+
+                    setActiveState(active);
+
+                    if (redraw) {
+                        dataTableApi.draw();
+                    }
+                }
+
+                function clearDateRange(event, targetColumnIndex) {
+                    if (targetColumnIndex !== columnIndex) {
+                        return;
+                    }
+
+                    fromInput.value = '';
+                    toInput.value = '';
+                    applyDateRange(false);
+                }
+
+                fromInput.addEventListener('change', function () {
+                    applyDateRange(true);
+                });
+                toInput.addEventListener('change', function () {
+                    applyDateRange(true);
+                });
+                dataTableApi.on(
+                    'cc-search-clear' + eventNamespace,
+                    clearDateRange
+                );
+
+                return container;
+            }
+        };
+
+        // ==================================================================
         // DataTables wants columns in this shape:
         // { title: "Human label", data: "rowObjectKey", name: "stableColumnName" }
         //
@@ -189,22 +393,66 @@
         // name = the stable id used by DataTables ordering configuration.
         // ==================================================================
         var columns = widgetData.headers.map(function (header) {
+            var filterContent;
+
+            if (header.filterType === 'date') {
+                filterContent = {
+                    extend: 'tsbDateRange',
+                    rowDataKey: '__tsbFilterValue_' + header.key
+                };
+            } else if (header.filterType === 'catalog') {
+                filterContent = {
+                    extend: 'tsbOptionList',
+                    options: header.filterOptions,
+                    rowDataKey: '__tsbFilterValue_' + header.key
+                };
+            } else if (header.filterType === 'number') {
+                filterContent = {
+                    extend: 'tsbOptionList',
+                    options: [
+                        {
+                            label: 'Zero values',
+                            value: 'Zero values'
+                        },
+                        {
+                            label: 'Non-zero values',
+                            value: 'Non-zero values'
+                        }
+                    ],
+                    rowDataKey: '__tsbFilterValue_' + header.key,
+                    valueMode: 'numberCategory'
+                };
+            } else {
+                filterContent = {
+                    extend: 'searchList',
+                    search: false,
+                    select: true,
+                    orthogonal: 'filter'
+                };
+            }
+
             var column = {
                 title: header.title,
                 data: header.key,
-                name: header.key
+                name: header.key,
+                columnControl: [{
+                    extend: 'dropdown',
+                    icon: 'filter',
+                    text: 'Filter',
+                    className: 'filterDropdown',
+                    content: [filterContent]
+                }]
             };
 
             // ==============================================================
-            // Additional query columns display links such as "0 / Doc", but
-            // their filters must compare the underlying integer count.
-            // Orthogonal rendering preserves the links for display while
-            // supplying the raw count for searching, sorting, and type checks.
+            // Additional query columns retain their rendered links for display
+            // and global searching. Their raw counts provide numeric sorting;
+            // the custom option list maps those counts to zero or non-zero.
             // ==============================================================
             if (header.filterType === 'number') {
                 column.type = 'num';
                 column.render = function (data, type, row) {
-                    if (type === 'display') {
+                    if (type === 'display' || type === 'filter') {
                         return data;
                     }
 
@@ -212,6 +460,21 @@
                     var filterValue = parseInt(row[filterValueKey], 10);
 
                     return isNaN(filterValue) ? 0 : filterValue;
+                };
+            }
+
+            // ==============================================================
+            // Updated retains its rendered value for display and global search.
+            // Its raw ISO date provides sorting and date-range comparisons.
+            // ==============================================================
+            if (header.filterType === 'date') {
+                column.type = 'date';
+                column.render = function (data, type, row) {
+                    if (type === 'display' || type === 'filter') {
+                        return data;
+                    }
+
+                    return row['__tsbFilterValue_' + header.key] || '';
                 };
             }
 
@@ -282,22 +545,6 @@
             order: defaultOrder.length ? defaultOrder : [],
 
             // ==============================================================
-            // Add a compact filter dropdown to every displayed column.
-            // ColumnControl chooses text or numeric conditions from the
-            // filter type supplied by the server-rendered column definition.
-            // Multiple active column filters are combined by DataTables.
-            // ==============================================================
-            columnControl: [{
-                extend: 'dropdown',
-                icon: 'filter',
-                text: 'Filter',
-                className: 'filterDropdown',
-                content: [{
-                    extend: 'search'
-                }]
-            }],
-
-            // ==============================================================
             // Paging remains disabled by default to preserve existing widget
             // behavior. When enabled, pageLength limits each page to the row
             // count configured in the widget properties panel. lengthChange
@@ -309,6 +556,10 @@
             scrollY: tableHeight,
             autoWidth: true,
             fixedHeader: true,
+            language: {
+                emptyTable: 'No documents are available for the selected data set.',
+                zeroRecords: 'No documents match the selected filters.'
+            },
 
             // ==============================================================
             // Show the entry count above the table. Set bottomStart to null
@@ -334,7 +585,9 @@
 
                                     dt.columns().every(function () {
                                         if (this.search.fixed('dtcc') ||
-                                            this.search.fixed('dtcc-list')) {
+                                            this.search.fixed('dtcc-list') ||
+                                            this.search.fixed('tsb-option-list') ||
+                                            this.search.fixed('tsb-date-range')) {
                                             hasColumnFilter = true;
                                         }
                                     });
@@ -357,65 +610,6 @@
         });
 
         var tableContainer = dataTable.table().container();
-
-        // ==================================================================
-        // ColumnControl redraws the scrolling table for every input event.
-        // Polarion can move the dropdown during that redraw and interrupt
-        // typing. Wait until typing pauses, then apply one search and restore
-        // focus only when the user was still working in the same input.
-        // ==================================================================
-        var columnFilterInputTimers = new Map();
-
-        function handleColumnFilterInput(event) {
-            var filterInput = event.target;
-
-            if (event.tsbColumnFilterCommit ||
-                filterInput.tagName !== 'INPUT' ||
-                !filterInput.closest('div.dtcc-search')) {
-                return;
-            }
-
-            event.stopImmediatePropagation();
-
-            if (columnFilterInputTimers.has(filterInput)) {
-                window.clearTimeout(columnFilterInputTimers.get(filterInput));
-            }
-
-            columnFilterInputTimers.set(filterInput, window.setTimeout(function () {
-                var restoreFocus = document.activeElement === filterInput;
-
-                columnFilterInputTimers.delete(filterInput);
-
-                if (!document.documentElement.contains(filterInput)) {
-                    return;
-                }
-
-                if (restoreFocus) {
-                    dataTable.one('draw', function () {
-                        window.requestAnimationFrame(function () {
-                            if (document.documentElement.contains(filterInput)) {
-                                filterInput.focus({
-                                    preventScroll: true
-                                });
-                                filterInput.setSelectionRange(
-                                    filterInput.value.length,
-                                    filterInput.value.length
-                                );
-                            }
-                        });
-                    });
-                }
-
-                var filterEvent = new Event('input', {
-                    bubbles: true
-                });
-
-                filterEvent.tsbColumnFilterCommit = true;
-                filterInput.dispatchEvent(filterEvent);
-            }, 300));
-        }
-
-        tableContainer.addEventListener('input', handleColumnFilterInput, true);
 
         new TableEffects(tableContainer, {
             header: {
@@ -458,17 +652,6 @@
                 if (this.adjustmentFrame !== null) {
                     window.cancelAnimationFrame(this.adjustmentFrame);
                 }
-
-                tableContainer.removeEventListener(
-                    'input',
-                    handleColumnFilterInput,
-                    true
-                );
-
-                columnFilterInputTimers.forEach(function (timerId) {
-                    window.clearTimeout(timerId);
-                });
-                columnFilterInputTimers.clear();
 
                 var registeredIndex = tableInstances.indexOf(this);
                 if (registeredIndex !== -1) {

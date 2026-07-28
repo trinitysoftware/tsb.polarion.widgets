@@ -172,14 +172,21 @@ Documentation update only. No widget behavior changes and no code fixes.
 ### 2026-07-27
 
 - [ENHANCEMENT] Added optional paging with a configurable rows-per-page value that defaults to `10` and remains hidden while paging is disabled.
-- [ENHANCEMENT] Added a reset control for restoring table presentation and behavior settings to their defaults.
 - [ENHANCEMENT] Centered pagination controls and added corporate-blue hover and active states.
-- [ENHANCEMENT] Added per-column filter dropdowns with text conditions and numeric conditions for additional query-count columns.
+- [ENHANCEMENT] Added per-column distinct-value dropdowns for ordinary columns and zero/non-zero choices for computed columns.
 - [ENHANCEMENT] Added funnel and active-filter indicators, retained column sorting controls, and positioned both controls consistently across all columns.
 - [ENHANCEMENT] Added a `Clear filters` action beside the DataTables entry count.
-- [ENHANCEMENT] Preserved continuous typing and input focus while column filters redraw the table.
 - [ENHANCEMENT] Left-aligned additional query-column headers and values with the other table content.
 - [FIX] Recalculated DataTables column widths after Polarion resizes the widget.
 - [FIX] Applied fixed table layout to keep DataTables scroll-header and body columns aligned during widget editing and redraws.
 - [FIX] Limited internal sizing-header cleanup to the DataTables master table.
 - [DOCS] Updated the documented DataTables macro signature for column filter metadata and table settings.
+
+### 2026-07-28
+
+- [ENHANCEMENT] Removed the Reset Table Settings parameter from the widget properties panel.
+- [ENHANCEMENT] Updated column filters to use Polarion catalog values for Spaces, document types, and document statuses.
+- [ENHANCEMENT] Added an inclusive date-range filter for Updated and retained zero/non-zero choices for computed columns.
+- [ENHANCEMENT] Added empty-state messages for data sets and filter combinations with no matching documents.
+- [FIX] Removed duplicate document status and document type choices from filter dropdowns.
+- [FIX] Restored global search across visible cell values while keeping column filters on their dedicated raw values.

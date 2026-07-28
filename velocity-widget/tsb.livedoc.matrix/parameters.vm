@@ -68,12 +68,8 @@ $parameters.put("showSearchBar", $factory.bool("Show Search Bar").value(true).de
 
 ## Paging remains disabled by default.
 ## Rows Per Page applies only when paging is enabled.
-$parameters.put("enablePaging", $factory.bool("Enable Paging").value(false).dependencySource(true).dependencyTarget(true).build())
+$parameters.put("enablePaging", $factory.bool("Enable Paging").value(false).dependencySource(true).build())
 $parameters.put("rowsPerPage", $factory.integer("Rows Per Page").value(10).dependencyTarget(true).build())
-
-## Reset Table Settings is a one-time dependency trigger.
-## It restores only table presentation and behavior parameters.
-$parameters.put("resetTableSettings", $factory.bool("Reset Table Settings").value(false).dependencySource(true).dependencyTarget(true).build())
 
 ## ==========================================================================
 ## Build Additional Column workitem queries

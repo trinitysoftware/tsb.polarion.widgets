@@ -109,6 +109,63 @@
 #end
 
 ## ==========================================================================
+## Build project-level filter catalogs independently from the displayed rows.
+## This keeps supported values visible even when the current query has no
+## document for a configured Space, Document Type, or Document Status.
+## ==========================================================================
+#macro ( prepareFilterOptionsMacro )
+    #set ( $headerFilterOptionsMap = $objectFactory.newMap() )
+    #set ( $trackerProject = $trackerService.getTrackerProject($projectId) )
+
+    ## ======================================================================
+    ## The current widget supports one project, but Project uses the same
+    ## catalog structure needed by the planned multi-project implementation.
+    ## ======================================================================
+    #set ( $projectFilterOptions = [] )
+    #set ( $void = $projectFilterOptions.add($trackerProject.getName()) )
+    #set ( $void = $headerFilterOptionsMap.put("project", $projectFilterOptions) )
+
+    ## ======================================================================
+    ## Read all visible Spaces from Polarion instead of deriving them from
+    ## the current document rows. Empty Spaces remain available for filtering.
+    ## ======================================================================
+    #set ( $spaceFilterOptions = [] )
+    #set ( $projectSpaces = $transaction.spaces().getSpaces().project($projectId).path("") )
+    #foreach ( $projectSpace in $projectSpaces )
+        #set ( $void = $spaceFilterOptions.add($projectSpace.label()) )
+    #end
+    #set ( $void = $headerFilterOptionsMap.put("space", $spaceFilterOptions) )
+
+    ## ======================================================================
+    ## Read configured Document Types and Document Statuses from Polarion.
+    ## Hidden options are omitted, and repeated display names are added once.
+    ## Polarion can return context-specific options with the same display name.
+    ## ======================================================================
+    #set ( $documentTypeFilterOptions = [] )
+    #foreach ( $documentType in $trackerProject.getModuleTypeEnum().getAllOptions() )
+        #if ( !$documentType.isHidden() )
+            #set ( $documentTypeName = $documentType.getName() )
+            #if ( !$documentTypeFilterOptions.contains($documentTypeName) )
+                #set ( $void = $documentTypeFilterOptions.add($documentTypeName) )
+            #end
+        #end
+    #end
+    #set ( $void = $headerFilterOptionsMap.put("documentHtml", $documentTypeFilterOptions) )
+
+    #set ( $documentStatusFilterOptions = [] )
+    #set ( $documentStatusEnum = $trackerService.getDataService().getEnumerationForKey("Module", "status", $trackerProject.getContextId()) )
+    #foreach ( $documentStatus in $documentStatusEnum.getAllOptions() )
+        #if ( !$documentStatus.isHidden() )
+            #set ( $documentStatusName = $documentStatus.getName() )
+            #if ( !$documentStatusFilterOptions.contains($documentStatusName) )
+                #set ( $void = $documentStatusFilterOptions.add($documentStatusName) )
+            #end
+        #end
+    #end
+    #set ( $void = $headerFilterOptionsMap.put("status", $documentStatusFilterOptions) )
+#end
+
+## ==========================================================================
 ## Build the DataTables column definitions in Velocity maps.
 ## $headersKeys preserves display order because map iteration order is not used.
 ## ==========================================================================
@@ -121,8 +178,8 @@
     #set ( $headersMap = $objectFactory.newMap() )
 
     ## ======================================================================
-    ## This map identifies the filter type for each displayed column.
-    ## Computed query columns use numeric filtering; other columns use text.
+    ## This map identifies the filter control for each displayed column.
+    ## Catalog, date, list, and computed numeric columns use distinct controls.
     ## ======================================================================
     #set ( $headerFilterTypesMap = $objectFactory.newMap() )
 
@@ -133,18 +190,18 @@
 
     #if ( true == $parameters.showProject.value() )
         #set ( $void = $headersMap.put("project", "Project") )
-        #set ( $void = $headerFilterTypesMap.put("project", "text") )
+        #set ( $void = $headerFilterTypesMap.put("project", "catalog") )
         #set ( $void = $headersKeys.add("project") )
     #end
 
     #if ( true == $parameters.showSpace.value() )
         #set ( $void = $headersMap.put("space", "Space") )
-        #set ( $void = $headerFilterTypesMap.put("space", "text") )
+        #set ( $void = $headerFilterTypesMap.put("space", "catalog") )
         #set ( $void = $headersKeys.add("space") )
     #end
 
     #set ( $void = $headersMap.put("documentHtml", "Document") )
-    #set ( $void = $headerFilterTypesMap.put("documentHtml", "text") )
+    #set ( $void = $headerFilterTypesMap.put("documentHtml", "catalog") )
     #set ( $void = $headersKeys.add("documentHtml") )
 
     ## ======================================================================
@@ -165,14 +222,20 @@
             #end
 
             #set ( $void = $headersMap.put($fieldId, $fieldTitle) )
-            #set ( $void = $headerFilterTypesMap.put($fieldId, "text") )
+            #if ( $fieldId.equals("status") )
+                #set ( $void = $headerFilterTypesMap.put($fieldId, "catalog") )
+            #elseif ( $fieldId.equals("updated") )
+                #set ( $void = $headerFilterTypesMap.put($fieldId, "date") )
+            #else
+                #set ( $void = $headerFilterTypesMap.put($fieldId, "list") )
+            #end
             #set ( $void = $headersKeys.add($fieldId) )
         #end
     #end
 
     #if ( true == $parameters.showSignaturesStatus.value() )
         #set ( $void = $headersMap.put("signatureHtml","Signatures") )
-        #set ( $void = $headerFilterTypesMap.put("signatureHtml", "text") )
+        #set ( $void = $headerFilterTypesMap.put("signatureHtml", "list") )
         #set ( $void = $headersKeys.add("signatureHtml") )
     #end
 
@@ -223,6 +286,7 @@
         #if ( true == $parameters.showProject.value() )
             #set ( $projectHtml = "$!docu.fields().project().render()")
             #set ( $void = $rowsMap.put("project", $projectHtml) )
+            #set ( $void = $rowsMap.put("__tsbFilterValue_project", $docu.getOldApi().getProject().getName()) )
         #end
 
         ## ==================================================================
@@ -231,6 +295,7 @@
         #if ( true == $parameters.showSpace.value() )
             #set ( $spaceHtml = "$!docu.space().render()" )
             #set ( $void = $rowsMap.put("space", $spaceHtml) )
+            #set ( $void = $rowsMap.put("__tsbFilterValue_space", $docu.space().label()) )
         #end
 
         ## ==================================================================
@@ -238,6 +303,7 @@
         ## ==================================================================
         #set ( $documentHtml = $docu.render().withIcon().withLinks(true) )
         #set ( $void = $rowsMap.put("documentHtml", $documentHtml) )
+        #set ( $void = $rowsMap.put("__tsbFilterValue_documentHtml", $docu.getOldApi().getType().getName()) )
 
         ## ==================================================================
         ## Add the Signatures cell when enabled.
@@ -271,6 +337,17 @@
             #if ( !$fieldId.equals("") )
                 #set ( $fieldHtml = "$!docu.fields().get($fieldId).render()" )
                 #set ( $void = $rowsMap.put($fieldId, $fieldHtml) )
+
+                ## ==========================================================
+                ## Status and Updated use raw values for smart filtering.
+                ## Their rendered HTML remains unchanged in the visible cell.
+                ## ==========================================================
+                #if ( $fieldId.equals("status") )
+                    #set ( $void = $rowsMap.put("__tsbFilterValue_status", $docu.getOldApi().getStatus().getName()) )
+                #elseif ( $fieldId.equals("updated") )
+                    #set ( $updatedDate = $date.format("yyyy-MM-dd", $docu.getOldApi().getUpdated()) )
+                    #set ( $void = $rowsMap.put("__tsbFilterValue_updated", $updatedDate) )
+                #end
             #end
         #end
         
@@ -348,6 +425,7 @@
 #if ( $allowRendering )
     #prepareRowsMacro()
 
+    #prepareFilterOptionsMacro()
     #prepareHeadersMacro()
     #prepareDataRowsMacro()
     #prepareTableSettingsMacro()
@@ -365,5 +443,5 @@
     #loadWidgetJsResource("resources/tableEffects.js")
     #loadWidgetCssResource("resources/tableEffects.css")
 
-    #initDataTableMacro ( $widgetTableId $headersKeys $headersMap $headerFilterTypesMap $dataRows $tableSettings )
+    #initDataTableMacro ( $widgetTableId $headersKeys $headersMap $headerFilterTypesMap $headerFilterOptionsMap $dataRows $tableSettings )
 #end
