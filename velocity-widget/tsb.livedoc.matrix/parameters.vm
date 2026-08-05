@@ -34,8 +34,20 @@
 
 ## ==========================================================================
 ## Build Data Set Parameter
+##
+## The Data Set serves as the single source of truth for scope selection
+## (single project, project group, or global repository scope) as well as
+## multi-project queries (such as project.id or project.group.id filters).
 ## ==========================================================================
-$parameters.put("dataSet", $factory.dataSet("Data Set").prototype().document().allowedPrototypes(["Document"]).build())
+$parameters.put("dataSet", $factory.dataSet("Data Set").prototype().document().allowedPrototypes(["Document"]).dependencySource(true).build())
+
+## ==========================================================================
+## Build revision and Project Baseline parameters.
+## The widget uses HEAD by default. A concrete revision can be entered directly,
+## or resolved from a Project Baseline ID/name and used for historical queries.
+## ==========================================================================
+$parameters.put("projectBaseline", $factory.customEnum("Project Baseline").allowNoValue(true).allowMultipleValues(false).dependencyTarget(true).build())
+$parameters.put("specificRevision", $factory.string("Revision").value("").dependencyTarget(true).build())
 
 ## --------------------------------------------------------------------------
 ## dependencySource = allows the script to process dependencies (parent-child items) - can be used to include the entire linked structure

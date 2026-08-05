@@ -32,7 +32,7 @@
 ## ==========================================================================
 
 <ul>
-	<li><b>Data Set</b> — Defines the data source for the matrix, including Scope (specific project), query type, document type, and query. </li>
+	<li><b>Data Set</b> — Defines the complete data source for the matrix, including project, project-group, or global Scope, query type, document type, and query. To include unrelated projects in addition to the selected Scope, add one <code>Project ID</code> query criterion and enter multiple project IDs separated by commas, for example <code>Yeh,OtherProject</code>.</li>
 	<li><b>Show Signatures Status</b> — Adds a signatures column showing electronic sign-off status for LiveDocs, providing visible proof of review, approval, and compliance.</li>
 	<li><b>Show Unresolved Comments</b> — When enabled, this will show unresolved review comments per document so teams can quickly identify open discussion items (planned; not yet rendered in this version).</li>
 	<li><b>Show Project</b> — Adds a project column so each document row shows its project context.</li>

@@ -40,3 +40,96 @@
 #set ( $rowsPerPageParameter = $parameters.rowsPerPage )
 #set ( $pagingEnabled = $enablePagingParameter.value() )
 #set ( $void = $rowsPerPageParameter.visuals().setVisible($pagingEnabled) )
+
+## ==========================================================================
+## Populate Project Baseline options from the projects in the Data Set scope.
+## Option value is revision|baselineName. The label intentionally omits project
+## names because selecting a baseline applies its revision to the full matrix.
+## ==========================================================================
+#set ( $projectBaselineSetter = $parameters.projectBaseline.set().clear().allowNoValue(true).allowMultipleValues(false) )
+#set ( $dataSetScope = $parameters.dataSet.scope() )
+#set ( $projectId = $dataSetScope.projectId() )
+#set ( $scopePath = $dataSetScope.path() )
+#set ( $dataSetScopeIsGlobal = $dataSetScope.isGlobal() )
+#set ( $baselineProjectIds = [] )
+#set ( $baselineOptions = [] )
+#set ( $baselineValues = [] )
+#set ( $documentQuery = $parameters.dataSet.getFor().revision("").queryToShow() )
+
+#if ( $projectId )
+    #set ( $void = $baselineProjectIds.add($projectId) )
+#elseif ( !$dataSetScopeIsGlobal && $scopePath )
+    ## ======================================================================
+    ## Collect accessible project ids through document search. Direct
+    ## project-group traversal can fail when the group contains unreadable
+    ## projects, even though readable documents from the same group can render.
+    ## ======================================================================
+    #set ( $scopeDocuments = $transaction.documents().search().query($documentQuery).sort("project.id") )
+
+    #foreach ( $scopeDocument in $scopeDocuments )
+        #if ( !$scopeDocument.isUnresolvable() )
+            #set ( $scopeProjectId = $scopeDocument.fields().project().projectId() )
+
+            #if ( $scopeProjectId && !$baselineProjectIds.contains($scopeProjectId) )
+                #set ( $void = $baselineProjectIds.add($scopeProjectId) )
+            #end
+        #end
+    #end
+#end
+
+#foreach ( $baselineProjectId in $baselineProjectIds )
+    #set ( $baselineTrackerProject = $trackerService.getTrackerProject($baselineProjectId) )
+
+    #if ( $baselineTrackerProject )
+        #foreach ( $candidateProjectBaseline in $baselineTrackerProject.getBaselinesManager().getBaselines() )
+            #set ( $baselineId = "$!candidateProjectBaseline.getId()" )
+            #set ( $baselineName = "$!candidateProjectBaseline.getName()" )
+            #set ( $baselineRevision = "$!candidateProjectBaseline.getBaseRevision()" )
+
+            #if ( $baselineName.equals("") )
+                #set ( $baselineName = $baselineId )
+            #end
+
+            #if ( !$baselineRevision.equals("") )
+                #set ( $baselineOptionKey = "$baselineName|$baselineRevision" )
+                #set ( $baselineValue = "$baselineRevision|$baselineName" )
+
+                #if ( !$baselineOptions.contains($baselineOptionKey) )
+                    #set ( $baselineLabel = "$baselineName (r$baselineRevision)" )
+                    #set ( $void = $baselineOptions.add($baselineOptionKey) )
+                    #set ( $void = $baselineValues.add($baselineValue) )
+                    #set ( $void = $projectBaselineSetter.addEnumItem($baselineValue, $baselineLabel) )
+                #end
+            #end
+        #end
+    #end
+#end
+
+## ==========================================================================
+## Clear a stale Project Baseline when the Data Set scope changes and the
+## previous baseline is no longer available in the rebuilt option list.
+## ==========================================================================
+#set ( $projectBaselineValues = $parameters.projectBaseline.values() )
+#set ( $hasSelectedProjectBaseline = false )
+
+#if ( !$projectBaselineValues.isEmpty() )
+    #set ( $projectBaselineValue = "$!projectBaselineValues.get(0)" )
+    #if ( $baselineValues.contains($projectBaselineValue) )
+        #set ( $hasSelectedProjectBaseline = true )
+    #else
+        #set ( $void = $parameters.projectBaseline.set().value("") )
+    #end
+#end
+
+## ==========================================================================
+## Hide direct revision entry when Project Baseline is selected.
+## Project Baseline resolves to its own base revision and takes precedence.
+## ==========================================================================
+#set ( $projectBaselineValues = $parameters.projectBaseline.values() )
+#set ( $specificRevisionParameter = $parameters.specificRevision )
+#set ( $showSpecificRevision = !$hasSelectedProjectBaseline )
+#set ( $void = $specificRevisionParameter.visuals().setVisible($showSpecificRevision) )
+
+#if ( !$showSpecificRevision )
+    #set ( $void = $specificRevisionParameter.set().value("") )
+#end

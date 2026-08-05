@@ -30,41 +30,64 @@
 #import("tsb.framework.vm")
 
 ## ==========================================================================
-## Warning shown when the Data Set does not resolve to one project.
-## This widget builds document and work item links in one project context.
+## Resolve document search criteria directly from the Data Set parameter.
+## The Data Set parameter handles single project, project group, global scope,
+## and multi-project project.id terms.
 ## ==========================================================================
-#set ( $warnSingleProject = "This widget renders a document matrix for <b>single Projects only</b>. Please select a <b>single Project</b> for the <b>Scope parameter</b>." )
+#set ( $dataSetScope = $parameters.dataSet.scope() )
+#set ( $projectId = $dataSetScope.projectId() )
+#set ( $effectiveRevision = "" )
+#set ( $revisionWarning = "" )
 
 ## ==========================================================================
-## Read the selected project and document query from the Data Set parameter.
-## $allowRendering is turned off when the required project scope is missing.
+## Resolve the revision context before any document or work item search runs.
+## Empty revision means HEAD/current. Project Baseline selection takes
+## precedence because its base revision is the authoritative snapshot point.
+## Project Baseline options use revision|baselineName values. The selected
+## revision applies to all documents represented by the Data Set.
 ## ==========================================================================
-#set ( $allowRendering = true )
-#set ( $projectId = $parameters.dataSet.scope().projectId() )
-#set ( $documentQuery = $parameters.dataSet.getFor().revision("").queryToShow() )
+#set ( $projectBaselineValues = $parameters.projectBaseline.values() )
+#set ( $specificRevision = $parameters.specificRevision.value().trim() )
 
-## ==========================================================================
-## Stop rendering early when the Data Set does not select a single project.
-## ==========================================================================
-#if ( !$projectId )
-    $widgetContext.renderWarning("$warnSingleProject")
-    #set ( $allowRendering = false )
+#if ( !$projectBaselineValues.isEmpty() )
+    #set ( $projectBaselineValue = "$!projectBaselineValues.get(0)" )
+    #set ( $projectBaselineValue = $projectBaselineValue.trim() )
+    #set ( $projectBaselineSeparatorIndex = $projectBaselineValue.indexOf("|") )
+
+    #if ( $projectBaselineSeparatorIndex > 0 )
+        #set ( $projectBaselineRevision = $projectBaselineValue.substring(0, $projectBaselineSeparatorIndex) )
+        #set ( $effectiveRevision = $projectBaselineRevision.trim() )
+    #else
+        ## Older saved configurations used projectId/baselineId values. They
+        ## cannot identify a cross-project revision anymore, so fall back to HEAD.
+        #set ( $revisionWarning = "Project Baseline '$projectBaselineValue' cannot be resolved. Rows are rendered from HEAD." )
+    #end
+#elseif ( !$specificRevision.equals("") )
+    #set ( $effectiveRevision = $specificRevision )
 #end
+
+#set ( $documentQuery = $parameters.dataSet.getFor().revision("$!effectiveRevision").queryToShow() )
+#set ( $q = '"' )
 
 ## ==========================================================================
 ## $docItems stores the LiveDocs found by the document query.
 ## $docQueries stores the matching work item query for each LiveDoc.
 ## Both lists use the same index so each document can find its own query later.
+##
+## $projectIds stores each represented project once for filter catalogs.
 ## ==========================================================================
 #set ( $docItems = [] )
 #set ( $docQueries = [] )
+#set ( $docRevisions = [] )
+#set ( $projectIds = [] )
+
+#if ( $projectId )
+    #set ( $void = $projectIds.add($projectId) )
+#end
 
 ## ==========================================================================
-## $q keeps double quotes readable when building Lucene query strings.
-## 
 ## $widgetTableId gives this widget instance its own table element.
 ## ==========================================================================
-#set ( $q = '"' )
 #set ( $tableUniqueId = $widgetContext.generateUniqueElementId() )
 #set ( $widgetTableId = "widget-table-${tableUniqueId}" )
 
@@ -80,89 +103,257 @@
 ## ==========================================================================
 #macro ( prepareRowsMacro )
     ## ======================================================================
-    ## Get the documents selected by the widget parameter.
-    ## Sort them by project, space, and title.
+    ## Execute the Data Set query through document search. This preserves the
+    ## query path that rendered project-group scopes before Project Baseline
+    ## was added, while still allowing a selected revision to be applied.
     ## ======================================================================
-    #set ( $_docs = $transaction.documents().search().query($documentQuery).sort("project.id space.id title") )
+    #set ( $_docsSearch = $transaction.documents().search().query($documentQuery) )
+
+    #if ( !$effectiveRevision.equals("") )
+        #set ( $_docsSearch = $_docsSearch.baseline("$effectiveRevision") )
+    #end
+
+    #set ( $_docs = $_docsSearch.sort("project.id space.id title") )
 
     #foreach ( $_doc in $_docs )
         ## ==================================================================
-        ## Skip unresolved documents because their fields and links cannot be
-        ## rendered safely. Resolved documents become table rows.
+        ## Skip unresolved documents because their fields and links cannot
+        ## be rendered safely.
         ## ==================================================================
-        #if (!$_doc.isUnresolvable())
-            #set ( $void = $docItems.add($_doc) )
+        #if ( !$_doc.isUnresolvable() )
+            #set ( $rowProjectId = $_doc.fields().project().projectId() )
+            #set ( $rowRevision = "$!effectiveRevision" )
 
             ## ==============================================================
-            ## Get the document id used by work item document queries.
-            ## Polarion stores the default space with an "_default/" prefix.
+            ## A valid project context is required for this document's work
+            ## item query and portal links.
             ## ==============================================================
-            #set ( $docNameWithSpace = $_doc.getOldApi().getRelativePath().replace("_default/","") )
+            #if ( $rowProjectId )
+                #if ( !$projectIds.contains($rowProjectId) )
+                    #set ( $void = $projectIds.add($rowProjectId) )
+                #end
 
-            ## ==============================================================
-            ## Build a work item query for this document.
-            ## It finds non-heading work items inside this document.
-            ## ==============================================================
-            #set ( $void = $docQueries.add("(project.id:$_doc.fields().project().projectId() AND (NOT type:heading) AND document.id:$q$docNameWithSpace$q)") )
+                #set ( $void = $docItems.add($_doc) )
+                #set ( $void = $docRevisions.add($rowRevision) )
+
+                ## ==========================================================
+                ## Polarion stores the default space with an "_default/"
+                ## prefix that is not part of document.id query values.
+                ## ==========================================================
+                #set ( $docNameWithSpace = $_doc.getOldApi().getRelativePath().replace("_default/","") )
+
+                ## ==========================================================
+                ## Build the work item query with the document's own project.
+                ## Equal document paths in different projects therefore keep
+                ## independent work item counts.
+                ## ==========================================================
+                #set ( $void = $docQueries.add("(project.id:$rowProjectId AND (NOT type:heading) AND document.id:$q$docNameWithSpace$q)") )
+            #end
         #end
     #end
 #end
 
 ## ==========================================================================
-## Build project-level filter catalogs independently from the displayed rows.
-## This keeps supported values visible even when the current query has no
-## document for a configured Space, Document Type, or Document Status.
+## Resolve configured document field metadata once for all later table stages.
+## Filter behavior comes from Polarion field types rather than field ids:
+##   - scalar enumerations use configured catalog values;
+##   - date and date-time fields use the date-range control;
+##   - multi-value, text, unknown, or cross-project conflicts use list search.
+##
+## A field may be undefined or configured differently in another project.
+## The list fallback keeps one DataTables column behavior safe for every row.
+## ==========================================================================
+#macro ( prepareFieldMetadataMacro )
+    #set ( $columnFieldIds = [] )
+    #set ( $fieldTitlesMap = $objectFactory.newMap() )
+    #set ( $fieldFilterTypesMap = $objectFactory.newMap() )
+    #set ( $fieldProjectIdsMap = $objectFactory.newMap() )
+
+    #foreach ( $fieldIdRaw in $parameters.columnFields.value().split(",") )
+        #set ( $fieldId = $fieldIdRaw.trim() )
+
+        #if ( !$fieldId.equals("") && !$columnFieldIds.contains($fieldId) )
+            #set ( $void = $columnFieldIds.add($fieldId) )
+            #set ( $fieldTitle = $fieldId )
+            #set ( $resolvedFilterType = "" )
+            #set ( $hasTypeConflict = false )
+            #set ( $fieldProjectIds = [] )
+
+            ## ==============================================================
+            ## Inspect every represented document because custom field
+            ## definitions can differ by project or document configuration.
+            ## Undefined fields are ignored and render as empty cells later.
+            ## ==============================================================
+            #foreach ( $metadataDoc in $docItems )
+                #set ( $renderingField = $metadataDoc.fields().get($fieldId) )
+
+                #if ( $renderingField.is().defined() )
+                    #if ( $fieldTitle.equals($fieldId) )
+                        #set ( $fieldTitle = $renderingField.label() )
+                    #end
+
+                    #set ( $metadataProjectId = $metadataDoc.fields().project().projectId() )
+                    #if ( $metadataProjectId && !$fieldProjectIds.contains($metadataProjectId) )
+                        #set ( $void = $fieldProjectIds.add($metadataProjectId) )
+                    #end
+
+                    ## ======================================================
+                    ## getFieldType() supports both built-in and custom
+                    ## fields. Enumeration metadata is checked separately
+                    ## because IEnumType does not expose primitive type names.
+                    ## ======================================================
+                    #set ( $oldApiDocument = $metadataDoc.getOldApi() )
+                    #set ( $fieldType = $oldApiDocument.getFieldType($fieldId) )
+                    #set ( $enumerationType = $oldApiDocument.getEnumerationTypeForField($fieldId) )
+                    #set ( $candidateFilterType = "list" )
+
+                    #if ( $enumerationType.isPresent() )
+                        ## ==================================================
+                        ## The catalog control compares one raw value per row.
+                        ## Multi-enumerations remain list filters until the
+                        ## client supports matching several catalog values.
+                        ## ==================================================
+                        #set ( $listItemType = "$!fieldType.getItemType()" )
+                        #if ( $listItemType.equals("") )
+                            #set ( $candidateFilterType = "catalog" )
+                        #end
+                    #else
+                        #set ( $primitiveTypeName = "$!fieldType.getTypeName()" )
+                        #if ( $primitiveTypeName.equals("java.util.Date") || $primitiveTypeName.equals("com.polarion.core.util.types.DateOnly") )
+                            #set ( $candidateFilterType = "date" )
+                        #end
+                    #end
+
+                    ## ======================================================
+                    ## One table column can have only one filter control.
+                    ## Prefer list search when projects disagree about the
+                    ## same field id instead of applying invalid typed logic.
+                    ## ======================================================
+                    #if ( $resolvedFilterType.equals("") )
+                        #set ( $resolvedFilterType = $candidateFilterType )
+                    #elseif ( !$resolvedFilterType.equals($candidateFilterType) )
+                        #set ( $hasTypeConflict = true )
+                    #end
+                #end
+            #end
+
+            #if ( $resolvedFilterType.equals("") || $hasTypeConflict )
+                #set ( $resolvedFilterType = "list" )
+            #end
+
+            #set ( $void = $fieldTitlesMap.put($fieldId, $fieldTitle) )
+            #set ( $void = $fieldFilterTypesMap.put($fieldId, $resolvedFilterType) )
+            #set ( $void = $fieldProjectIdsMap.put($fieldId, $fieldProjectIds) )
+        #end
+    #end
+#end
+
+## ==========================================================================
+## Merge project-level filter catalogs for all projects represented by the
+## Data Set. Catalog values come from Polarion configuration rather than only
+## the displayed rows, so valid values remain selectable when no row uses them.
 ## ==========================================================================
 #macro ( prepareFilterOptionsMacro )
     #set ( $headerFilterOptionsMap = $objectFactory.newMap() )
-    #set ( $trackerProject = $trackerService.getTrackerProject($projectId) )
-
-    ## ======================================================================
-    ## The current widget supports one project, but Project uses the same
-    ## catalog structure needed by the planned multi-project implementation.
-    ## ======================================================================
     #set ( $projectFilterOptions = [] )
-    #set ( $void = $projectFilterOptions.add($trackerProject.getName()) )
-    #set ( $void = $headerFilterOptionsMap.put("project", $projectFilterOptions) )
-
-    ## ======================================================================
-    ## Read all visible Spaces from Polarion instead of deriving them from
-    ## the current document rows. Empty Spaces remain available for filtering.
-    ## ======================================================================
     #set ( $spaceFilterOptions = [] )
-    #set ( $projectSpaces = $transaction.spaces().getSpaces().project($projectId).path("") )
-    #foreach ( $projectSpace in $projectSpaces )
-        #set ( $void = $spaceFilterOptions.add($projectSpace.label()) )
-    #end
-    #set ( $void = $headerFilterOptionsMap.put("space", $spaceFilterOptions) )
+    #set ( $documentTypeFilterOptions = [] )
+    #set ( $customFieldFilterOptionsMap = $objectFactory.newMap() )
 
     ## ======================================================================
-    ## Read configured Document Types and Document Statuses from Polarion.
-    ## Hidden options are omitted, and repeated display names are added once.
-    ## Polarion can return context-specific options with the same display name.
+    ## Allocate one merged option list for every configured scalar enum field.
+    ## prepareFieldMetadataMacro has already removed multi-value and conflicting
+    ## definitions from catalog-filter consideration.
     ## ======================================================================
-    #set ( $documentTypeFilterOptions = [] )
-    #foreach ( $documentType in $trackerProject.getModuleTypeEnum().getAllOptions() )
-        #if ( !$documentType.isHidden() )
-            #set ( $documentTypeName = $documentType.getName() )
-            #if ( !$documentTypeFilterOptions.contains($documentTypeName) )
-                #set ( $void = $documentTypeFilterOptions.add($documentTypeName) )
+    #foreach ( $fieldId in $columnFieldIds )
+        #if ( $fieldFilterTypesMap.get($fieldId).equals("catalog") )
+            #set ( $fieldOptions = [] )
+            #set ( $void = $customFieldFilterOptionsMap.put($fieldId, $fieldOptions) )
+        #end
+    #end
+
+    #foreach ( $catalogProjectId in $projectIds )
+        #set ( $trackerProject = $trackerService.getTrackerProject($catalogProjectId) )
+
+        #if ( $trackerProject )
+            ## ==================================================================
+            ## Project display names are the raw values stored on table rows.
+            ## Deduplicate names because filter values are currently strings,
+            ## not project-id/label pairs.
+            ## ==================================================================
+            #set ( $projectName = $trackerProject.getName() )
+            #if ( !$projectFilterOptions.contains($projectName) )
+                #set ( $void = $projectFilterOptions.add($projectName) )
+            #end
+
+            ## ==================================================================
+            ## Merge all configured Spaces from this project. Equal Space labels
+            ## intentionally form one filter choice that can match several
+            ## projects.
+            ## ==================================================================
+            #set ( $projectSpaces = $transaction.spaces().getSpaces().project($catalogProjectId).path("") )
+            #foreach ( $projectSpace in $projectSpaces )
+                #set ( $spaceLabel = $projectSpace.label() )
+                #if ( !$spaceFilterOptions.contains($spaceLabel) )
+                    #set ( $void = $spaceFilterOptions.add($spaceLabel) )
+                #end
+            #end
+
+            ## ==================================================================
+            ## Document types and custom field enumerations are project-specific.
+            ## Hidden options are omitted and equal display names are shown once.
+            ## ==================================================================
+            #foreach ( $documentType in $trackerProject.getModuleTypeEnum().getAllOptions() )
+                #if ( !$documentType.isHidden() )
+                    #set ( $documentTypeName = $documentType.getName() )
+                    #if ( !$documentTypeFilterOptions.contains($documentTypeName) )
+                        #set ( $void = $documentTypeFilterOptions.add($documentTypeName) )
+                    #end
+                #end
+            #end
+
+            #foreach ( $fieldId in $columnFieldIds )
+                #if ( $fieldFilterTypesMap.get($fieldId).equals("catalog") )
+                    #set ( $fieldProjectIds = $fieldProjectIdsMap.get($fieldId) )
+
+                    ## ==========================================================
+                    ## Query an enumeration only where a returned document proved
+                    ## that the field is defined. This avoids requesting a custom
+                    ## field configuration from unrelated projects.
+                    ## ==========================================================
+                    #if ( $fieldProjectIds.contains($catalogProjectId) )
+                        #set ( $fieldEnumeration = $trackerService.getDataService().getEnumerationForKey("Module", $fieldId, $trackerProject.getContextId()) )
+
+                        #if ( $fieldEnumeration )
+                            #set ( $fieldOptions = $customFieldFilterOptionsMap.get($fieldId) )
+                            #foreach ( $fieldOption in $fieldEnumeration.getAllOptions() )
+                                #if ( !$fieldOption.isHidden() )
+                                    #set ( $fieldOptionName = $fieldOption.getName() )
+                                    #if ( !$fieldOptions.contains($fieldOptionName) )
+                                        #set ( $void = $fieldOptions.add($fieldOptionName) )
+                                    #end
+                                #end
+                            #end
+                        #end
+                    #end
+                #end
             #end
         #end
     #end
+
+    ## ======================================================================
+    ## Publish completed catalogs only after every project has contributed.
+    ## The shared DataTables macro reads these lists by header key.
+    ## ======================================================================
+    #set ( $void = $headerFilterOptionsMap.put("project", $projectFilterOptions) )
+    #set ( $void = $headerFilterOptionsMap.put("space", $spaceFilterOptions) )
     #set ( $void = $headerFilterOptionsMap.put("documentHtml", $documentTypeFilterOptions) )
 
-    #set ( $documentStatusFilterOptions = [] )
-    #set ( $documentStatusEnum = $trackerService.getDataService().getEnumerationForKey("Module", "status", $trackerProject.getContextId()) )
-    #foreach ( $documentStatus in $documentStatusEnum.getAllOptions() )
-        #if ( !$documentStatus.isHidden() )
-            #set ( $documentStatusName = $documentStatus.getName() )
-            #if ( !$documentStatusFilterOptions.contains($documentStatusName) )
-                #set ( $void = $documentStatusFilterOptions.add($documentStatusName) )
-            #end
+    #foreach ( $fieldId in $columnFieldIds )
+        #if ( $customFieldFilterOptionsMap.containsKey($fieldId) )
+            #set ( $void = $headerFilterOptionsMap.put($fieldId, $customFieldFilterOptionsMap.get($fieldId)) )
         #end
     #end
-    #set ( $void = $headerFilterOptionsMap.put("status", $documentStatusFilterOptions) )
 #end
 
 ## ==========================================================================
@@ -184,6 +375,13 @@
     #set ( $headerFilterTypesMap = $objectFactory.newMap() )
 
     ## ======================================================================
+    ## This map decides whether a column contributes to the global search.
+    ## Displayed semantic columns use clean values prepared with their metadata.
+    ## Computed columns retain their dedicated numeric filter controls instead.
+    ## ======================================================================
+    #set ( $headerGlobalSearchMap = $objectFactory.newMap() )
+
+    ## ======================================================================
     ## Used to track the order of columns when rendering, since map is unordered.
     ## ======================================================================
     #set ( $headersKeys = [] )
@@ -191,51 +389,38 @@
     #if ( true == $parameters.showProject.value() )
         #set ( $void = $headersMap.put("project", "Project") )
         #set ( $void = $headerFilterTypesMap.put("project", "catalog") )
+        #set ( $void = $headerGlobalSearchMap.put("project", true) )
         #set ( $void = $headersKeys.add("project") )
     #end
 
     #if ( true == $parameters.showSpace.value() )
         #set ( $void = $headersMap.put("space", "Space") )
         #set ( $void = $headerFilterTypesMap.put("space", "catalog") )
+        #set ( $void = $headerGlobalSearchMap.put("space", true) )
         #set ( $void = $headersKeys.add("space") )
     #end
 
     #set ( $void = $headersMap.put("documentHtml", "Document") )
     #set ( $void = $headerFilterTypesMap.put("documentHtml", "catalog") )
+    #set ( $void = $headerGlobalSearchMap.put("documentHtml", true) )
     #set ( $void = $headersKeys.add("documentHtml") )
 
     ## ======================================================================
-    ## Custom columns from the widget parameter.
-    ## Example: "status,severity" becomes two table columns.
+    ## Custom document columns use metadata prepared from every represented
+    ## project. The user-facing label remains separate from the field type that
+    ## selects the appropriate DataTables filter control.
     ## ======================================================================
-    ###set ( $firstDoc = "" )
-    ###set ( $firstDoc = $docItems.get(0) )
-
-    #foreach ( $fieldIdRaw in $parameters.columnFields.value().split(",") )
-        #set ( $fieldId = $fieldIdRaw.trim() )
-
-        #if ( !$fieldId.equals("") )
-            #if ( $docItems.size() > 0 )
-                #set ( $fieldTitle = "$!docItems.get(0).fields().get($fieldId).label()" )
-            #else
-                #set ( $fieldTitle = $fieldId )
-            #end
-
-            #set ( $void = $headersMap.put($fieldId, $fieldTitle) )
-            #if ( $fieldId.equals("status") )
-                #set ( $void = $headerFilterTypesMap.put($fieldId, "catalog") )
-            #elseif ( $fieldId.equals("updated") )
-                #set ( $void = $headerFilterTypesMap.put($fieldId, "date") )
-            #else
-                #set ( $void = $headerFilterTypesMap.put($fieldId, "list") )
-            #end
-            #set ( $void = $headersKeys.add($fieldId) )
-        #end
+    #foreach ( $fieldId in $columnFieldIds )
+        #set ( $void = $headersMap.put($fieldId, $fieldTitlesMap.get($fieldId)) )
+        #set ( $void = $headerFilterTypesMap.put($fieldId, $fieldFilterTypesMap.get($fieldId)) )
+        #set ( $void = $headerGlobalSearchMap.put($fieldId, true) )
+        #set ( $void = $headersKeys.add($fieldId) )
     #end
 
     #if ( true == $parameters.showSignaturesStatus.value() )
         #set ( $void = $headersMap.put("signatureHtml","Signatures") )
         #set ( $void = $headerFilterTypesMap.put("signatureHtml", "list") )
+        #set ( $void = $headerGlobalSearchMap.put("signatureHtml", true) )
         #set ( $void = $headersKeys.add("signatureHtml") )
     #end
 
@@ -247,6 +432,7 @@
         #if ( !($columnParam.title.value() == "") && !($columnParam.query.value() == "") )
             #set ( $void = $headersMap.put($columnParam.title.value(), $columnParam.title.value()) )
             #set ( $void = $headerFilterTypesMap.put($columnParam.title.value(), "number") )
+            #set ( $void = $headerGlobalSearchMap.put($columnParam.title.value(), false) )
             #set ( $void = $headersKeys.add($columnParam.title.value()) )
         #end
     #end
@@ -269,6 +455,8 @@
     #foreach ( $docu in $docItems )
         #set ( $indexLoop = $velocityCount - 1 )
         #set ( $docQuery = $docQueries.get($indexLoop) )
+        #set ( $rowRevision = $docRevisions.get($indexLoop) )
+        #set ( $rowProjectId = $docu.fields().project().projectId() )
 
         ## ==================================================================
         ## This map stores all cells for the current row.
@@ -287,6 +475,7 @@
             #set ( $projectHtml = "$!docu.fields().project().render()")
             #set ( $void = $rowsMap.put("project", $projectHtml) )
             #set ( $void = $rowsMap.put("__tsbFilterValue_project", $docu.getOldApi().getProject().getName()) )
+            #set ( $void = $rowsMap.put("__tsbSearchValue_project", $docu.getOldApi().getProject().getName()) )
         #end
 
         ## ==================================================================
@@ -296,14 +485,17 @@
             #set ( $spaceHtml = "$!docu.space().render()" )
             #set ( $void = $rowsMap.put("space", $spaceHtml) )
             #set ( $void = $rowsMap.put("__tsbFilterValue_space", $docu.space().label()) )
+            #set ( $void = $rowsMap.put("__tsbSearchValue_space", $docu.space().label()) )
         #end
 
         ## ==================================================================
-        ## Add the Document cell. This contains Polarion-rendered link HTML.
+        ## Add the Document cell. Display keeps Polarion-rendered link HTML,
+        ## while global search receives only the document's plain title.
         ## ==================================================================
         #set ( $documentHtml = $docu.render().withIcon().withLinks(true) )
         #set ( $void = $rowsMap.put("documentHtml", $documentHtml) )
         #set ( $void = $rowsMap.put("__tsbFilterValue_documentHtml", $docu.getOldApi().getType().getName()) )
+        #set ( $void = $rowsMap.put("__tsbSearchValue_documentHtml", $docu.getOldApi().getTitle()) )
 
         ## ==================================================================
         ## Add the Signatures cell when enabled.
@@ -329,25 +521,51 @@
         #end
 
         ## ==================================================================
-        ## Add one cell for each configured document field id.
+        ## Add one cell for each configured document field id. Visible cells
+        ## keep Polarion-rendered HTML while typed filters and global search
+        ## receive separate semantic values when the resolved type provides
+        ## a stable scalar representation.
         ## ==================================================================
-        #set ( $fieldsId = $parameters.columnFields.value().split(",") )
-        #foreach ( $fieldIdRaw in $fieldsId )
-            #set ( $fieldId = $fieldIdRaw.trim() )
-            #if ( !$fieldId.equals("") )
-                #set ( $fieldHtml = "$!docu.fields().get($fieldId).render()" )
-                #set ( $void = $rowsMap.put($fieldId, $fieldHtml) )
+        #foreach ( $fieldId in $columnFieldIds )
+            #set ( $documentField = $docu.fields().get($fieldId) )
+            #set ( $fieldHtml = "$!documentField.render()" )
+            #set ( $void = $rowsMap.put($fieldId, $fieldHtml) )
+            #set ( $fieldFilterType = $fieldFilterTypesMap.get($fieldId) )
+            #set ( $filterValueKey = "__tsbFilterValue_${fieldId}" )
+            #set ( $searchValueKey = "__tsbSearchValue_${fieldId}" )
 
-                ## ==========================================================
-                ## Status and Updated use raw values for smart filtering.
-                ## Their rendered HTML remains unchanged in the visible cell.
-                ## ==========================================================
-                #if ( $fieldId.equals("status") )
-                    #set ( $void = $rowsMap.put("__tsbFilterValue_status", $docu.getOldApi().getStatus().getName()) )
-                #elseif ( $fieldId.equals("updated") )
-                    #set ( $updatedDate = $date.format("yyyy-MM-dd", $docu.getOldApi().getUpdated()) )
-                    #set ( $void = $rowsMap.put("__tsbFilterValue_updated", $updatedDate) )
+            ## ==============================================================
+            ## Scalar enum fields expose one display name that matches the
+            ## merged catalog values prepared from project configuration.
+            ## ==============================================================
+            #if ( $fieldFilterType.equals("catalog") )
+                #set ( $oldFieldValue = $docu.getOldApi().getValue($fieldId) )
+                #set ( $rawFilterValue = "$!oldFieldValue.getName()" )
+                #set ( $void = $rowsMap.put($filterValueKey, $rawFilterValue) )
+                #set ( $void = $rowsMap.put($searchValueKey, $rawFilterValue) )
+
+            ## ==============================================================
+            ## Date and DateOnly values have different old-API representations.
+            ## Normalize both to yyyy-MM-dd for DataTables sorting and range
+            ## comparisons without changing their rendered cell content.
+            ## ==============================================================
+            #elseif ( $fieldFilterType.equals("date") )
+                #set ( $oldApiDocument = $docu.getOldApi() )
+                #set ( $oldFieldValue = $oldApiDocument.getValue($fieldId) )
+                #set ( $rowFieldType = $oldApiDocument.getFieldType($fieldId) )
+                #set ( $rowFieldTypeName = "$!rowFieldType.getTypeName()" )
+                #set ( $rawFilterValue = "" )
+
+                #if ( $oldFieldValue )
+                    #if ( $rowFieldTypeName.equals("java.util.Date") )
+                        #set ( $rawFilterValue = $date.format("yyyy-MM-dd", $oldFieldValue) )
+                    #elseif ( $rowFieldTypeName.equals("com.polarion.core.util.types.DateOnly") )
+                        #set ( $rawFilterValue = $date.format("yyyy-MM-dd", $oldFieldValue.getDate()) )
+                    #end
                 #end
+
+                #set ( $void = $rowsMap.put($filterValueKey, $rawFilterValue) )
+                #set ( $void = $rowsMap.put($searchValueKey, $rawFilterValue) )
             #end
         #end
         
@@ -364,11 +582,19 @@
                 ## The class applies only to additional-column count links.
                 ## ==========================================================
                 #set ( $cellQuery = "$docQuery AND ($columnParam.query.value())" )
-                #set ( $workitemCount = $transaction.workItems().search().query("$cellQuery").size() )
-                #set ( $trackerLink = $transaction.context().createPortalLink().project("$docu.fields().project().projectId()").workItems().query("$cellQuery").toEncodedRelativeUrl() )
+                #set ( $workitemSearch = $transaction.workItems().search().query("$cellQuery") )
+                #if ( !$rowRevision.equals("") )
+                    #set ( $workitemSearch = $workitemSearch.baseline("$rowRevision") )
+                #end
+                #set ( $workitemCount = $workitemSearch.size() )
+                #set ( $portalLinkBuilder = $transaction.context().createPortalLink() )
+                #if ( !$rowRevision.equals("") )
+                    #set ( $portalLinkBuilder = $portalLinkBuilder.baseline("$rowRevision") )
+                #end
+                #set ( $trackerLink = $portalLinkBuilder.project("$rowProjectId").workItems().query("$cellQuery").toEncodedRelativeUrl() )
                 #set ( $docSpace = $docu.getOldApi().getModuleFolder() )
                 #set ( $docName = $docu.fields().moduleName().get() )
-                #set ( $docLink = $transaction.context().createPortalLink().project("$docu.fields().project().projectId()").document("$docSpace","$docName").filter("$cellQuery").toEncodedRelativeUrl() )
+                #set ( $docLink = $portalLinkBuilder.project("$rowProjectId").document("$docSpace","$docName").filter("$cellQuery").toEncodedRelativeUrl() )
 
                 #set ( $countClassAttribute = "" )
                 #if ( $workitemCount == 0 )
@@ -422,26 +648,31 @@
 ## ==========================================================================
 ## Main 
 ## ==========================================================================
-#if ( $allowRendering )
-    #prepareRowsMacro()
+#prepareRowsMacro()
+#prepareFieldMetadataMacro()
+#prepareFilterOptionsMacro()
+#prepareHeadersMacro()
+#prepareDataRowsMacro()
+#prepareTableSettingsMacro()
 
-    #prepareFilterOptionsMacro()
-    #prepareHeadersMacro()
-    #prepareDataRowsMacro()
-    #prepareTableSettingsMacro()
-
-    ## ======================================================================
-    ## Load widget-local DataTables assets.
-    ## ======================================================================
-    #loadWidgetCssResource("resources/datatables.css")
-    #loadWidgetJsResource("resources/datatables.js")
-
-    ## ======================================================================
-    ## Load files for changing the effects or changing
-    ## the design of the table.
-    ## ======================================================================
-    #loadWidgetJsResource("resources/tableEffects.js")
-    #loadWidgetCssResource("resources/tableEffects.css")
-
-    #initDataTableMacro ( $widgetTableId $headersKeys $headersMap $headerFilterTypesMap $headerFilterOptionsMap $dataRows $tableSettings )
+## ======================================================================
+## Show revision-context warnings without preventing HEAD rendering.
+## ======================================================================
+#if ( !$revisionWarning.equals("") )
+    $widgetContext.renderWarning($revisionWarning)
 #end
+
+## ======================================================================
+## Load widget-local DataTables assets.
+## ======================================================================
+#loadWidgetCssResource("resources/datatables.css")
+#loadWidgetJsResource("resources/datatables.js")
+
+## ======================================================================
+## Load files for changing the effects or changing
+## the design of the table.
+## ======================================================================
+#loadWidgetJsResource("resources/tableEffects.js")
+#loadWidgetCssResource("resources/tableEffects.css")
+
+#initDataTableMacro ( $widgetTableId $headersKeys $headersMap $headerFilterTypesMap $headerFilterOptionsMap $headerGlobalSearchMap $dataRows $tableSettings )
