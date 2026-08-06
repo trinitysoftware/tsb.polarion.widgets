@@ -117,7 +117,7 @@
     #if ( $baselineValues.contains($projectBaselineValue) )
         #set ( $hasSelectedProjectBaseline = true )
     #else
-        #set ( $void = $parameters.projectBaseline.set().value("") )
+        #set ( $void = $projectBaselineSetter.singleValue("") )
     #end
 #end
 

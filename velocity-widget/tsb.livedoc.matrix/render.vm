@@ -48,6 +48,7 @@
 ## ==========================================================================
 #set ( $projectBaselineValues = $parameters.projectBaseline.values() )
 #set ( $specificRevision = $parameters.specificRevision.value().trim() )
+#set ( $currentDocumentQuery = $parameters.dataSet.getFor().revision("").queryToShow() )
 
 #if ( !$projectBaselineValues.isEmpty() )
     #set ( $projectBaselineValue = "$!projectBaselineValues.get(0)" )
@@ -55,8 +56,52 @@
     #set ( $projectBaselineSeparatorIndex = $projectBaselineValue.indexOf("|") )
 
     #if ( $projectBaselineSeparatorIndex > 0 )
-        #set ( $projectBaselineRevision = $projectBaselineValue.substring(0, $projectBaselineSeparatorIndex) )
-        #set ( $effectiveRevision = $projectBaselineRevision.trim() )
+        #set ( $selectedProjectBaselineIsValid = false )
+        #set ( $scopeBaselineProjectIds = [] )
+
+        #if ( $projectId )
+            #set ( $void = $scopeBaselineProjectIds.add($projectId) )
+        #else
+            #set ( $scopeDocuments = $transaction.documents().search().query($currentDocumentQuery).sort("project.id") )
+
+            #foreach ( $scopeDocument in $scopeDocuments )
+                #if ( !$scopeDocument.isUnresolvable() )
+                    #set ( $scopeProjectId = $scopeDocument.fields().project().projectId() )
+
+                    #if ( $scopeProjectId && !$scopeBaselineProjectIds.contains($scopeProjectId) )
+                        #set ( $void = $scopeBaselineProjectIds.add($scopeProjectId) )
+                    #end
+                #end
+            #end
+        #end
+
+        #foreach ( $scopeBaselineProjectId in $scopeBaselineProjectIds )
+            #set ( $scopeBaselineTrackerProject = $trackerService.getTrackerProject($scopeBaselineProjectId) )
+
+            #if ( $scopeBaselineTrackerProject )
+                #foreach ( $scopeProjectBaseline in $scopeBaselineTrackerProject.getBaselinesManager().getBaselines() )
+                    #set ( $scopeBaselineName = "$!scopeProjectBaseline.getName()" )
+                    #set ( $scopeBaselineRevision = "$!scopeProjectBaseline.getBaseRevision()" )
+
+                    #if ( $scopeBaselineName.equals("") )
+                        #set ( $scopeBaselineName = "$!scopeProjectBaseline.getId()" )
+                    #end
+
+                    #set ( $scopeBaselineValue = "$scopeBaselineRevision|$scopeBaselineName" )
+
+                    #if ( $projectBaselineValue.equals($scopeBaselineValue) )
+                        #set ( $selectedProjectBaselineIsValid = true )
+                    #end
+                #end
+            #end
+        #end
+
+        #if ( $selectedProjectBaselineIsValid )
+            #set ( $projectBaselineRevision = $projectBaselineValue.substring(0, $projectBaselineSeparatorIndex) )
+            #set ( $effectiveRevision = $projectBaselineRevision.trim() )
+        #else
+            #set ( $revisionWarning = "Project Baseline '$projectBaselineValue' is not available in the current Data Set scope. Rows are rendered from HEAD." )
+        #end
     #else
         ## Older saved configurations used projectId/baselineId values. They
         ## cannot identify a cross-project revision anymore, so fall back to HEAD.
