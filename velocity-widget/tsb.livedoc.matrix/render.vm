@@ -46,8 +46,8 @@
 ## Project Baseline options use revision|baselineName values. The selected
 ## revision applies to all documents represented by the Data Set.
 ## ==========================================================================
-#set ( $projectBaselineValues = $parameters.projectBaseline.values() )
-#set ( $specificRevision = $parameters.specificRevision.value().trim() )
+#set ( $projectBaselineValues = $parameters.dataSet.projectBaseline.values() )
+#set ( $specificRevision = $parameters.dataSet.specificRevision.value().trim() )
 #set ( $currentDocumentQuery = $parameters.dataSet.getFor().revision("").queryToShow() )
 
 #if ( !$projectBaselineValues.isEmpty() )
@@ -87,9 +87,10 @@
                         #set ( $scopeBaselineName = "$!scopeProjectBaseline.getId()" )
                     #end
 
-                    #set ( $scopeBaselineValue = "$scopeBaselineRevision|$scopeBaselineName" )
+                    #set ( $scopeBaselineValue = "$scopeBaselineRevision|$scopeBaselineName|$scopeBaselineProjectId" )
+                    #set ( $scopeBaselineValueLegacy = "$scopeBaselineRevision|$scopeBaselineName" )
 
-                    #if ( $projectBaselineValue.equals($scopeBaselineValue) )
+                    #if ( $projectBaselineValue.equals($scopeBaselineValue) || $projectBaselineValue.equals($scopeBaselineValueLegacy) )
                         #set ( $selectedProjectBaselineIsValid = true )
                     #end
                 #end

@@ -43,10 +43,10 @@
 
 ## ==========================================================================
 ## Populate Project Baseline options from the projects in the Data Set scope.
-## Option value is revision|baselineName. The label intentionally omits project
-## names because selecting a baseline applies its revision to the full matrix.
+## Option value is revision|baselineName|projectId. The label includes project
+## name and revision number (without 'r' prefix).
 ## ==========================================================================
-#set ( $projectBaselineSetter = $parameters.projectBaseline.set().clear().allowNoValue(true).allowMultipleValues(false) )
+#set ( $projectBaselineSetter = $parameters.dataSet.projectBaseline.set().clear().allowNoValue(true).allowMultipleValues(false) )
 #set ( $dataSetScope = $parameters.dataSet.scope() )
 #set ( $projectId = $dataSetScope.projectId() )
 #set ( $scopePath = $dataSetScope.path() )
@@ -81,6 +81,11 @@
     #set ( $baselineTrackerProject = $trackerService.getTrackerProject($baselineProjectId) )
 
     #if ( $baselineTrackerProject )
+        #set ( $projectName = "$!baselineTrackerProject.getName()" )
+        #if ( $projectName.equals("") )
+            #set ( $projectName = $baselineProjectId )
+        #end
+
         #foreach ( $candidateProjectBaseline in $baselineTrackerProject.getBaselinesManager().getBaselines() )
             #set ( $baselineId = "$!candidateProjectBaseline.getId()" )
             #set ( $baselineName = "$!candidateProjectBaseline.getName()" )
@@ -91,11 +96,11 @@
             #end
 
             #if ( !$baselineRevision.equals("") )
-                #set ( $baselineOptionKey = "$baselineName|$baselineRevision" )
-                #set ( $baselineValue = "$baselineRevision|$baselineName" )
+                #set ( $baselineOptionKey = "$baselineProjectId|$baselineName|$baselineRevision" )
+                #set ( $baselineValue = "$baselineRevision|$baselineName|$baselineProjectId" )
 
                 #if ( !$baselineOptions.contains($baselineOptionKey) )
-                    #set ( $baselineLabel = "$baselineName (r$baselineRevision)" )
+                    #set ( $baselineLabel = "$projectName - $baselineName ($baselineRevision)" )
                     #set ( $void = $baselineOptions.add($baselineOptionKey) )
                     #set ( $void = $baselineValues.add($baselineValue) )
                     #set ( $void = $projectBaselineSetter.addEnumItem($baselineValue, $baselineLabel) )
@@ -109,27 +114,11 @@
 ## Clear a stale Project Baseline when the Data Set scope changes and the
 ## previous baseline is no longer available in the rebuilt option list.
 ## ==========================================================================
-#set ( $projectBaselineValues = $parameters.projectBaseline.values() )
-#set ( $hasSelectedProjectBaseline = false )
+#set ( $projectBaselineValues = $parameters.dataSet.projectBaseline.values() )
 
 #if ( !$projectBaselineValues.isEmpty() )
     #set ( $projectBaselineValue = "$!projectBaselineValues.get(0)" )
-    #if ( $baselineValues.contains($projectBaselineValue) )
-        #set ( $hasSelectedProjectBaseline = true )
-    #else
+    #if ( !$baselineValues.contains($projectBaselineValue) )
         #set ( $void = $projectBaselineSetter.singleValue("") )
     #end
-#end
-
-## ==========================================================================
-## Hide direct revision entry when Project Baseline is selected.
-## Project Baseline resolves to its own base revision and takes precedence.
-## ==========================================================================
-#set ( $projectBaselineValues = $parameters.projectBaseline.values() )
-#set ( $specificRevisionParameter = $parameters.specificRevision )
-#set ( $showSpecificRevision = !$hasSelectedProjectBaseline )
-#set ( $void = $specificRevisionParameter.visuals().setVisible($showSpecificRevision) )
-
-#if ( !$showSpecificRevision )
-    #set ( $void = $specificRevisionParameter.set().value("") )
 #end

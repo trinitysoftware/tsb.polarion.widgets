@@ -57,7 +57,7 @@
 ## Convert Velocity header and row maps into JavaScript data for DataTables.
 ## The server prepares the maps; this macro serializes them for the client.
 ## ==========================================================================
-#macro ( renderWidgetDataMacro $headersMap $headersKeys $headerFilterTypesMap $headerFilterOptionsMap $dataRows )
+#macro ( renderWidgetDataMacro $headersMap $headersKeys $headerFilterTypesMap $headerFilterOptionsMap $headerGlobalSearchMap $dataRows )
 <script type="text/javascript">
     // ======================================================================
     // This object is passed to DataTables.
@@ -73,10 +73,15 @@
     // Example: "space" -> "Space" becomes { key: "space", title: "Space" }.
     // ======================================================================
     #foreach ( $headerKey in $headersKeys )
+        #set ( $isGlobalSearchable = $headerGlobalSearchMap.get($headerKey) )
+        #if ( "$!isGlobalSearchable" == "" )
+            #set ( $isGlobalSearchable = true )
+        #end
         var headerData = {
             title: "$esc.javascript($headersMap.get($headerKey))",
             key: "$esc.javascript($headerKey)",
             filterType: "$esc.javascript($headerFilterTypesMap.get($headerKey))",
+            globalSearch: $isGlobalSearchable,
             filterOptions: []
         };
 
@@ -123,7 +128,7 @@
 ## The caller provides the table id, ordered headers, prepared row data, and
 ## table settings collected from the widget properties panel.
 ## ==========================================================================
-#macro ( initDataTableMacro $widgetTableId $headersKeys $headersMap $headerFilterTypesMap $headerFilterOptionsMap $dataRows $tableSettings )
+#macro ( initDataTableMacro $widgetTableId $headersKeys $headersMap $headerFilterTypesMap $headerFilterOptionsMap $headerGlobalSearchMap $dataRows $tableSettings )
     ## ======================================================================
     ## This is the empty table element.
     ## DataTables will fill it using widgetData.
@@ -149,7 +154,7 @@
     ## ======================================================================
     ## Write the prepared server data into JavaScript.
     ## ======================================================================
-    #renderWidgetDataMacro( $headersMap $headersKeys $headerFilterTypesMap $headerFilterOptionsMap $dataRows )
+    #renderWidgetDataMacro( $headersMap $headersKeys $headerFilterTypesMap $headerFilterOptionsMap $headerGlobalSearchMap $dataRows )
     <script type="text/javascript">
     (function () {
         // ==================================================================
@@ -435,6 +440,7 @@
                 title: header.title,
                 data: header.key,
                 name: header.key,
+                searchable: header.globalSearch !== false,
                 columnControl: [{
                     extend: 'dropdown',
                     icon: 'filter',
