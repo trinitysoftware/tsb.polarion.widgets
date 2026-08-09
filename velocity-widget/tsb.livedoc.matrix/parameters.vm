@@ -56,6 +56,12 @@ $parameters.put("dataSet", $factory.dataSet("Data Set").prototype().document().a
 ## These are just IDs and labels that we're initializing for later.
 ## ==========================================================================
 $parameters.put("showSignaturesStatus", $factory.bool("Show Signatures Status").value(true).build())
+$parameters.put("showDocumentBaselines", $factory.bool("Show Document Baselines").value(true).build())
+$parameters.put("showBranchedDocuments", $factory.bool("Show Branched Documents").value(false).build())
+$parameters.put("showMasterDocument", $factory.bool("Show Master Document").value(false).build())
+$parameters.put("showUnresolvedComments", $factory.bool("Show Unresolved Comments").value(false).build())
+$parameters.put("showUnreferencedWorkItems", $factory.bool("Show Unreferenced Work Items").value(false).build())
+$parameters.put("showApprovedVersions", $factory.bool("Show Approved Versions").value(true).build())
 $parameters.put("showProject", $factory.bool("Show Project").value(true).build())
 $parameters.put("showSpace", $factory.bool("Show Space").value(true).build())
 $parameters.put("columnFields", $factory.string("Show Fields as Columns").value("status,updated").build())
@@ -83,12 +89,14 @@ $parameters.put("rowsPerPage", $factory.integer("Rows Per Page").value(10).depen
 ## ==========================================================================
 #set ( $title = $factory.string("Title").build() )
 #set ( $query = $factory.string("Query (Lucene)").value("").build() )
-#set ( $composite = $factory.composite("Column Query").add("title", $title).add("query", $query).build() )
+#set ( $showRisksheetLink = $factory.bool("Show Risksheet Link").value(false).build() )
+#set ( $includeReferencedWorkItems = $factory.bool("Include Referenced Work Items").value(false).build() )
+#set ( $composite = $factory.composite("Column Query").add("title", $title).add("query", $query).add("showRisksheetLink", $showRisksheetLink).add("includeReferencedWorkItems", $includeReferencedWorkItems).build() )
 $parameters.put("columns", $factory.multi("Additional Columns", $composite).build())
 
 ## --------------------------------------------------------------------------
 ## SIDE NOTE: A composite groups related inputs into one reusable parameter block.
-## Here, each block contains a column Title and a Lucene Query.
+## Here, each block contains a column Title, Lucene Query, and query behavior.
 ## Wrapping that composite in multi("Additional Columns", ...) lets users add
 ## multiple query columns in the widget configuration.
 ## --------------------------------------------------------------------------

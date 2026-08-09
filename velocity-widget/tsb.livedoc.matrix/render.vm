@@ -252,8 +252,8 @@
                     #collectCollectionDocumentsMacro($upstreamCollection)
                 #end
             #end
-        #end
     #end
+#end
 #end
 
 #macro ( prepareCollectionScopeMacro )
@@ -571,6 +571,33 @@
     #set ( $void = $formattingRules.add($formattingRule) )
 #end
 
+#macro ( prepareWorkItemIdentityQueryMacro $workItems )
+    ## ======================================================================
+    ## Build an exact Lucene identity query from a document work item list.
+    ## This lets tracker, document, and risksheet links reuse the same matched
+    ## set when the column uses referenced or unreferenced document items.
+    ## ======================================================================
+    #set ( $workItemIdentityQueryParts = [] )
+
+    #foreach ( $workItem in $workItems )
+        #if ( $workItem && !$workItem.isUnresolvable() )
+            #set ( $oldApiWorkItem = $workItem.getOldApi() )
+            #set ( $workItemProjectId = "$!oldApiWorkItem.getProjectId()" )
+            #set ( $workItemId = "$!oldApiWorkItem.getId()" )
+
+            #if ( !$workItemProjectId.equals("") && !$workItemId.equals("") )
+                #set ( $void = $workItemIdentityQueryParts.add("(project.id:$q$workItemProjectId$q AND id:$q$workItemId$q)") )
+            #end
+        #end
+    #end
+
+    #if ( $workItemIdentityQueryParts.isEmpty() )
+        #set ( $workItemIdentityQuery = "project.id:__tsb_no_matching_project__" )
+    #else
+        #set ( $workItemIdentityQuery = $workItemIdentityQueryParts.toString().replace("[","(").replace("]",")").replace(", "," OR ") )
+    #end
+#end
+
 #macro ( prepareHeadersMacro )
     ## ======================================================================
     ## This map stores the table columns.
@@ -682,6 +709,52 @@
     #end
 
     ## ======================================================================
+    ## Optional LiveDoc metadata columns are rendered after document fields and
+    ## signatures, before user-defined query-count columns.
+    ## ======================================================================
+    #if ( true == $parameters.showDocumentBaselines.value() )
+        #set ( $void = $headersMap.put("documentBaselinesHtml", "Document Baselines") )
+        #set ( $void = $headerFilterTypesMap.put("documentBaselinesHtml", "list") )
+        #set ( $void = $headerGlobalSearchMap.put("documentBaselinesHtml", true) )
+        #set ( $void = $headersKeys.add("documentBaselinesHtml") )
+    #end
+
+    #if ( true == $parameters.showBranchedDocuments.value() )
+        #set ( $void = $headersMap.put("branchedDocumentsHtml", "Branched Documents") )
+        #set ( $void = $headerFilterTypesMap.put("branchedDocumentsHtml", "list") )
+        #set ( $void = $headerGlobalSearchMap.put("branchedDocumentsHtml", true) )
+        #set ( $void = $headersKeys.add("branchedDocumentsHtml") )
+    #end
+
+    #if ( true == $parameters.showMasterDocument.value() )
+        #set ( $void = $headersMap.put("masterDocumentHtml", "Master Document") )
+        #set ( $void = $headerFilterTypesMap.put("masterDocumentHtml", "list") )
+        #set ( $void = $headerGlobalSearchMap.put("masterDocumentHtml", true) )
+        #set ( $void = $headersKeys.add("masterDocumentHtml") )
+    #end
+
+    #if ( true == $parameters.showUnresolvedComments.value() )
+        #set ( $void = $headersMap.put("unresolvedCommentsHtml", "Unresolved Comments") )
+        #set ( $void = $headerFilterTypesMap.put("unresolvedCommentsHtml", "number") )
+        #set ( $void = $headerGlobalSearchMap.put("unresolvedCommentsHtml", false) )
+        #set ( $void = $headersKeys.add("unresolvedCommentsHtml") )
+    #end
+
+    #if ( true == $parameters.showUnreferencedWorkItems.value() )
+        #set ( $void = $headersMap.put("unreferencedWorkItemsHtml", "Unreferenced Work Items") )
+        #set ( $void = $headerFilterTypesMap.put("unreferencedWorkItemsHtml", "number") )
+        #set ( $void = $headerGlobalSearchMap.put("unreferencedWorkItemsHtml", false) )
+        #set ( $void = $headersKeys.add("unreferencedWorkItemsHtml") )
+    #end
+
+    #if ( true == $parameters.showApprovedVersions.value() )
+        #set ( $void = $headersMap.put("approvedVersionsHtml", "Approved Versions") )
+        #set ( $void = $headerFilterTypesMap.put("approvedVersionsHtml", "list") )
+        #set ( $void = $headerGlobalSearchMap.put("approvedVersionsHtml", true) )
+        #set ( $void = $headersKeys.add("approvedVersionsHtml") )
+    #end
+
+    ## ======================================================================
     ## This is for user-defined query-count columns in the matrix.
     ## Lets user create columns with defined queries from Lucene
     ## ======================================================================
@@ -705,6 +778,7 @@
     ## Each $rowsMap inside it stores one table row.
     ## ======================================================================
     #set ( $dataRows = [] )
+    #set ( $dataService = $trackerService.getDataService() )
 
     ## ======================================================================
     ## Create one row map for each document.
@@ -714,6 +788,7 @@
         #set ( $docQuery = $docQueries.get($indexLoop) )
         #set ( $rowRevision = $docRevisions.get($indexLoop) )
         #set ( $rowProjectId = $docu.fields().project().projectId() )
+        #set ( $oldApiDocument = $docu.getOldApi() )
 
         ## ==================================================================
         ## This map stores all cells for the current row.
@@ -753,11 +828,17 @@
         #set ( $documentHtml = $docu.render().withIcon().withLinks(true) )
         #set ( $documentName = "$!docu.fields().moduleName().get()" )
         #if ( $documentName.equals("") )
-            #set ( $documentName = "$!docu.getOldApi().getTitle()" )
+            #set ( $documentName = "$!oldApiDocument.getTitle()" )
         #end
+        #set ( $documentSpace = $oldApiDocument.getModuleFolder() )
+        #set ( $documentPortalLinkBuilder = $transaction.context().createPortalLink() )
+        #if ( !$rowRevision.equals("") )
+            #set ( $documentPortalLinkBuilder = $documentPortalLinkBuilder.baseline("$rowRevision") )
+        #end
+        #set ( $documentLink = $documentPortalLinkBuilder.project("$rowProjectId").document("$documentSpace","$documentName").toEncodedRelativeUrl() )
         #set ( $void = $rowsMap.put("documentHtml", $documentHtml) )
         #set ( $void = $rowsMap.put("__tsbFilterValue_documentHtml", $documentName) )
-        #set ( $void = $rowsMap.put("__tsbSearchValue_documentHtml", $docu.getOldApi().getTitle()) )
+        #set ( $void = $rowsMap.put("__tsbSearchValue_documentHtml", $oldApiDocument.getTitle()) )
 
         ## ==================================================================
         ## Add the Signatures cell when enabled.
@@ -780,6 +861,254 @@
             #end
 
             #set ( $void = $rowsMap.put("signatureHtml", $signatureHtml) )
+        #end
+
+        ## ==================================================================
+        ## Add document baseline information when enabled. Document baselines
+        ## are object baselines whose base object points to this LiveDoc.
+        ## ==================================================================
+        #if ( true == $parameters.showDocumentBaselines.value() )
+            #set ( $documentBaselinesHtml = "" )
+            #set ( $documentBaselinesSearchText = "" )
+            #set ( $documentBaseObjectPath = "document/$oldApiDocument.getModuleLocation().getLocationPath()" )
+            #set ( $documentBaselineQuery = "project.id:$q$rowProjectId$q AND baseObject:$q$documentBaseObjectPath$q" )
+            #set ( $documentBaselines = $dataService.searchInstances("Baseline", $documentBaselineQuery, "baseRevision") )
+
+            #foreach ( $documentBaseline in $documentBaselines )
+                #set ( $documentBaselineName = "$!documentBaseline.getName()" )
+                #set ( $documentBaselineRevision = "$!documentBaseline.getBaseRevision()" )
+
+                #if ( $documentBaselineName.equals("") )
+                    #set ( $documentBaselineName = "$!documentBaseline.getId()" )
+                #end
+
+                #if ( !$documentBaselineRevision.equals("") )
+                    #set ( $baselineDocument = false )
+                    #set ( $baselineDocument = $documentBaseline.getBaseObject() )
+
+                    #if ( $baselineDocument && $baselineDocument.can().read() )
+                        #set ( $baselineLinkBuilder = $transaction.context().createPortalLink().baseline("$documentBaselineRevision") )
+                        #set ( $baselineDocumentSpace = "$!baselineDocument.getModuleFolder()" )
+                        #set ( $baselineDocumentName = "$!baselineDocument.getModuleName()" )
+                        #if ( $baselineDocumentSpace.equals("") )
+                            #set ( $baselineDocumentSpace = $documentSpace )
+                        #end
+                        #if ( $baselineDocumentName.equals("") )
+                            #set ( $baselineDocumentName = $documentName )
+                        #end
+                        #set ( $baselineLink = $baselineLinkBuilder.project("$rowProjectId").document("$baselineDocumentSpace","$baselineDocumentName").toEncodedRelativeUrl() )
+                        #set ( $baselineLabel = "$documentBaselineName ($documentBaselineRevision)" )
+                        #set ( $baselineLabelHtml = $esc.html($baselineLabel) )
+                        #set ( $documentBaselinesHtml = "${documentBaselinesHtml}<div><a href=${q}${baselineLink}${q}>$baselineLabelHtml</a></div>" )
+                        #set ( $documentBaselinesSearchText = "${documentBaselinesSearchText} ${baselineLabel}" )
+                    #end
+                #end
+            #end
+
+            #set ( $void = $rowsMap.put("documentBaselinesHtml", $documentBaselinesHtml) )
+            #set ( $void = $rowsMap.put("__tsbSearchValue_documentBaselinesHtml", $documentBaselinesSearchText.trim()) )
+        #end
+
+        ## ==================================================================
+        ## Add branched document links when enabled.
+        ## ==================================================================
+        #if ( true == $parameters.showBranchedDocuments.value() )
+            #set ( $branchedDocumentsHtml = "" )
+            #set ( $branchedDocumentsSearchText = "" )
+            #set ( $branchedModules = $oldApiDocument.getBranchedModules() )
+
+            #foreach ( $branchedModule in $branchedModules )
+                #if ( $branchedModule )
+                    #set ( $branchedProjectId = "$!branchedModule.getProject().getId()" )
+                    #if ( $branchedProjectId.equals("") )
+                        #set ( $branchedProjectId = $rowProjectId )
+                    #end
+                    #set ( $branchedSpace = "$!branchedModule.getModuleFolder()" )
+                    #set ( $branchedName = "$!branchedModule.getModuleName()" )
+                    #set ( $branchedTitle = "$!branchedModule.getTitleOrName()" )
+                    #if ( $branchedTitle.equals("") )
+                        #set ( $branchedTitle = $branchedName )
+                    #end
+
+                    #set ( $branchedLink = $transaction.context().createPortalLink().project("$branchedProjectId").document("$branchedSpace","$branchedName").toEncodedRelativeUrl() )
+                    #set ( $branchedTitleHtml = $esc.html($branchedTitle) )
+                    #set ( $branchedDocumentsHtml = "${branchedDocumentsHtml}<div><a href=${q}${branchedLink}${q}>$branchedTitleHtml</a></div>" )
+                    #set ( $branchedDocumentsSearchText = "${branchedDocumentsSearchText} ${branchedTitle}" )
+                #end
+            #end
+
+            #set ( $void = $rowsMap.put("branchedDocumentsHtml", $branchedDocumentsHtml) )
+            #set ( $void = $rowsMap.put("__tsbSearchValue_branchedDocumentsHtml", $branchedDocumentsSearchText.trim()) )
+        #end
+
+        ## ==================================================================
+        ## Add the master/source document for branched or derived documents.
+        ## Branched source takes precedence because it is the stronger document
+        ## relationship; derived source is used when no branch source exists.
+        ## ==================================================================
+        #if ( true == $parameters.showMasterDocument.value() )
+            #set ( $masterDocumentHtml = "" )
+            #set ( $masterDocumentSearchText = "" )
+            #set ( $masterModule = false )
+            #set ( $masterModule = $oldApiDocument.getBranchedFrom() )
+
+            #if ( !$masterModule )
+                #set ( $masterModule = $oldApiDocument.getDerivedFrom() )
+            #end
+
+            #if ( $masterModule )
+                #set ( $masterProjectId = "$!masterModule.getProject().getId()" )
+                #if ( $masterProjectId.equals("") )
+                    #set ( $masterProjectId = $rowProjectId )
+                #end
+                #set ( $masterSpace = "$!masterModule.getModuleFolder()" )
+                #set ( $masterName = "$!masterModule.getModuleName()" )
+                #set ( $masterTitle = "$!masterModule.getTitleOrName()" )
+                #if ( $masterTitle.equals("") )
+                    #set ( $masterTitle = $masterName )
+                #end
+
+                #set ( $masterLink = $transaction.context().createPortalLink().project("$masterProjectId").document("$masterSpace","$masterName").toEncodedRelativeUrl() )
+                #set ( $masterTitleHtml = $esc.html($masterTitle) )
+                #set ( $masterDocumentHtml = "<a href=${q}${masterLink}${q}>$masterTitleHtml</a>" )
+                #set ( $masterDocumentSearchText = $masterTitle )
+            #end
+
+            #set ( $void = $rowsMap.put("masterDocumentHtml", $masterDocumentHtml) )
+            #set ( $void = $rowsMap.put("__tsbSearchValue_masterDocumentHtml", $masterDocumentSearchText) )
+        #end
+
+        ## ==================================================================
+        ## Add unresolved root comment count when enabled.
+        ## Link the count to the document so users can open the comments panel
+        ## in document context.
+        ## ==================================================================
+        #if ( true == $parameters.showUnresolvedComments.value() )
+            #set ( $unresolvedRootComments = $oldApiDocument.getRootComments(false) )
+            #set ( $unresolvedCommentCount = $unresolvedRootComments.size() )
+            #set ( $unresolvedCommentClassAttribute = "" )
+            #if ( $unresolvedCommentCount == 0 )
+                #set ( $unresolvedCommentClassAttribute = " class=${q}tsb-computed-count-zero${q}" )
+            #end
+            #set ( $unresolvedCommentsHtml = "<a$unresolvedCommentClassAttribute href=${q}${documentLink}${q}>$unresolvedCommentCount</a>" )
+            #set ( $void = $rowsMap.put("unresolvedCommentsHtml", $unresolvedCommentsHtml) )
+            #set ( $void = $rowsMap.put("__tsbFilterValue_unresolvedCommentsHtml", $unresolvedCommentCount) )
+        #end
+
+        ## ==================================================================
+        ## Add the unreferenced work item count when enabled. The count and
+        ## tracker link are built from the exact unreferenced item identities,
+        ## not from the normal document.id query.
+        ## ==================================================================
+        #if ( true == $parameters.showUnreferencedWorkItems.value() )
+            #set ( $unreferencedWorkItems = $docu.items().unreferenced() )
+            #prepareWorkItemIdentityQueryMacro($unreferencedWorkItems)
+            #set ( $unreferencedWorkItemQuery = $workItemIdentityQuery )
+            #set ( $unreferencedWorkItemSearch = $transaction.workItems().search().query("$unreferencedWorkItemQuery") )
+
+            #if ( !$rowRevision.equals("") )
+                #set ( $unreferencedWorkItemSearch = $unreferencedWorkItemSearch.baseline("$rowRevision") )
+            #end
+
+            #set ( $unreferencedWorkItemCount = $unreferencedWorkItemSearch.size() )
+            #set ( $unreferencedPortalLinkBuilder = $transaction.context().createPortalLink() )
+
+            #if ( !$rowRevision.equals("") )
+                #set ( $unreferencedPortalLinkBuilder = $unreferencedPortalLinkBuilder.baseline("$rowRevision") )
+            #end
+
+            #set ( $unreferencedTrackerLink = $unreferencedPortalLinkBuilder.project("$rowProjectId").workItems().query("$unreferencedWorkItemQuery").toEncodedRelativeUrl() )
+            #set ( $unreferencedClassAttribute = "" )
+
+            #if ( $unreferencedWorkItemCount == 0 )
+                #set ( $unreferencedClassAttribute = " class=${q}tsb-computed-count-zero${q}" )
+            #end
+
+            #set ( $unreferencedWorkItemsHtml = "<a$unreferencedClassAttribute href=${q}${unreferencedTrackerLink}${q}>$unreferencedWorkItemCount</a>" )
+            #set ( $void = $rowsMap.put("unreferencedWorkItemsHtml", $unreferencedWorkItemsHtml) )
+            #set ( $void = $rowsMap.put("__tsbFilterValue_unreferencedWorkItemsHtml", $unreferencedWorkItemCount) )
+        #end
+
+        ## ==================================================================
+        ## Add approved version information from document workflow signatures.
+        ## Each approved transition links to the versioned document revision.
+        ## ==================================================================
+        #if ( true == $parameters.showApprovedVersions.value() )
+            #set ( $approvedVersionsHtml = "" )
+            #set ( $approvedVersionsSearchText = "" )
+
+            #foreach ( $approvedSignature in $oldApiDocument.getWorkflowSignatures() )
+                #set ( $approvedTargetStatusId = "$!approvedSignature.targetStatus.id" )
+
+                #if ( $approvedSignature.transitionRevision && $approvedTargetStatusId.equals("approved") )
+                    #set ( $approvedRevision = "$!approvedSignature.transitionRevision" )
+                    #set ( $approvedVersionedDoc = false )
+                    #set ( $approvedVersionedDoc = $dataService.getVersionedInstance($oldApiDocument.getUri(), $approvedRevision) )
+
+                    #if ( $approvedVersionedDoc )
+                        #set ( $approvedVersionValue = "" )
+                        #set ( $approvedVersionValue = $approvedVersionedDoc.getValue("version") )
+                        #set ( $approvedVersion = "$!approvedVersionValue" )
+                        #if ( $approvedVersion.equals("") )
+                            #set ( $approvedVersion = "r$approvedRevision" )
+                        #end
+                        #set ( $approvedUpdated = "" )
+                        #if ( $approvedVersionedDoc.getUpdated() )
+                            #set ( $approvedUpdated = $date.format("dd-MMM-yyyy", $approvedVersionedDoc.getUpdated()) )
+                        #end
+                        #set ( $approvedEcoValue = "" )
+                        #set ( $approvedEcoValue = $approvedVersionedDoc.getValue("eco") )
+                        #set ( $approvedEco = "$!approvedEcoValue" )
+                        #set ( $approvedDescription = "" )
+                        #set ( $approvedDescriptionValue = false )
+                        #set ( $approvedDescriptionValue = $approvedVersionedDoc.getValue("descriptionOfChange") )
+                        #if ( $approvedDescriptionValue )
+                            #set ( $approvedDescription = "$!approvedDescriptionValue.getContent()" )
+                        #end
+
+                        #set ( $approvedLinkBuilder = $transaction.context().createPortalLink().baseline("$approvedRevision") )
+                        #set ( $approvedDocumentSpace = "$!approvedVersionedDoc.getModuleFolder()" )
+                        #set ( $approvedDocumentName = "$!approvedVersionedDoc.getModuleName()" )
+                        #if ( $approvedDocumentSpace.equals("") )
+                            #set ( $approvedDocumentSpace = $documentSpace )
+                        #end
+                        #if ( $approvedDocumentName.equals("") )
+                            #set ( $approvedDocumentName = $documentName )
+                        #end
+                        #set ( $approvedLink = $approvedLinkBuilder.project("$rowProjectId").document("$approvedDocumentSpace","$approvedDocumentName").toEncodedRelativeUrl() )
+                        #set ( $approvedLabel = "$approvedVersion" )
+                        #if ( !$approvedUpdated.equals("") )
+                            #set ( $approvedLabel = "$approvedLabel - $approvedUpdated" )
+                        #end
+                        #if ( !$approvedEco.equals("") )
+                            #set ( $approvedLabel = "$approvedLabel - $approvedEco" )
+                        #end
+                        #if ( !$approvedDescription.equals("") )
+                            #set ( $approvedLabel = "$approvedLabel - $approvedDescription" )
+                        #end
+
+                        #set ( $approvedVersionHtml = $esc.html($approvedVersion) )
+                        #set ( $approvedUpdatedHtml = $esc.html($approvedUpdated) )
+                        #set ( $approvedEcoHtml = $esc.html($approvedEco) )
+                        #set ( $approvedDescriptionHtml = $esc.html($approvedDescription) )
+                        #set ( $approvedVersionsHtml = "${approvedVersionsHtml}<div><a href=${q}${approvedLink}${q}>$approvedVersionHtml</a>" )
+                        #if ( !$approvedUpdated.equals("") )
+                            #set ( $approvedVersionsHtml = "${approvedVersionsHtml}<br>$approvedUpdatedHtml" )
+                        #end
+                        #if ( !$approvedEco.equals("") )
+                            #set ( $approvedVersionsHtml = "${approvedVersionsHtml}<br>$approvedEcoHtml" )
+                        #end
+                        #if ( !$approvedDescription.equals("") )
+                            #set ( $approvedVersionsHtml = "${approvedVersionsHtml}<br>$approvedDescriptionHtml" )
+                        #end
+                        #set ( $approvedVersionsHtml = "${approvedVersionsHtml}</div>" )
+                        #set ( $approvedVersionsSearchText = "${approvedVersionsSearchText} ${approvedLabel}" )
+                    #end
+                #end
+            #end
+
+            #set ( $void = $rowsMap.put("approvedVersionsHtml", $approvedVersionsHtml) )
+            #set ( $void = $rowsMap.put("__tsbSearchValue_approvedVersionsHtml", $approvedVersionsSearchText.trim()) )
         #end
 
         ## ==================================================================
@@ -838,17 +1167,41 @@
         #foreach ( $columnParam in $parameters.columns.get() )
             #if ( !($columnParam.title.value() == "") && !($columnParam.query.value() == "") )
                 ## ==========================================================
-                ## Count matching work items and build links to the tracker
-                ## result and filtered document view.
+                ## Count matching work items and build links to the tracker,
+                ## filtered document, and optional risksheet views.
                 ## Zero counts receive a dedicated CSS class.
                 ## The class applies only to additional-column count links.
                 ## ==========================================================
-                #set ( $cellQuery = "$docQuery AND ($columnParam.query.value())" )
-                #set ( $workitemSearch = $transaction.workItems().search().query("$cellQuery") )
-                #if ( !$rowRevision.equals("") )
-                    #set ( $workitemSearch = $workitemSearch.baseline("$rowRevision") )
+                #set ( $columnQuery = "$!columnParam.query.value()" )
+                #set ( $cellQuery = "$docQuery AND ($columnQuery)" )
+                #set ( $workitemCount = 0 )
+                #set ( $includeReferencedWorkItems = false )
+                #set ( $showRisksheetLink = false )
+
+                #if ( true == $columnParam.includeReferencedWorkItems.value() )
+                    #set ( $includeReferencedWorkItems = true )
                 #end
-                #set ( $workitemCount = $workitemSearch.size() )
+
+                #if ( true == $columnParam.showRisksheetLink.value() )
+                    #set ( $showRisksheetLink = true )
+                #end
+
+                #if ( $includeReferencedWorkItems )
+                    #prepareWorkItemIdentityQueryMacro($docu.items().filtered(""))
+                    #set ( $cellQuery = "(($docQuery) OR ($workItemIdentityQuery)) AND ($columnQuery)" )
+                    #set ( $workitemSearch = $transaction.workItems().search().query("$cellQuery") )
+                    #if ( !$rowRevision.equals("") )
+                        #set ( $workitemSearch = $workitemSearch.baseline("$rowRevision") )
+                    #end
+                    #set ( $workitemCount = $workitemSearch.size() )
+                #else
+                    #set ( $workitemSearch = $transaction.workItems().search().query("$cellQuery") )
+                    #if ( !$rowRevision.equals("") )
+                        #set ( $workitemSearch = $workitemSearch.baseline("$rowRevision") )
+                    #end
+                    #set ( $workitemCount = $workitemSearch.size() )
+                #end
+
                 #set ( $portalLinkBuilder = $transaction.context().createPortalLink() )
                 #if ( !$rowRevision.equals("") )
                     #set ( $portalLinkBuilder = $portalLinkBuilder.baseline("$rowRevision") )
@@ -857,6 +1210,7 @@
                 #set ( $docSpace = $docu.getOldApi().getModuleFolder() )
                 #set ( $docName = $docu.fields().moduleName().get() )
                 #set ( $docLink = $portalLinkBuilder.project("$rowProjectId").document("$docSpace","$docName").filter("$cellQuery").toEncodedRelativeUrl() )
+                #set ( $risksheetLink = $portalLinkBuilder.project("$rowProjectId").document("$docSpace","$docName").tab("risksheet").filter("$cellQuery").toEncodedRelativeUrl() )
 
                 #set ( $countClassAttribute = "" )
                 #if ( $workitemCount == 0 )
@@ -866,6 +1220,10 @@
                 #set ( $countHtml = "<a$countClassAttribute href=$q$trackerLink$q>$workitemCount</a>" )
                 #set ( $documentLinkHtml = "<a href=$q$docLink$q>Doc</a>" )
                 #set ( $cellHtml = "$countHtml / $documentLinkHtml" )
+                #if ( $showRisksheetLink )
+                    #set ( $risksheetLinkHtml = "<a href=$q$risksheetLink$q>Risksheet</a>" )
+                    #set ( $cellHtml = "$cellHtml / $risksheetLinkHtml" )
+                #end
                 #set ( $void = $rowsMap.put($columnParam.title.value(), $cellHtml) )
 
                 ## ==========================================================
@@ -942,4 +1300,4 @@
 #loadWidgetJsResource("resources/tableEffects.js")
 #loadWidgetCssResource("resources/tableEffects.css")
 
-#initDataTableMacro ( $widgetTableId $headersKeys $headersMap $headerFilterTypesMap $headerFilterOptionsMap $headerGlobalSearchMap $headerFormattingRulesMap $dataRows $tableSettings )
+#initDataTableMacro($widgetTableId $headersKeys $headersMap $headerFilterTypesMap $headerFilterOptionsMap $headerGlobalSearchMap $headerFormattingRulesMap $dataRows $tableSettings)
