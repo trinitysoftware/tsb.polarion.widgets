@@ -41,11 +41,23 @@
 #set ( $dataSetWidgetContextScope = "$!parameters.dataSet.getWidgetContextScope()" )
 #set ( $dataSetWidgetContextScopeLower = $dataSetWidgetContextScope.toLowerCase() )
 #set ( $projectId = $dataSetScope.projectId() )
+#set ( $scopePath = $dataSetScope.path() )
+#set ( $dataSetScopeIsGlobal = $dataSetScope.isGlobal() )
 #set ( $effectiveRevision = "" )
 #set ( $revisionWarning = "" )
 #set ( $dataSetWarning = "" )
 
-#if ( $dataSetCollectionReference || $dataSetWidgetContextScopeLower.contains("collection") )
+## ==========================================================================
+## Prefer the active Data Set scope over a stale Collection reference. Polarion
+## can retain a previous Collection reference after switching back to a normal
+## scope, while the active scope still exposes project/path/global state.
+## ==========================================================================
+#if ( $dataSetWidgetContextScopeLower.contains("collection") )
+    #set ( $dataSetCollectionScopeSelected = true )
+    #set ( $dataSetCollectionInheritanceEnabled = $parameters.dataSet.collectionInheritance.value() )
+#elseif ( $projectId || $scopePath || $dataSetScopeIsGlobal )
+    #set ( $dataSetCollectionScopeSelected = false )
+#elseif ( $dataSetCollectionReference )
     #set ( $dataSetCollectionScopeSelected = true )
     #set ( $dataSetCollectionInheritanceEnabled = $parameters.dataSet.collectionInheritance.value() )
 #end

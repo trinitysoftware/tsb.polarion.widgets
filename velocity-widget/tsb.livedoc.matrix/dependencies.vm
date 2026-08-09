@@ -67,7 +67,17 @@
     #set ( $documentQueryIsSql = true )
 #end
 
-#if ( $dataSetCollectionReference || $dataSetWidgetContextScopeLower.contains("collection") )
+## ==========================================================================
+## Prefer the active Data Set scope over a stale Collection reference. Polarion
+## can keep the previous Collection reference populated after switching back to
+## Project/Project Group/Global, and treating that stale value as active would
+## leave Project Baseline with no rebuilt options.
+## ==========================================================================
+#if ( $dataSetWidgetContextScopeLower.contains("collection") )
+    #set ( $dataSetCollectionScopeSelected = true )
+#elseif ( $projectId || $scopePath || $dataSetScopeIsGlobal )
+    #set ( $dataSetCollectionScopeSelected = false )
+#elseif ( $dataSetCollectionReference )
     #set ( $dataSetCollectionScopeSelected = true )
 #end
 
@@ -80,7 +90,7 @@
 #set ( $void = $parameters.dataSet.projectBaseline.visuals().setVisible(true) )
 #set ( $void = $parameters.dataSet.specificRevision.visuals().setVisible(true) )
 
-#if ( !$dataSetCollectionScopeSelected && $projectId )
+#if ( $projectId )
     #set ( $void = $baselineProjectIds.add($projectId) )
 #elseif ( !$dataSetCollectionScopeSelected && !$dataSetScopeIsGlobal && $scopePath )
     ## ======================================================================
