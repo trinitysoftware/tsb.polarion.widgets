@@ -441,7 +441,7 @@
     #set ( $headerFilterOptionsMap = $objectFactory.newMap() )
     #set ( $projectFilterOptions = [] )
     #set ( $spaceFilterOptions = [] )
-    #set ( $documentTypeFilterOptions = [] )
+    #set ( $documentFilterOptions = [] )
     #set ( $customFieldFilterOptionsMap = $objectFactory.newMap() )
 
     ## ======================================================================
@@ -483,19 +483,6 @@
                 #end
             #end
 
-            ## ==================================================================
-            ## Document types and custom field enumerations are project-specific.
-            ## Hidden options are omitted and equal display names are shown once.
-            ## ==================================================================
-            #foreach ( $documentType in $trackerProject.getModuleTypeEnum().getAllOptions() )
-                #if ( !$documentType.isHidden() )
-                    #set ( $documentTypeName = $documentType.getName() )
-                    #if ( !$documentTypeFilterOptions.contains($documentTypeName) )
-                        #set ( $void = $documentTypeFilterOptions.add($documentTypeName) )
-                    #end
-                #end
-            #end
-
             #foreach ( $fieldId in $columnFieldIds )
                 #if ( $fieldFilterTypesMap.get($fieldId).equals("catalog") )
                     #set ( $fieldProjectIds = $fieldProjectIdsMap.get($fieldId) )
@@ -526,12 +513,28 @@
     #end
 
     ## ======================================================================
+    ## The Document column filters by the actual returned documents, not by
+    ## module type. Document type can be displayed as a normal field column.
+    ## ======================================================================
+    #foreach ( $filterDocument in $docItems )
+        #set ( $documentName = "$!filterDocument.fields().moduleName().get()" )
+
+        #if ( $documentName.equals("") )
+            #set ( $documentName = "$!filterDocument.getOldApi().getTitle()" )
+        #end
+
+        #if ( !$documentName.equals("") && !$documentFilterOptions.contains($documentName) )
+            #set ( $void = $documentFilterOptions.add($documentName) )
+        #end
+    #end
+
+    ## ======================================================================
     ## Publish completed catalogs only after every project has contributed.
     ## The shared DataTables macro reads these lists by header key.
     ## ======================================================================
     #set ( $void = $headerFilterOptionsMap.put("project", $projectFilterOptions) )
     #set ( $void = $headerFilterOptionsMap.put("space", $spaceFilterOptions) )
-    #set ( $void = $headerFilterOptionsMap.put("documentHtml", $documentTypeFilterOptions) )
+    #set ( $void = $headerFilterOptionsMap.put("documentHtml", $documentFilterOptions) )
 
     #foreach ( $fieldId in $columnFieldIds )
         #if ( $customFieldFilterOptionsMap.containsKey($fieldId) )
@@ -544,6 +547,18 @@
 ## Build the DataTables column definitions in Velocity maps.
 ## $headersKeys preserves display order because map iteration order is not used.
 ## ==========================================================================
+#macro ( addHeaderFormattingRuleMacro $formattingRules $operator $value $className $target )
+    #set ( $formattingRule = $objectFactory.newMap() )
+    #set ( $void = $formattingRule.put("operator", $operator) )
+    #set ( $void = $formattingRule.put("value", $value) )
+    #set ( $void = $formattingRule.put("className", $className) )
+    #set ( $void = $formattingRule.put("textColor", "") )
+    #set ( $void = $formattingRule.put("backgroundColor", "") )
+    #set ( $void = $formattingRule.put("bold", false) )
+    #set ( $void = $formattingRule.put("target", $target) )
+    #set ( $void = $formattingRules.add($formattingRule) )
+#end
+
 #macro ( prepareHeadersMacro )
     ## ======================================================================
     ## This map stores the table columns.
@@ -564,6 +579,12 @@
     ## Computed columns retain their dedicated numeric filter controls instead.
     ## ======================================================================
     #set ( $headerGlobalSearchMap = $objectFactory.newMap() )
+
+    ## ======================================================================
+    ## Optional per-column formatting rules consumed by DataTables createdCell.
+    ## Rules are attached by column implementation, not by widget parameters.
+    ## ======================================================================
+    #set ( $headerFormattingRulesMap = $objectFactory.newMap() )
 
     ## ======================================================================
     ## Used to track the order of columns when rendering, since map is unordered.
@@ -598,6 +619,46 @@
         #set ( $void = $headersMap.put($fieldId, $fieldTitlesMap.get($fieldId)) )
         #set ( $void = $headerFilterTypesMap.put($fieldId, $fieldFilterTypesMap.get($fieldId)) )
         #set ( $void = $headerGlobalSearchMap.put($fieldId, true) )
+        #if ( $fieldId.equals("status") )
+            #set ( $formattingRules = [] )
+            #set ( $statusFormattingOptionNames = [] )
+            #set ( $statusProjectIds = $fieldProjectIdsMap.get($fieldId) )
+
+            ## ==============================================================
+            ## Status formatting uses the configured Polarion status options
+            ## from represented projects. Rules match exact option names that
+            ## also back the status catalog filter values. Colors are assigned
+            ## by enumeration order, so every configured status can receive a
+            ## style without hardcoding status names.
+            ## ==============================================================
+            #foreach ( $statusProjectId in $statusProjectIds )
+                #set ( $statusTrackerProject = $trackerService.getTrackerProject($statusProjectId) )
+
+                #if ( $statusTrackerProject )
+                    #set ( $statusEnumeration = $trackerService.getDataService().getEnumerationForKey("Module", $fieldId, $statusTrackerProject.getContextId()) )
+
+                    #if ( $statusEnumeration )
+                        #foreach ( $statusOption in $statusEnumeration.getAllOptions() )
+                            #if ( !$statusOption.isHidden() )
+                                #set ( $statusOptionName = "$!statusOption.getName()" )
+
+                                #if ( !$statusOptionName.equals("") && !$statusFormattingOptionNames.contains($statusOptionName) )
+                                    #set ( $statusToneNumber = $statusFormattingOptionNames.size() )
+                                    #set ( $statusToneNumber = $statusToneNumber + 1 )
+                                    #set ( $statusFormattingClass = "tsb-status-tone-${statusToneNumber}" )
+                                    #addHeaderFormattingRuleMacro($formattingRules "equals" $statusOptionName $statusFormattingClass "cell")
+                                    #set ( $void = $statusFormattingOptionNames.add($statusOptionName) )
+                                #end
+                            #end
+                        #end
+                    #end
+                #end
+            #end
+
+            #if ( !$formattingRules.isEmpty() )
+                #set ( $void = $headerFormattingRulesMap.put($fieldId, $formattingRules) )
+            #end
+        #end
         #set ( $void = $headersKeys.add($fieldId) )
     #end
 
@@ -673,12 +734,17 @@
         #end
 
         ## ==================================================================
-        ## Add the Document cell. Display keeps Polarion-rendered link HTML,
-        ## while global search receives only the document's plain title.
+        ## Add the Document cell. Display keeps Polarion-rendered link HTML.
+        ## The column filter uses the actual document name, while global
+        ## search receives only the document's plain title.
         ## ==================================================================
         #set ( $documentHtml = $docu.render().withIcon().withLinks(true) )
+        #set ( $documentName = "$!docu.fields().moduleName().get()" )
+        #if ( $documentName.equals("") )
+            #set ( $documentName = "$!docu.getOldApi().getTitle()" )
+        #end
         #set ( $void = $rowsMap.put("documentHtml", $documentHtml) )
-        #set ( $void = $rowsMap.put("__tsbFilterValue_documentHtml", $docu.getOldApi().getType().getName()) )
+        #set ( $void = $rowsMap.put("__tsbFilterValue_documentHtml", $documentName) )
         #set ( $void = $rowsMap.put("__tsbSearchValue_documentHtml", $docu.getOldApi().getTitle()) )
 
         ## ==================================================================
@@ -782,7 +848,7 @@
 
                 #set ( $countClassAttribute = "" )
                 #if ( $workitemCount == 0 )
-                    #set ( $countClassAttribute = " class=${q}tsb-additional-column-zero${q}" )
+                    #set ( $countClassAttribute = " class=${q}tsb-computed-count-zero${q}" )
                 #end
 
                 #set ( $countHtml = "<a$countClassAttribute href=$q$trackerLink$q>$workitemCount</a>" )
@@ -864,4 +930,4 @@
 #loadWidgetJsResource("resources/tableEffects.js")
 #loadWidgetCssResource("resources/tableEffects.css")
 
-#initDataTableMacro ( $widgetTableId $headersKeys $headersMap $headerFilterTypesMap $headerFilterOptionsMap $headerGlobalSearchMap $dataRows $tableSettings )
+#initDataTableMacro ( $widgetTableId $headersKeys $headersMap $headerFilterTypesMap $headerFilterOptionsMap $headerGlobalSearchMap $headerFormattingRulesMap $dataRows $tableSettings )
