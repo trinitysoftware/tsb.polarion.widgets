@@ -35,13 +35,14 @@
 ## ==========================================================================
 ## Build Data Set Parameter with nested Project Baseline and Revision fields.
 ## The Data Set serves as the single source of truth for scope selection
-## (single project, project group, or global repository scope) as well as
-## multi-project queries (such as project.id or project.group.id filters).
+## (single project, project group, collection, or global repository scope) as
+## well as multi-project queries (such as project.id or project.group.id filters).
 ## ==========================================================================
 #set ( $projectBaselineParam = $factory.customEnum("Project Baseline").allowNoValue(true).allowMultipleValues(false).dependencyTarget(true).build() )
 #set ( $specificRevisionParam = $factory.string("Revision").value("").dependencyTarget(true).build() )
+#set ( $collectionInheritanceParam = $factory.bool("Collection Inheritance").value(false).dependencyTarget(true).build() )
 
-$parameters.put("dataSet", $factory.dataSet("Data Set").prototype().document().allowedPrototypes(["Document"]).add("projectBaseline", $projectBaselineParam).add("specificRevision", $specificRevisionParam).dependencySource(true).build())
+$parameters.put("dataSet", $factory.dataSet("Data Set").prototype().document().allowedPrototypes(["Document"]).allowCollectionScope(true).luceneQuery("").add("projectBaseline", $projectBaselineParam).add("specificRevision", $specificRevisionParam).add("collectionInheritance", $collectionInheritanceParam).dependencySource(true).build())
 
 ## --------------------------------------------------------------------------
 ## dependencySource = allows the script to process dependencies (parent-child items) - can be used to include the entire linked structure

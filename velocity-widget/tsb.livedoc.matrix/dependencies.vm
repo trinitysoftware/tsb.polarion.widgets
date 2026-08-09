@@ -48,6 +48,10 @@
 ## ==========================================================================
 #set ( $projectBaselineSetter = $parameters.dataSet.projectBaseline.set().clear().allowNoValue(true).allowMultipleValues(false) )
 #set ( $dataSetScope = $parameters.dataSet.scope() )
+#set ( $dataSetCollectionReference = $parameters.dataSet.getCollectionReference() )
+#set ( $dataSetCollectionScopeSelected = false )
+#set ( $dataSetWidgetContextScope = "$!parameters.dataSet.getWidgetContextScope()" )
+#set ( $dataSetWidgetContextScopeLower = $dataSetWidgetContextScope.toLowerCase() )
 #set ( $projectId = $dataSetScope.projectId() )
 #set ( $scopePath = $dataSetScope.path() )
 #set ( $dataSetScopeIsGlobal = $dataSetScope.isGlobal() )
@@ -55,15 +59,39 @@
 #set ( $baselineOptions = [] )
 #set ( $baselineValues = [] )
 #set ( $documentQuery = $parameters.dataSet.getFor().revision("").queryToShow() )
+#set ( $documentQueryText = "$!documentQuery" )
+#set ( $documentQueryLower = $documentQueryText.toLowerCase() )
+#set ( $documentQueryIsSql = false )
 
-#if ( $projectId )
+#if ( $documentQueryLower.contains("select ") || $documentQueryLower.contains(" from ") )
+    #set ( $documentQueryIsSql = true )
+#end
+
+#if ( $dataSetCollectionReference || $dataSetWidgetContextScopeLower.contains("collection") )
+    #set ( $dataSetCollectionScopeSelected = true )
+#end
+
+## ==========================================================================
+## Keep all nested Data Set parameters visible. Polarion does not repaint nested
+## visibility immediately when only the Data Set scope tab changes, so rendering
+## ignores fields that do not apply to the selected mode instead.
+## ==========================================================================
+#set ( $void = $parameters.dataSet.collectionInheritance.visuals().setVisible(true) )
+#set ( $void = $parameters.dataSet.projectBaseline.visuals().setVisible(true) )
+#set ( $void = $parameters.dataSet.specificRevision.visuals().setVisible(true) )
+
+#if ( !$dataSetCollectionScopeSelected && $projectId )
     #set ( $void = $baselineProjectIds.add($projectId) )
-#elseif ( !$dataSetScopeIsGlobal && $scopePath )
+#elseif ( !$dataSetCollectionScopeSelected && !$dataSetScopeIsGlobal && $scopePath )
     ## ======================================================================
     ## Collect accessible project ids through document search. Direct
     ## project-group traversal can fail when the group contains unreadable
     ## projects, even though readable documents from the same group can render.
     ## ======================================================================
+    #if ( $documentQueryIsSql )
+        #set ( $documentQuery = "project.id:__tsb_no_matching_project__" )
+    #end
+
     #set ( $scopeDocuments = $transaction.documents().search().query($documentQuery).sort("project.id") )
 
     #foreach ( $scopeDocument in $scopeDocuments )

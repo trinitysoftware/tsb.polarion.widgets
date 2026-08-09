@@ -31,13 +31,24 @@
 
 ## ==========================================================================
 ## Resolve document search criteria directly from the Data Set parameter.
-## The Data Set parameter handles single project, project group, global scope,
-## and multi-project project.id terms.
+## The Data Set parameter handles single project, project group, collection,
+## global scope, and multi-project project.id terms.
 ## ==========================================================================
 #set ( $dataSetScope = $parameters.dataSet.scope() )
+#set ( $dataSetCollectionReference = $parameters.dataSet.getCollectionReference() )
+#set ( $dataSetCollectionScopeSelected = false )
+#set ( $dataSetCollectionInheritanceEnabled = false )
+#set ( $dataSetWidgetContextScope = "$!parameters.dataSet.getWidgetContextScope()" )
+#set ( $dataSetWidgetContextScopeLower = $dataSetWidgetContextScope.toLowerCase() )
 #set ( $projectId = $dataSetScope.projectId() )
 #set ( $effectiveRevision = "" )
 #set ( $revisionWarning = "" )
+#set ( $dataSetWarning = "" )
+
+#if ( $dataSetCollectionReference || $dataSetWidgetContextScopeLower.contains("collection") )
+    #set ( $dataSetCollectionScopeSelected = true )
+    #set ( $dataSetCollectionInheritanceEnabled = $parameters.dataSet.collectionInheritance.value() )
+#end
 
 ## ==========================================================================
 ## Resolve the revision context before any document or work item search runs.
@@ -45,12 +56,30 @@
 ## precedence because its base revision is the authoritative snapshot point.
 ## Project Baseline options use revision|baselineName values. The selected
 ## revision applies to all documents represented by the Data Set.
+##
+## Collection scope carries per-document revisions from its Collection elements,
+## so Project Baseline and Revision are intentionally ignored in that mode.
 ## ==========================================================================
 #set ( $projectBaselineValues = $parameters.dataSet.projectBaseline.values() )
 #set ( $specificRevision = $parameters.dataSet.specificRevision.value().trim() )
 #set ( $currentDocumentQuery = $parameters.dataSet.getFor().revision("").queryToShow() )
+#set ( $currentDocumentQueryText = "$!currentDocumentQuery" )
+#set ( $currentDocumentQueryLower = $currentDocumentQueryText.toLowerCase() )
+#set ( $currentDocumentQueryIsSql = false )
 
-#if ( !$projectBaselineValues.isEmpty() )
+#if ( $currentDocumentQueryLower.contains("select ") || $currentDocumentQueryLower.contains(" from ") )
+    #set ( $currentDocumentQueryIsSql = true )
+#end
+
+#if ( !$dataSetCollectionScopeSelected && $currentDocumentQueryIsSql )
+    #if ( $projectId )
+        #set ( $currentDocumentQuery = "project.id:$projectId" )
+    #else
+        #set ( $currentDocumentQuery = "project.id:__tsb_no_matching_project__" )
+    #end
+#end
+
+#if ( !$dataSetCollectionScopeSelected && !$projectBaselineValues.isEmpty() )
     #set ( $projectBaselineValue = "$!projectBaselineValues.get(0)" )
     #set ( $projectBaselineValue = $projectBaselineValue.trim() )
     #set ( $projectBaselineSeparatorIndex = $projectBaselineValue.indexOf("|") )
@@ -108,11 +137,28 @@
         ## cannot identify a cross-project revision anymore, so fall back to HEAD.
         #set ( $revisionWarning = "Project Baseline '$projectBaselineValue' cannot be resolved. Rows are rendered from HEAD." )
     #end
-#elseif ( !$specificRevision.equals("") )
+#elseif ( !$dataSetCollectionScopeSelected && !$specificRevision.equals("") )
     #set ( $effectiveRevision = $specificRevision )
 #end
 
 #set ( $documentQuery = $parameters.dataSet.getFor().revision("$!effectiveRevision").queryToShow() )
+#set ( $documentQueryText = "$!documentQuery" )
+#set ( $documentQueryLower = $documentQueryText.toLowerCase() )
+#set ( $documentQueryIsSql = false )
+
+#if ( $documentQueryLower.contains("select ") || $documentQueryLower.contains(" from ") )
+    #set ( $documentQueryIsSql = true )
+#end
+
+#if ( !$dataSetCollectionScopeSelected && $documentQueryIsSql )
+    #if ( $projectId )
+        #set ( $documentQuery = "project.id:$projectId" )
+        #set ( $dataSetWarning = "Rows are rendered from the selected Project scope; switch Query Type to Lucene to use document query criteria." )
+    #else
+        #set ( $documentQuery = "project.id:__tsb_no_matching_project__" )
+        #set ( $dataSetWarning = "Switch Query Type to Lucene before rendering Project Group or Global scopes." )
+    #end
+#end
 #set ( $q = '"' )
 
 ## ==========================================================================
@@ -126,8 +172,12 @@
 #set ( $docQueries = [] )
 #set ( $docRevisions = [] )
 #set ( $projectIds = [] )
+#set ( $collectionDocumentKeys = [] )
+#set ( $collectionDocumentMap = $objectFactory.newMap() )
+#set ( $collectionDocumentRevisionsMap = $objectFactory.newMap() )
+#set ( $processedCollectionKeys = [] )
 
-#if ( $projectId )
+#if ( !$dataSetCollectionScopeSelected && $projectId )
     #set ( $void = $projectIds.add($projectId) )
 #end
 
@@ -147,53 +197,141 @@
 ## Collect LiveDocs and build one work item query per LiveDoc.
 ## The row-building step uses the collected documents and matching queries.
 ## ==========================================================================
-#macro ( prepareRowsMacro )
-    ## ======================================================================
-    ## Execute the Data Set query through document search. This preserves the
-    ## query path that rendered project-group scopes before Project Baseline
-    ## was added, while still allowing a selected revision to be applied.
-    ## ======================================================================
-    #set ( $_docsSearch = $transaction.documents().search().query($documentQuery) )
+#macro ( collectCollectionDocumentsMacro $collection )
+    #if ( $collection && !$collection.isUnresolvable() )
+        #set ( $collectionReference = $collection.getReference() )
+        #set ( $collectionKey = "$!collectionReference.toPath()" )
 
-    #if ( !$effectiveRevision.equals("") )
-        #set ( $_docsSearch = $_docsSearch.baseline("$effectiveRevision") )
-    #end
-
-    #set ( $_docs = $_docsSearch.sort("project.id space.id title") )
-
-    #foreach ( $_doc in $_docs )
-        ## ==================================================================
-        ## Skip unresolved documents because their fields and links cannot
-        ## be rendered safely.
-        ## ==================================================================
-        #if ( !$_doc.isUnresolvable() )
-            #set ( $rowProjectId = $_doc.fields().project().projectId() )
-            #set ( $rowRevision = "$!effectiveRevision" )
+        #if ( !$collectionKey.equals("") && !$processedCollectionKeys.contains($collectionKey) )
+            #set ( $void = $processedCollectionKeys.add($collectionKey) )
 
             ## ==============================================================
-            ## A valid project context is required for this document's work
-            ## item query and portal links.
+            ## Collection elements are stored as document objects. Keep a key
+            ## based on project and document path so later Data Set query
+            ## results can be intersected without mixing projects.
             ## ==============================================================
-            #if ( $rowProjectId )
-                #if ( !$projectIds.contains($rowProjectId) )
-                    #set ( $void = $projectIds.add($rowProjectId) )
+            #foreach ( $collectionElement in $collection.fields().elements() )
+                #set ( $collectionObject = $collectionElement.fields().object().get() )
+
+                #if ( $collectionObject && !$collectionObject.isUnresolvable() )
+                    #set ( $collectionProjectId = $collectionObject.fields().project().projectId() )
+
+                    #if ( $collectionProjectId )
+                        #set ( $collectionDocumentPath = $collectionObject.getOldApi().getRelativePath().replace("_default/","") )
+                        #set ( $collectionDocumentKey = "$collectionProjectId|$collectionDocumentPath" )
+
+                        #if ( !$collectionDocumentKeys.contains($collectionDocumentKey) )
+                            #set ( $void = $collectionDocumentKeys.add($collectionDocumentKey) )
+                        #end
+
+                        #set ( $void = $collectionDocumentMap.put($collectionDocumentKey, $collectionObject) )
+                        #set ( $collectionElementRevision = "$!collectionElement.fields().revision().get()" )
+                        #set ( $void = $collectionDocumentRevisionsMap.put($collectionDocumentKey, $collectionElementRevision) )
+                    #end
                 #end
+            #end
 
-                #set ( $void = $docItems.add($_doc) )
-                #set ( $void = $docRevisions.add($rowRevision) )
+            #if ( $dataSetCollectionInheritanceEnabled )
+                ## ==========================================================
+                ## Inheritance follows direct upstream Collections recursively.
+                ## processedCollectionKeys prevents cycles from repeating rows.
+                ## ==========================================================
+                #foreach ( $upstreamCollection in $collection.fields().upstreamCollections() )
+                    #collectCollectionDocumentsMacro($upstreamCollection)
+                #end
+            #end
+        #end
+    #end
+#end
+
+#macro ( prepareCollectionScopeMacro )
+    #if ( $dataSetCollectionScopeSelected && $dataSetCollectionReference )
+        #set ( $selectedCollection = $dataSetCollectionReference.get($transaction) )
+        #collectCollectionDocumentsMacro($selectedCollection)
+    #end
+#end
+
+#macro ( prepareRowsMacro )
+    #if ( $dataSetCollectionScopeSelected )
+        ## ==================================================================
+        ## Collection mode renders from Collection elements directly. The Data
+        ## Set's Collection tab can keep a SQL-shaped query internally, so using
+        ## document search as the source can drop valid Collection documents.
+        ## ==================================================================
+        #foreach ( $rowDocumentKey in $collectionDocumentKeys )
+            #set ( $rowDocument = $collectionDocumentMap.get($rowDocumentKey) )
+
+            #if ( $rowDocument && !$rowDocument.isUnresolvable() )
+                #set ( $rowProjectId = $rowDocument.fields().project().projectId() )
+                #set ( $rowRevision = "$!collectionDocumentRevisionsMap.get($rowDocumentKey)" )
+
+                #if ( $rowProjectId )
+                    #set ( $docNameWithSpace = $rowDocument.getOldApi().getRelativePath().replace("_default/","") )
+
+                    #if ( !$projectIds.contains($rowProjectId) )
+                        #set ( $void = $projectIds.add($rowProjectId) )
+                    #end
+
+                    #set ( $void = $docItems.add($rowDocument) )
+                    #set ( $void = $docRevisions.add($rowRevision) )
+
+                    ## ======================================================
+                    ## Build the work item query with the document's own project.
+                    ## Equal document paths in different projects therefore keep
+                    ## independent work item counts.
+                    ## ======================================================
+                    #set ( $void = $docQueries.add("(project.id:$rowProjectId AND (NOT type:heading) AND document.id:$q$docNameWithSpace$q)") )
+                #end
+            #end
+        #end
+    #else
+        ## ==================================================================
+        ## Execute the Data Set query through document search. This preserves
+        ## the query path that renders project and project-group scopes, while
+        ## still allowing a selected revision to be applied.
+        ## ==================================================================
+        #set ( $_docsSearch = $transaction.documents().search().query($documentQuery) )
+
+        #if ( !$effectiveRevision.equals("") )
+            #set ( $_docsSearch = $_docsSearch.baseline("$effectiveRevision") )
+        #end
+
+        #set ( $_docs = $_docsSearch.sort("project.id space.id title") )
+
+        #foreach ( $_doc in $_docs )
+            ## ==============================================================
+            ## Skip unresolved documents because their fields and links cannot
+            ## be rendered safely.
+            ## ==============================================================
+            #if ( !$_doc.isUnresolvable() )
+                #set ( $rowProjectId = $_doc.fields().project().projectId() )
+                #set ( $rowRevision = "$!effectiveRevision" )
 
                 ## ==========================================================
-                ## Polarion stores the default space with an "_default/"
-                ## prefix that is not part of document.id query values.
+                ## A valid project context is required for this document's work
+                ## item query and portal links.
                 ## ==========================================================
-                #set ( $docNameWithSpace = $_doc.getOldApi().getRelativePath().replace("_default/","") )
+                #if ( $rowProjectId )
+                    #if ( !$projectIds.contains($rowProjectId) )
+                        #set ( $void = $projectIds.add($rowProjectId) )
+                    #end
 
-                ## ==========================================================
-                ## Build the work item query with the document's own project.
-                ## Equal document paths in different projects therefore keep
-                ## independent work item counts.
-                ## ==========================================================
-                #set ( $void = $docQueries.add("(project.id:$rowProjectId AND (NOT type:heading) AND document.id:$q$docNameWithSpace$q)") )
+                    #set ( $void = $docItems.add($_doc) )
+                    #set ( $void = $docRevisions.add($rowRevision) )
+
+                    ## ======================================================
+                    ## Polarion stores the default space with an "_default/"
+                    ## prefix that is not part of document.id query values.
+                    ## ======================================================
+                    #set ( $docNameWithSpace = $_doc.getOldApi().getRelativePath().replace("_default/","") )
+
+                    ## ======================================================
+                    ## Build the work item query with the document's own project.
+                    ## Equal document paths in different projects therefore keep
+                    ## independent work item counts.
+                    ## ======================================================
+                    #set ( $void = $docQueries.add("(project.id:$rowProjectId AND (NOT type:heading) AND document.id:$q$docNameWithSpace$q)") )
+                #end
             #end
         #end
     #end
@@ -694,6 +832,7 @@
 ## ==========================================================================
 ## Main 
 ## ==========================================================================
+#prepareCollectionScopeMacro()
 #prepareRowsMacro()
 #prepareFieldMetadataMacro()
 #prepareFilterOptionsMacro()
@@ -706,6 +845,10 @@
 ## ======================================================================
 #if ( !$revisionWarning.equals("") )
     $widgetContext.renderWarning($revisionWarning)
+#end
+
+#if ( !$dataSetWarning.equals("") )
+    $widgetContext.renderWarning($dataSetWarning)
 #end
 
 ## ======================================================================
