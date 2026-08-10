@@ -72,10 +72,72 @@
 ## Collection scope carries per-document revisions from its Collection elements,
 ## so Project Baseline and Revision are intentionally ignored in that mode.
 ## ==========================================================================
+#set ( $q = '"' )
 #set ( $projectBaselineValues = $parameters.dataSet.projectBaseline.values() )
 #set ( $specificRevision = $parameters.dataSet.specificRevision.value().trim() )
+
+## ==========================================================================
+## Replace page-parameter references in Lucene query text without #evaluate.
+## The Data Set query is already plain text at this point; running it through
+## a nested Velocity parser can fail inside Polarion, so resolve the documented
+## $pageParameters.<id> tokens directly from the page parameter map.
+## ==========================================================================
+#macro ( resolveQueryPageParametersMacro $sourceQuery )
+    #set ( $resolvedQueryText = "$!sourceQuery" )
+
+    #if ( $resolvedQueryText.contains("$") && $pageParameters )
+        #foreach ( $pageParameterId in $pageParameters.keySet() )
+            #set ( $pageParameter = $pageParameters.get($pageParameterId) )
+            #set ( $pageParameterToken = "${esc.d}pageParameters.${pageParameterId}" )
+            #set ( $pageParameterTokenSilent = "${esc.d}!pageParameters.${pageParameterId}" )
+            #set ( $pageParameterTokenBraced = "${esc.d}{pageParameters.${pageParameterId}}" )
+            #set ( $pageParameterTokenSilentBraced = "${esc.d}!{pageParameters.${pageParameterId}}" )
+            #set ( $pageParameterValue = "$!pageParameter.value" )
+            #set ( $pageParameterValues = "$!pageParameter.values" )
+            #set ( $pageParameterSingleValue = "$!pageParameter.singleValue" )
+            #set ( $pageParameterSingleValueId = "$!pageParameter.singleValue.id" )
+            #set ( $pageParameterSingleValueName = "$!pageParameter.singleValue.name" )
+            #set ( $pageParameterLuceneValue = "$!pageParameter.toLucene()" )
+            #set ( $pageParameterSqlValue = "$!pageParameter.toSql()" )
+
+            #if ( $pageParameterLuceneValue.equals("") )
+                #set ( $pageParameterLuceneValue = $pageParameterValue )
+            #end
+            #if ( $pageParameterValue.equals("") )
+                #set ( $pageParameterValue = $pageParameterSingleValueId )
+            #end
+            #if ( $pageParameterValue.equals("") )
+                #set ( $pageParameterValue = $pageParameterSingleValueName )
+            #end
+            #if ( $pageParameterValue.equals("") )
+                #set ( $pageParameterValue = $pageParameterLuceneValue )
+            #end
+
+            #foreach ( $parameterToken in [$pageParameterToken, $pageParameterTokenSilent] )
+                #set ( $resolvedQueryText = $resolvedQueryText.replace("${parameterToken}.singleValue.id", $pageParameterSingleValueId) )
+                #set ( $resolvedQueryText = $resolvedQueryText.replace("${parameterToken}.singleValue.name", $pageParameterSingleValueName) )
+                #set ( $resolvedQueryText = $resolvedQueryText.replace("${parameterToken}.singleValue", $pageParameterSingleValue) )
+                #set ( $resolvedQueryText = $resolvedQueryText.replace("${parameterToken}.values()", $pageParameterValues) )
+                #set ( $resolvedQueryText = $resolvedQueryText.replace("${parameterToken}.values", $pageParameterValues) )
+                #set ( $resolvedQueryText = $resolvedQueryText.replace("${parameterToken}.value()", $pageParameterValue) )
+                #set ( $resolvedQueryText = $resolvedQueryText.replace("${parameterToken}.value", $pageParameterValue) )
+                #set ( $resolvedQueryText = $resolvedQueryText.replace("${parameterToken}.toLucene()", $pageParameterLuceneValue) )
+                #set ( $resolvedQueryText = $resolvedQueryText.replace("${parameterToken}.toLucene", $pageParameterLuceneValue) )
+                #set ( $resolvedQueryText = $resolvedQueryText.replace("${parameterToken}.toSql()", $pageParameterSqlValue) )
+                #set ( $resolvedQueryText = $resolvedQueryText.replace("${parameterToken}.toSql", $pageParameterSqlValue) )
+                #set ( $resolvedQueryText = $resolvedQueryText.replace($parameterToken, $pageParameterLuceneValue) )
+            #end
+
+            #set ( $resolvedQueryText = $resolvedQueryText.replace($pageParameterTokenBraced, $pageParameterLuceneValue) )
+            #set ( $resolvedQueryText = $resolvedQueryText.replace($pageParameterTokenSilentBraced, $pageParameterLuceneValue) )
+        #end
+    #end
+#end
+
 #set ( $currentDocumentQuery = $parameters.dataSet.getFor().revision("").queryToShow() )
-#set ( $currentDocumentQueryText = "$!currentDocumentQuery" )
+#resolveQueryPageParametersMacro($currentDocumentQuery)
+#set ( $currentDocumentQueryText = $resolvedQueryText )
+#set ( $currentDocumentQuery = $currentDocumentQueryText )
 #set ( $currentDocumentQueryLower = $currentDocumentQueryText.toLowerCase() )
 #set ( $currentDocumentQueryIsSql = false )
 
@@ -154,7 +216,9 @@
 #end
 
 #set ( $documentQuery = $parameters.dataSet.getFor().revision("$!effectiveRevision").queryToShow() )
-#set ( $documentQueryText = "$!documentQuery" )
+#resolveQueryPageParametersMacro($documentQuery)
+#set ( $documentQueryText = $resolvedQueryText )
+#set ( $documentQuery = $documentQueryText )
 #set ( $documentQueryLower = $documentQueryText.toLowerCase() )
 #set ( $documentQueryIsSql = false )
 
@@ -171,7 +235,6 @@
         #set ( $dataSetWarning = "Switch Query Type to Lucene before rendering Project Group or Global scopes." )
     #end
 #end
-#set ( $q = '"' )
 
 ## ==========================================================================
 ## $docItems stores the LiveDocs found by the document query.
@@ -1173,6 +1236,8 @@
                 ## The class applies only to additional-column count links.
                 ## ==========================================================
                 #set ( $columnQuery = "$!columnParam.query.value()" )
+                #resolveQueryPageParametersMacro($columnQuery)
+                #set ( $columnQuery = $resolvedQueryText )
                 #set ( $cellQuery = "$docQuery AND ($columnQuery)" )
                 #set ( $workitemCount = 0 )
                 #set ( $includeReferencedWorkItems = false )
