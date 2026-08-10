@@ -398,7 +398,12 @@
             #foreach ( $collectionElement in $collection.fields().elements() )
                 #set ( $collectionObject = $collectionElement.fields().object().get() )
 
-                #if ( $collectionObject && !$collectionObject.isUnresolvable() )
+                ## ==========================================================
+                ## Collection object references can point to documents outside
+                ## the user's readable scope. Skip them before reading project,
+                ## path, or revision metadata.
+                ## ==========================================================
+                #if ( $collectionObject && !$collectionObject.isUnresolvable() && $collectionObject.can().read() )
                     #set ( $collectionProjectId = $collectionObject.fields().project().projectId() )
 
                     #if ( $collectionProjectId )
@@ -1094,7 +1099,12 @@
             #set ( $branchedModules = $oldApiDocument.getBranchedModules() )
 
             #foreach ( $branchedModule in $branchedModules )
-                #if ( $branchedModule )
+                ## ==========================================================
+                ## Render only branch targets the current user can read.
+                ## This keeps relationship metadata aligned with Polarion
+                ## permissions before titles and portal links are exposed.
+                ## ==========================================================
+                #if ( $branchedModule && $branchedModule.can().read() )
                     #set ( $branchedProjectId = "$!branchedModule.getProject().getId()" )
                     #if ( $branchedProjectId.equals("") )
                         #set ( $branchedProjectId = $rowProjectId )
@@ -1132,7 +1142,12 @@
                 #set ( $masterModule = $oldApiDocument.getDerivedFrom() )
             #end
 
-            #if ( $masterModule )
+            ## ==============================================================
+            ## Render only source documents the current user can read.
+            ## The matrix should not expose hidden branch/derivation metadata
+            ## through titles, search text, or generated portal links.
+            ## ==============================================================
+            #if ( $masterModule && $masterModule.can().read() )
                 #set ( $masterProjectId = "$!masterModule.getProject().getId()" )
                 #if ( $masterProjectId.equals("") )
                     #set ( $masterProjectId = $rowProjectId )
@@ -1221,7 +1236,11 @@
                     #set ( $approvedVersionedDoc = false )
                     #set ( $approvedVersionedDoc = $dataService.getVersionedInstance($oldApiDocument.getUri(), $approvedRevision) )
 
-                    #if ( $approvedVersionedDoc )
+                    ## ======================================================
+                    ## Render approved version metadata only when the user can
+                    ## read the versioned document object.
+                    ## ======================================================
+                    #if ( $approvedVersionedDoc && $approvedVersionedDoc.can().read() )
                         #set ( $approvedVersionValue = "" )
                         #set ( $approvedVersionValue = $approvedVersionedDoc.getValue("version") )
                         #set ( $approvedVersion = "$!approvedVersionValue" )
