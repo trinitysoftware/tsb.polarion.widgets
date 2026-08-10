@@ -33,6 +33,50 @@
 ## ==========================================================================
 
 ## ==========================================================================
+## Validate the selected recommended matrix configuration preset.
+## Custom Configuration keeps the existing manual fields and query columns.
+## The other presets are applied at render time so user-entered custom values
+## remain intact when switching back to Custom Configuration.
+## ==========================================================================
+#set ( $presetSetter = $parameters.matrixConfigurationPreset.set().clear().allowNoValue(false).allowMultipleValues(false) )
+#set ( $void = $presetSetter.addEnumItem("custom", "Custom Configuration") )
+#set ( $void = $presetSetter.addEnumItem("basicLiveDocStatus", "Basic LiveDoc Status") )
+#set ( $void = $presetSetter.addEnumItem("reviewAndApproval", "Review and Approval") )
+#set ( $void = $presetSetter.addEnumItem("traceabilityCounts", "Traceability Counts") )
+#set ( $void = $presetSetter.addEnumItem("releaseReadiness", "Release Readiness") )
+#set ( $presetValues = $parameters.matrixConfigurationPreset.values() )
+#set ( $selectedPreset = "custom" )
+#if ( !$presetValues.isEmpty() )
+    #set ( $selectedPreset = "$!presetValues.get(0)" )
+#end
+#set ( $validPresetValues = ["custom", "basicLiveDocStatus", "reviewAndApproval", "traceabilityCounts", "releaseReadiness"] )
+#if ( !$validPresetValues.contains($selectedPreset) )
+    #set ( $selectedPreset = "custom" )
+    #set ( $void = $presetSetter.singleValue("custom") )
+#elseif ( $presetValues.isEmpty() )
+    #set ( $void = $presetSetter.singleValue("custom") )
+#end
+
+## ==========================================================================
+## Show manual matrix configuration only when Custom Configuration is active.
+## Presets own the server-rendered columns and query-count definitions.
+## Display behavior parameters such as height, paging, search, and export stay
+## visible because they do not change the matrix's semantic configuration.
+## ==========================================================================
+#set ( $customPresetSelected = $selectedPreset.equals("custom") )
+#set ( $void = $parameters.showSignaturesStatus.visuals().setVisible($customPresetSelected) )
+#set ( $void = $parameters.showDocumentBaselines.visuals().setVisible($customPresetSelected) )
+#set ( $void = $parameters.showBranchedDocuments.visuals().setVisible($customPresetSelected) )
+#set ( $void = $parameters.showMasterDocument.visuals().setVisible($customPresetSelected) )
+#set ( $void = $parameters.showUnresolvedComments.visuals().setVisible($customPresetSelected) )
+#set ( $void = $parameters.showUnreferencedWorkItems.visuals().setVisible($customPresetSelected) )
+#set ( $void = $parameters.showApprovedVersions.visuals().setVisible($customPresetSelected) )
+#set ( $void = $parameters.showProject.visuals().setVisible($customPresetSelected) )
+#set ( $void = $parameters.showSpace.visuals().setVisible($customPresetSelected) )
+#set ( $void = $parameters.columnFields.visuals().setVisible($customPresetSelected) )
+#set ( $void = $parameters.columns.visuals().setVisible($customPresetSelected) )
+
+## ==========================================================================
 ## Update dependent paging parameters.
 ## Rows Per Page is visible only when Enable Paging is selected.
 ## ==========================================================================

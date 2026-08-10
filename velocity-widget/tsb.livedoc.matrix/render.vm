@@ -257,6 +257,116 @@
 #end
 
 ## ==========================================================================
+## Resolve the selected recommended matrix configuration preset.
+## Presets provide complete, conservative matrix setups for common review
+## workflows. Custom Configuration keeps the manually entered widget values.
+## ==========================================================================
+#set ( $matrixPresetValues = $parameters.matrixConfigurationPreset.values() )
+#set ( $selectedMatrixPreset = "custom" )
+
+#if ( !$matrixPresetValues.isEmpty() )
+    #set ( $selectedMatrixPreset = "$!matrixPresetValues.get(0)" )
+#end
+
+#set ( $validMatrixPresetValues = ["custom", "basicLiveDocStatus", "reviewAndApproval", "traceabilityCounts", "releaseReadiness"] )
+
+#if ( !$validMatrixPresetValues.contains($selectedMatrixPreset) )
+    #set ( $selectedMatrixPreset = "custom" )
+#end
+
+## ==========================================================================
+## Build the effective matrix configuration used by rendering.
+## Query columns are kept in a normalized map list so preset and custom columns
+## use the same rendering path and the same Lucene handling.
+## ==========================================================================
+#set ( $matrixShowSignaturesStatus = $parameters.showSignaturesStatus.value() )
+#set ( $matrixShowDocumentBaselines = $parameters.showDocumentBaselines.value() )
+#set ( $matrixShowBranchedDocuments = $parameters.showBranchedDocuments.value() )
+#set ( $matrixShowMasterDocument = $parameters.showMasterDocument.value() )
+#set ( $matrixShowUnresolvedComments = $parameters.showUnresolvedComments.value() )
+#set ( $matrixShowUnreferencedWorkItems = $parameters.showUnreferencedWorkItems.value() )
+#set ( $matrixShowApprovedVersions = $parameters.showApprovedVersions.value() )
+#set ( $matrixShowProject = $parameters.showProject.value() )
+#set ( $matrixShowSpace = $parameters.showSpace.value() )
+#set ( $matrixColumnFields = $parameters.columnFields.value() )
+#set ( $matrixColumnQueries = [] )
+#set ( $matrixColumnQueryTitles = [] )
+
+#macro ( addMatrixColumnQueryMacro $title $query $showRisksheetLink $includeReferencedWorkItems )
+    #set ( $matrixColumnTitle = "$!title" )
+    #set ( $matrixColumnQuery = "$!query" )
+    #set ( $matrixColumnTitle = $matrixColumnTitle.trim() )
+    #set ( $matrixColumnQuery = $matrixColumnQuery.trim() )
+
+    #if ( !$matrixColumnTitle.equals("") && !$matrixColumnQuery.equals("") && !$matrixColumnQueryTitles.contains($matrixColumnTitle) )
+        #set ( $matrixColumnQueryMap = $objectFactory.newMap() )
+        #set ( $void = $matrixColumnQueryMap.put("title", $matrixColumnTitle) )
+        #set ( $void = $matrixColumnQueryMap.put("query", $matrixColumnQuery) )
+        #set ( $void = $matrixColumnQueryMap.put("showRisksheetLink", $showRisksheetLink) )
+        #set ( $void = $matrixColumnQueryMap.put("includeReferencedWorkItems", $includeReferencedWorkItems) )
+        #set ( $void = $matrixColumnQueries.add($matrixColumnQueryMap) )
+        #set ( $void = $matrixColumnQueryTitles.add($matrixColumnTitle) )
+    #end
+#end
+
+#if ( $selectedMatrixPreset.equals("basicLiveDocStatus") )
+    #set ( $matrixShowSignaturesStatus = false )
+    #set ( $matrixShowDocumentBaselines = false )
+    #set ( $matrixShowBranchedDocuments = false )
+    #set ( $matrixShowMasterDocument = false )
+    #set ( $matrixShowUnresolvedComments = false )
+    #set ( $matrixShowUnreferencedWorkItems = false )
+    #set ( $matrixShowApprovedVersions = false )
+    #set ( $matrixShowProject = true )
+    #set ( $matrixShowSpace = true )
+    #set ( $matrixColumnFields = "status,updated" )
+#elseif ( $selectedMatrixPreset.equals("reviewAndApproval") )
+    #set ( $matrixShowSignaturesStatus = true )
+    #set ( $matrixShowDocumentBaselines = true )
+    #set ( $matrixShowBranchedDocuments = false )
+    #set ( $matrixShowMasterDocument = false )
+    #set ( $matrixShowUnresolvedComments = true )
+    #set ( $matrixShowUnreferencedWorkItems = false )
+    #set ( $matrixShowApprovedVersions = true )
+    #set ( $matrixShowProject = true )
+    #set ( $matrixShowSpace = true )
+    #set ( $matrixColumnFields = "status,updated" )
+#elseif ( $selectedMatrixPreset.equals("traceabilityCounts") )
+    #set ( $matrixShowSignaturesStatus = false )
+    #set ( $matrixShowDocumentBaselines = false )
+    #set ( $matrixShowBranchedDocuments = false )
+    #set ( $matrixShowMasterDocument = false )
+    #set ( $matrixShowUnresolvedComments = false )
+    #set ( $matrixShowUnreferencedWorkItems = true )
+    #set ( $matrixShowApprovedVersions = false )
+    #set ( $matrixShowProject = true )
+    #set ( $matrixShowSpace = true )
+    #set ( $matrixColumnFields = "status,updated,type" )
+    #addMatrixColumnQueryMacro("Requirements" "type:requirement" false true)
+    #addMatrixColumnQueryMacro("Test Cases" "type:testcase" false true)
+    #addMatrixColumnQueryMacro("Defects" "type:defect" false true)
+    #addMatrixColumnQueryMacro("Risks" "type:risk" true true)
+#elseif ( $selectedMatrixPreset.equals("releaseReadiness") )
+    #set ( $matrixShowSignaturesStatus = true )
+    #set ( $matrixShowDocumentBaselines = true )
+    #set ( $matrixShowBranchedDocuments = true )
+    #set ( $matrixShowMasterDocument = true )
+    #set ( $matrixShowUnresolvedComments = true )
+    #set ( $matrixShowUnreferencedWorkItems = true )
+    #set ( $matrixShowApprovedVersions = true )
+    #set ( $matrixShowProject = true )
+    #set ( $matrixShowSpace = true )
+    #set ( $matrixColumnFields = "status,updated" )
+    #addMatrixColumnQueryMacro("Open Items" "NOT status:(closed resolved done approved rejected)" false true)
+    #addMatrixColumnQueryMacro("Change Requests" "type:changeRequest" false true)
+    #addMatrixColumnQueryMacro("Defects" "type:defect" false true)
+#else
+    #foreach ( $columnParam in $parameters.columns.get() )
+        #addMatrixColumnQueryMacro($columnParam.title.value() $columnParam.query.value() $columnParam.showRisksheetLink.value() $columnParam.includeReferencedWorkItems.value())
+    #end
+#end
+
+## ==========================================================================
 ## $widgetTableId gives this widget instance its own table element.
 ## ==========================================================================
 #set ( $tableUniqueId = $widgetContext.generateUniqueElementId() )
@@ -428,7 +538,7 @@
     #set ( $fieldFilterTypesMap = $objectFactory.newMap() )
     #set ( $fieldProjectIdsMap = $objectFactory.newMap() )
 
-    #foreach ( $fieldIdRaw in $parameters.columnFields.value().split(",") )
+    #foreach ( $fieldIdRaw in $matrixColumnFields.split(",") )
         #set ( $fieldId = $fieldIdRaw.trim() )
 
         #if ( !$fieldId.equals("") && !$columnFieldIds.contains($fieldId) )
@@ -693,14 +803,14 @@
     ## ======================================================================
     #set ( $headersKeys = [] )
 
-    #if ( true == $parameters.showProject.value() )
+    #if ( true == $matrixShowProject )
         #set ( $void = $headersMap.put("project", "Project") )
         #set ( $void = $headerFilterTypesMap.put("project", "catalog") )
         #set ( $void = $headerGlobalSearchMap.put("project", true) )
         #set ( $void = $headersKeys.add("project") )
     #end
 
-    #if ( true == $parameters.showSpace.value() )
+    #if ( true == $matrixShowSpace )
         #set ( $void = $headersMap.put("space", "Space") )
         #set ( $void = $headerFilterTypesMap.put("space", "catalog") )
         #set ( $void = $headerGlobalSearchMap.put("space", true) )
@@ -764,7 +874,7 @@
         #set ( $void = $headersKeys.add($fieldId) )
     #end
 
-    #if ( true == $parameters.showSignaturesStatus.value() )
+    #if ( true == $matrixShowSignaturesStatus )
         #set ( $void = $headersMap.put("signatureHtml","Signatures") )
         #set ( $void = $headerFilterTypesMap.put("signatureHtml", "list") )
         #set ( $void = $headerGlobalSearchMap.put("signatureHtml", true) )
@@ -775,42 +885,42 @@
     ## Optional LiveDoc metadata columns are rendered after document fields and
     ## signatures, before user-defined query-count columns.
     ## ======================================================================
-    #if ( true == $parameters.showDocumentBaselines.value() )
+    #if ( true == $matrixShowDocumentBaselines )
         #set ( $void = $headersMap.put("documentBaselinesHtml", "Document Baselines") )
         #set ( $void = $headerFilterTypesMap.put("documentBaselinesHtml", "list") )
         #set ( $void = $headerGlobalSearchMap.put("documentBaselinesHtml", true) )
         #set ( $void = $headersKeys.add("documentBaselinesHtml") )
     #end
 
-    #if ( true == $parameters.showBranchedDocuments.value() )
+    #if ( true == $matrixShowBranchedDocuments )
         #set ( $void = $headersMap.put("branchedDocumentsHtml", "Branched Documents") )
         #set ( $void = $headerFilterTypesMap.put("branchedDocumentsHtml", "list") )
         #set ( $void = $headerGlobalSearchMap.put("branchedDocumentsHtml", true) )
         #set ( $void = $headersKeys.add("branchedDocumentsHtml") )
     #end
 
-    #if ( true == $parameters.showMasterDocument.value() )
+    #if ( true == $matrixShowMasterDocument )
         #set ( $void = $headersMap.put("masterDocumentHtml", "Master Document") )
         #set ( $void = $headerFilterTypesMap.put("masterDocumentHtml", "list") )
         #set ( $void = $headerGlobalSearchMap.put("masterDocumentHtml", true) )
         #set ( $void = $headersKeys.add("masterDocumentHtml") )
     #end
 
-    #if ( true == $parameters.showUnresolvedComments.value() )
+    #if ( true == $matrixShowUnresolvedComments )
         #set ( $void = $headersMap.put("unresolvedCommentsHtml", "Unresolved Comments") )
         #set ( $void = $headerFilterTypesMap.put("unresolvedCommentsHtml", "number") )
         #set ( $void = $headerGlobalSearchMap.put("unresolvedCommentsHtml", false) )
         #set ( $void = $headersKeys.add("unresolvedCommentsHtml") )
     #end
 
-    #if ( true == $parameters.showUnreferencedWorkItems.value() )
+    #if ( true == $matrixShowUnreferencedWorkItems )
         #set ( $void = $headersMap.put("unreferencedWorkItemsHtml", "Unreferenced Work Items") )
         #set ( $void = $headerFilterTypesMap.put("unreferencedWorkItemsHtml", "number") )
         #set ( $void = $headerGlobalSearchMap.put("unreferencedWorkItemsHtml", false) )
         #set ( $void = $headersKeys.add("unreferencedWorkItemsHtml") )
     #end
 
-    #if ( true == $parameters.showApprovedVersions.value() )
+    #if ( true == $matrixShowApprovedVersions )
         #set ( $void = $headersMap.put("approvedVersionsHtml", "Approved Versions") )
         #set ( $void = $headerFilterTypesMap.put("approvedVersionsHtml", "list") )
         #set ( $void = $headerGlobalSearchMap.put("approvedVersionsHtml", true) )
@@ -818,15 +928,18 @@
     #end
 
     ## ======================================================================
-    ## This is for user-defined query-count columns in the matrix.
-    ## Lets user create columns with defined queries from Lucene
+    ## This is for configured query-count columns in the matrix.
+    ## Custom Configuration uses user-defined Lucene queries; recommended
+    ## presets provide vetted common queries through the same path.
     ## ======================================================================
-    #foreach ( $columnParam in $parameters.columns.get() )
-        #if ( !($columnParam.title.value() == "") && !($columnParam.query.value() == "") )
-            #set ( $void = $headersMap.put($columnParam.title.value(), $columnParam.title.value()) )
-            #set ( $void = $headerFilterTypesMap.put($columnParam.title.value(), "number") )
-            #set ( $void = $headerGlobalSearchMap.put($columnParam.title.value(), false) )
-            #set ( $void = $headersKeys.add($columnParam.title.value()) )
+    #foreach ( $columnQueryParam in $matrixColumnQueries )
+        #set ( $columnQueryTitle = $columnQueryParam.get("title") )
+        #set ( $columnQueryText = $columnQueryParam.get("query") )
+        #if ( !$columnQueryTitle.equals("") && !$columnQueryText.equals("") )
+            #set ( $void = $headersMap.put($columnQueryTitle, $columnQueryTitle) )
+            #set ( $void = $headerFilterTypesMap.put($columnQueryTitle, "number") )
+            #set ( $void = $headerGlobalSearchMap.put($columnQueryTitle, false) )
+            #set ( $void = $headersKeys.add($columnQueryTitle) )
         #end
     #end
 #end
@@ -866,7 +979,7 @@
         ## ==================================================================
         ## Add the Project cell when the Project column is enabled.
         ## ==================================================================
-        #if ( true == $parameters.showProject.value() )
+        #if ( true == $matrixShowProject )
             #set ( $projectHtml = "$!docu.fields().project().render()")
             #set ( $void = $rowsMap.put("project", $projectHtml) )
             #set ( $void = $rowsMap.put("__tsbFilterValue_project", $docu.getOldApi().getProject().getName()) )
@@ -876,7 +989,7 @@
         ## ==================================================================
         ## Add the Space cell when the Space column is enabled.
         ## ==================================================================
-        #if ( true == $parameters.showSpace.value() )
+        #if ( true == $matrixShowSpace )
             #set ( $spaceHtml = "$!docu.space().render()" )
             #set ( $void = $rowsMap.put("space", $spaceHtml) )
             #set ( $void = $rowsMap.put("__tsbFilterValue_space", $docu.space().label()) )
@@ -907,7 +1020,7 @@
         ## Add the Signatures cell when enabled.
         ## Only active signature states are shown.
         ## ==================================================================
-        #if ( true == $parameters.showSignaturesStatus.value() )
+        #if ( true == $matrixShowSignaturesStatus )
             #set ( $workflowSignatures = $docu.fields().workflowSignatures().toArrayList )
             
             #foreach( $row in $workflowSignatures )
@@ -930,7 +1043,7 @@
         ## Add document baseline information when enabled. Document baselines
         ## are object baselines whose base object points to this LiveDoc.
         ## ==================================================================
-        #if ( true == $parameters.showDocumentBaselines.value() )
+        #if ( true == $matrixShowDocumentBaselines )
             #set ( $documentBaselinesHtml = "" )
             #set ( $documentBaselinesSearchText = "" )
             #set ( $documentBaseObjectPath = "document/$oldApiDocument.getModuleLocation().getLocationPath()" )
@@ -975,7 +1088,7 @@
         ## ==================================================================
         ## Add branched document links when enabled.
         ## ==================================================================
-        #if ( true == $parameters.showBranchedDocuments.value() )
+        #if ( true == $matrixShowBranchedDocuments )
             #set ( $branchedDocumentsHtml = "" )
             #set ( $branchedDocumentsSearchText = "" )
             #set ( $branchedModules = $oldApiDocument.getBranchedModules() )
@@ -1009,7 +1122,7 @@
         ## Branched source takes precedence because it is the stronger document
         ## relationship; derived source is used when no branch source exists.
         ## ==================================================================
-        #if ( true == $parameters.showMasterDocument.value() )
+        #if ( true == $matrixShowMasterDocument )
             #set ( $masterDocumentHtml = "" )
             #set ( $masterDocumentSearchText = "" )
             #set ( $masterModule = false )
@@ -1046,7 +1159,7 @@
         ## Link the count to the document so users can open the comments panel
         ## in document context.
         ## ==================================================================
-        #if ( true == $parameters.showUnresolvedComments.value() )
+        #if ( true == $matrixShowUnresolvedComments )
             #set ( $unresolvedRootComments = $oldApiDocument.getRootComments(false) )
             #set ( $unresolvedCommentCount = $unresolvedRootComments.size() )
             #set ( $unresolvedCommentClassAttribute = "" )
@@ -1063,7 +1176,7 @@
         ## tracker link are built from the exact unreferenced item identities,
         ## not from the normal document.id query.
         ## ==================================================================
-        #if ( true == $parameters.showUnreferencedWorkItems.value() )
+        #if ( true == $matrixShowUnreferencedWorkItems )
             #set ( $unreferencedWorkItems = $docu.items().unreferenced() )
             #prepareWorkItemIdentityQueryMacro($unreferencedWorkItems)
             #set ( $unreferencedWorkItemQuery = $workItemIdentityQuery )
@@ -1096,7 +1209,7 @@
         ## Add approved version information from document workflow signatures.
         ## Each approved transition links to the versioned document revision.
         ## ==================================================================
-        #if ( true == $parameters.showApprovedVersions.value() )
+        #if ( true == $matrixShowApprovedVersions )
             #set ( $approvedVersionsHtml = "" )
             #set ( $approvedVersionsSearchText = "" )
 
@@ -1224,18 +1337,21 @@
         #end
         
         ## ==================================================================
-        ## This is for user-defined query-count columns in the matrix.
-        ## Lets user create columns with defined queries from Lucene
+        ## This is for configured query-count columns in the matrix.
+        ## Custom Configuration uses user-defined Lucene queries; recommended
+        ## presets provide vetted common queries through the same path.
         ## ==================================================================
-        #foreach ( $columnParam in $parameters.columns.get() )
-            #if ( !($columnParam.title.value() == "") && !($columnParam.query.value() == "") )
+        #foreach ( $columnQueryParam in $matrixColumnQueries )
+            #set ( $columnQueryTitle = $columnQueryParam.get("title") )
+            #set ( $columnQueryText = $columnQueryParam.get("query") )
+            #if ( !$columnQueryTitle.equals("") && !$columnQueryText.equals("") )
                 ## ==========================================================
                 ## Count matching work items and build links to the tracker,
                 ## filtered document, and optional risksheet views.
                 ## Zero counts receive a dedicated CSS class.
                 ## The class applies only to additional-column count links.
                 ## ==========================================================
-                #set ( $columnQuery = "$!columnParam.query.value()" )
+                #set ( $columnQuery = "$!columnQueryText" )
                 #resolveQueryPageParametersMacro($columnQuery)
                 #set ( $columnQuery = $resolvedQueryText )
                 #set ( $cellQuery = "$docQuery AND ($columnQuery)" )
@@ -1243,11 +1359,11 @@
                 #set ( $includeReferencedWorkItems = false )
                 #set ( $showRisksheetLink = false )
 
-                #if ( true == $columnParam.includeReferencedWorkItems.value() )
+                #if ( true == $columnQueryParam.get("includeReferencedWorkItems") )
                     #set ( $includeReferencedWorkItems = true )
                 #end
 
-                #if ( true == $columnParam.showRisksheetLink.value() )
+                #if ( true == $columnQueryParam.get("showRisksheetLink") )
                     #set ( $showRisksheetLink = true )
                 #end
 
@@ -1289,13 +1405,13 @@
                     #set ( $risksheetLinkHtml = "<a href=$q$risksheetLink$q>Risksheet</a>" )
                     #set ( $cellHtml = "$cellHtml / $risksheetLinkHtml" )
                 #end
-                #set ( $void = $rowsMap.put($columnParam.title.value(), $cellHtml) )
+                #set ( $void = $rowsMap.put($columnQueryTitle, $cellHtml) )
 
                 ## ==========================================================
                 ## Keep the raw count separate from the rendered links.
                 ## DataTables uses this value for numeric filtering.
                 ## ==========================================================
-                #set ( $filterValueKey = "__tsbFilterValue_${columnParam.title.value()}" )
+                #set ( $filterValueKey = "__tsbFilterValue_${columnQueryTitle}" )
                 #set ( $void = $rowsMap.put($filterValueKey, $workitemCount) )
             #end
         #end
