@@ -190,3 +190,33 @@ Documentation update only. No widget behavior changes and no code fixes.
 - [ENHANCEMENT] Added empty-state messages for data sets and filter combinations with no matching documents.
 - [FIX] Removed duplicate document status and document type choices from filter dropdowns.
 - [FIX] Restored global search across visible cell values while keeping column filters on their dedicated raw values.
+
+### 2026-08-05
+
+- [ENHANCEMENT] Added multi-project row handling so rendered LiveDocs preserve their own project context for links, work item queries, and counts.
+- [ENHANCEMENT] Added Project Baseline and Revision controls for rendering the matrix against a selected revision context.
+- [ENHANCEMENT] Added default sorting presets for Project, Space, and Document where those columns are available.
+- [ENHANCEMENT] Added initial formatting support for matrix status and count cells.
+
+### 2026-08-06
+
+- [FIX] Improved stale Project Baseline handling so invalid saved selections fall back safely instead of rendering against the wrong baseline.
+
+### 2026-08-09
+
+- [ENHANCEMENT] Moved baseline and revision configuration under the Data Set section.
+- [ENHANCEMENT] Added Collection scope support, including inherited Collection documents where configured.
+- [ENHANCEMENT] Added per-column filter and formatting improvements for document fields and computed count columns.
+- [ENHANCEMENT] Added optional LiveDoc metadata columns for document baselines, branched documents, master documents, approved versions, unresolved comments, and unreferenced work items.
+- [ENHANCEMENT] Added support for computed columns to include referenced work items in addition to contained document work items.
+- [FIX] Removed saved sorting controls from the widget properties panel.
+- [FIX] Refined Project Baseline option loading and validation.
+
+### 2026-08-10
+
+- [ENHANCEMENT] Added page-parameter query resolution for dynamic Data Set query values.
+- [ENHANCEMENT] Added recommended matrix configuration presets.
+- [FIX] Added explicit read checks for related documents and work items before rendering metadata or identity-based query links.
+- [FIX] Deduplicated identity-based work item queries so referenced and contained items are not counted twice.
+- [FIX] Hardened table settings validation for table height, rows per page, and configurable colors.
+- [FIX] Updated status formatting to use semantic status classes with a neutral fallback for custom statuses.

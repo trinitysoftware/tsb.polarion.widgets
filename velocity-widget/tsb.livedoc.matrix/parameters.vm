@@ -33,10 +33,9 @@
 ## ==========================================================================
 
 ## ==========================================================================
-## Build Data Set Parameter with nested Project Baseline and Revision fields.
-## The Data Set serves as the single source of truth for scope selection
-## (single project, project group, collection, or global repository scope) as
-## well as multi-project queries (such as project.id or project.group.id filters).
+## Build Data Set Parameter. The Data Set serves as the single source of truth 
+## for scope selection (single project, project group, collection, or global 
+## repository scope).
 ## ==========================================================================
 #set ( $projectBaselineParam = $factory.customEnum("Project Baseline").allowNoValue(true).allowMultipleValues(false).dependencyTarget(true).build() )
 #set ( $specificRevisionParam = $factory.string("Revision").value("").dependencyTarget(true).build() )
@@ -44,14 +43,9 @@
 
 $parameters.put("dataSet", $factory.dataSet("Data Set").prototype().document().allowedPrototypes(["Document"]).allowCollectionScope(true).luceneQuery("").add("projectBaseline", $projectBaselineParam).add("specificRevision", $specificRevisionParam).add("collectionInheritance", $collectionInheritanceParam).dependencySource(true).build())
 
-## --------------------------------------------------------------------------
-## dependencySource = allows the script to process dependencies (parent-child items) - can be used to include the entire linked structure
-## When we create a report, we can pull user stories, evaluate their status, which document it is linked to, etc.
-## --------------------------------------------------------------------------
-
 ## ==========================================================================
-## Parameters are the conditions or filters that we can see in the widget
-## These can help filter the data accordingly - aligned with what users want to see
+## Parameters are the conditions or filters that we can see in the widget.
+## These can help filter the data accordingly - aligned with what users want to see.
 ##
 ## These are just IDs and labels that we're initializing for later.
 ## ==========================================================================
@@ -79,14 +73,11 @@ $parameters.put("rowBackgroundColor", $factory.string("Row Background Color").va
 $parameters.put("alternateRowBackgroundColor", $factory.string("Alternate Row Background Color").value("#f8fafc").dependencyTarget(true).build())
 $parameters.put("showExportButtons", $factory.bool("Show Export Buttons").value(true).dependencyTarget(true).build())
 $parameters.put("showSearchBar", $factory.bool("Show Search Bar").value(true).dependencyTarget(true).build())
-
-## Paging remains disabled by default.
-## Rows Per Page applies only when paging is enabled.
 $parameters.put("enablePaging", $factory.bool("Enable Paging").value(false).dependencySource(true).build())
 $parameters.put("rowsPerPage", $factory.integer("Rows Per Page").value(10).dependencyTarget(true).build())
 
 ## ==========================================================================
-## Build Additional Column workitem queries
+## Build Additional Column work item queries.
 ## ==========================================================================
 #set ( $title = $factory.string("Title").build() )
 #set ( $query = $factory.string("Query (Lucene)").value("").build() )

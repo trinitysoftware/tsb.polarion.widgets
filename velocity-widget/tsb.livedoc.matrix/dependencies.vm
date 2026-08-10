@@ -87,8 +87,6 @@
 
 ## ==========================================================================
 ## Populate Project Baseline options from the projects in the Data Set scope.
-## Option value is revision|baselineName|projectId. The label includes project
-## name and revision number (without 'r' prefix).
 ## ==========================================================================
 #set ( $projectBaselineSetter = $parameters.dataSet.projectBaseline.set().clear().allowNoValue(true).allowMultipleValues(false) )
 #set ( $dataSetScope = $parameters.dataSet.scope() )
@@ -105,7 +103,7 @@
 
 ## ==========================================================================
 ## Resolve page-parameter tokens in the Data Set query before using it to find
-## projects for Project Baseline options. Keep this in sync with render.vm.
+## projects for Project Baseline options.
 ## ==========================================================================
 #macro ( resolveQueryPageParametersMacro $sourceQuery )
     #set ( $resolvedQueryText = "$!sourceQuery" )

@@ -130,7 +130,33 @@
     color: var(--tsb-zero-value-color) !important;
 }
 
-/* Built-in status formatting by configured Polarion status option order. */
+/* Semantic status formatting used by the matrix status column. */
+.tsb-table-effects table.dataTable tbody td.tsb-status-success {
+    color: #166534;
+    background-color: #dcfce7;
+}
+
+.tsb-table-effects table.dataTable tbody td.tsb-status-danger {
+    color: #991b1b;
+    background-color: #fee2e2;
+}
+
+.tsb-table-effects table.dataTable tbody td.tsb-status-warning {
+    color: #854d0e;
+    background-color: #fef3c7;
+}
+
+.tsb-table-effects table.dataTable tbody td.tsb-status-info {
+    color: #1d4ed8;
+    background-color: #dbeafe;
+}
+
+.tsb-table-effects table.dataTable tbody td.tsb-status-neutral {
+    color: #374151;
+    background-color: #f3f4f6;
+}
+
+/* Legacy status tone classes remain for older cached widget markup. */
 .tsb-table-effects table.dataTable tbody td.tsb-status-tone-1 {
     color: #374151;
     background-color: #f3f4f6;

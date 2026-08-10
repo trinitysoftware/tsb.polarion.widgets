@@ -32,7 +32,7 @@
 ## ==========================================================================
 ## Resolve document search criteria directly from the Data Set parameter.
 ## The Data Set parameter handles single project, project group, collection,
-## global scope, and multi-project project.id terms.
+## and global scope.
 ## ==========================================================================
 #set ( $dataSetScope = $parameters.dataSet.scope() )
 #set ( $dataSetCollectionReference = $parameters.dataSet.getCollectionReference() )
@@ -66,8 +66,7 @@
 ## Resolve the revision context before any document or work item search runs.
 ## Empty revision means HEAD/current. Project Baseline selection takes
 ## precedence because its base revision is the authoritative snapshot point.
-## Project Baseline options use revision|baselineName values. The selected
-## revision applies to all documents represented by the Data Set.
+## The selected revision applies to all documents represented by the Data Set.
 ##
 ## Collection scope carries per-document revisions from its Collection elements,
 ## so Project Baseline and Revision are intentionally ignored in that mode.
@@ -77,10 +76,8 @@
 #set ( $specificRevision = $parameters.dataSet.specificRevision.value().trim() )
 
 ## ==========================================================================
-## Replace page-parameter references in Lucene query text without #evaluate.
-## The Data Set query is already plain text at this point; running it through
-## a nested Velocity parser can fail inside Polarion, so resolve the documented
-## $pageParameters.<id> tokens directly from the page parameter map.
+## Replace page-parameter references in Lucene query text. The Data Set query 
+## is already plain text at this point.
 ## ==========================================================================
 #macro ( resolveQueryPageParametersMacro $sourceQuery )
     #set ( $resolvedQueryText = "$!sourceQuery" )
@@ -207,8 +204,6 @@
             #set ( $revisionWarning = "Project Baseline '$projectBaselineValue' is not available in the current Data Set scope. Rows are rendered from HEAD." )
         #end
     #else
-        ## Older saved configurations used projectId/baselineId values. They
-        ## cannot identify a cross-project revision anymore, so fall back to HEAD.
         #set ( $revisionWarning = "Project Baseline '$projectBaselineValue' cannot be resolved. Rows are rendered from HEAD." )
     #end
 #elseif ( !$dataSetCollectionScopeSelected && !$specificRevision.equals("") )
@@ -477,8 +472,8 @@
     #else
         ## ==================================================================
         ## Execute the Data Set query through document search. This preserves
-        ## the query path that renders project and project-group scopes, while
-        ## still allowing a selected revision to be applied.
+        ## Polarion's native scope, project group, query builder, and revision
+        ## behavior; each returned row then supplies its own project context.
         ## ==================================================================
         #set ( $_docsSearch = $transaction.documents().search().query($documentQuery) )
 
@@ -751,20 +746,29 @@
 
 #macro ( prepareWorkItemIdentityQueryMacro $workItems )
     ## ======================================================================
-    ## Build an exact Lucene identity query from a document work item list.
-    ## This lets tracker, document, and risksheet links reuse the same matched
-    ## set when the column uses referenced or unreferenced document items.
+    ## Build an exact Lucene identity query from a document-provided work item
+    ## list. Polarion owns the meaning of each list, such as unreferenced items
+    ## or the broader document item list used when a column includes referenced
+    ## work items. This macro keeps that API result safe for Lucene by allowing
+    ## only readable, resolvable work items and by deduplicating project/id pairs
+    ## before the query is sent back to the tracker.
     ## ======================================================================
     #set ( $workItemIdentityQueryParts = [] )
+    #set ( $workItemIdentityKeys = [] )
 
     #foreach ( $workItem in $workItems )
-        #if ( $workItem && !$workItem.isUnresolvable() )
+        #if ( $workItem && !$workItem.isUnresolvable() && $workItem.can().read() )
             #set ( $oldApiWorkItem = $workItem.getOldApi() )
             #set ( $workItemProjectId = "$!oldApiWorkItem.getProjectId()" )
             #set ( $workItemId = "$!oldApiWorkItem.getId()" )
 
             #if ( !$workItemProjectId.equals("") && !$workItemId.equals("") )
-                #set ( $void = $workItemIdentityQueryParts.add("(project.id:$q$workItemProjectId$q AND id:$q$workItemId$q)") )
+                #set ( $workItemIdentityKey = "$workItemProjectId|$workItemId" )
+
+                #if ( !$workItemIdentityKeys.contains($workItemIdentityKey) )
+                    #set ( $void = $workItemIdentityKeys.add($workItemIdentityKey) )
+                    #set ( $void = $workItemIdentityQueryParts.add("(project.id:$q$workItemProjectId$q AND id:$q$workItemId$q)") )
+                #end
             #end
         #end
     #end
@@ -843,10 +847,12 @@
 
             ## ==============================================================
             ## Status formatting uses the configured Polarion status options
-            ## from represented projects. Rules match exact option names that
-            ## also back the status catalog filter values. Colors are assigned
-            ## by enumeration order, so every configured status can receive a
-            ## style without hardcoding status names.
+            ## from represented projects. Rules still match the exact option
+            ## name stored in the row filter value, but the CSS class is chosen
+            ## from the option's meaning instead of its enumeration order. Known
+            ## lifecycle words receive semantic colors; unfamiliar custom values
+            ## remain neutral so they are readable without implying a state that
+            ## the project configuration did not express.
             ## ==============================================================
             #foreach ( $statusProjectId in $statusProjectIds )
                 #set ( $statusTrackerProject = $trackerService.getTrackerProject($statusProjectId) )
@@ -860,9 +866,29 @@
                                 #set ( $statusOptionName = "$!statusOption.getName()" )
 
                                 #if ( !$statusOptionName.equals("") && !$statusFormattingOptionNames.contains($statusOptionName) )
-                                    #set ( $statusToneNumber = $statusFormattingOptionNames.size() )
-                                    #set ( $statusToneNumber = $statusToneNumber + 1 )
-                                    #set ( $statusFormattingClass = "tsb-status-tone-${statusToneNumber}" )
+                                    #set ( $statusOptionId = "$!statusOption.getId()" )
+                                    #set ( $statusMeaning = "$statusOptionId $statusOptionName" )
+                                    #set ( $statusMeaning = $statusMeaning.toLowerCase() )
+                                    #set ( $statusFormattingClass = "tsb-status-neutral" )
+
+                                    ## ======================================
+                                    ## Negative lifecycle words are checked
+                                    ## first because some of them contain
+                                    ## positive words as substrings. This keeps
+                                    ## the visual meaning aligned with the
+                                    ## configured status instead of the first
+                                    ## matching fragment.
+                                    ## ======================================
+                                    #if ( $statusMeaning.contains("reject") || $statusMeaning.contains("obsolete") || $statusMeaning.contains("fail") || $statusMeaning.contains("invalid") || $statusMeaning.contains("cancel") || $statusMeaning.contains("declin") || $statusMeaning.contains("block") )
+                                        #set ( $statusFormattingClass = "tsb-status-danger" )
+                                    #elseif ( $statusMeaning.contains("accept") || $statusMeaning.contains("approv") || $statusMeaning.contains("publish") || $statusMeaning.contains("release") || $statusMeaning.contains("done") || $statusMeaning.contains("complete") || $statusMeaning.contains("closed") || $statusMeaning.contains("resolved") || $statusMeaning.contains("verified") || $statusMeaning.contains("passed") || $statusMeaning.contains("valid") || $statusMeaning.contains("ready") || $statusMeaning.contains("final") )
+                                        #set ( $statusFormattingClass = "tsb-status-success" )
+                                    #elseif ( $statusMeaning.contains("draft") || $statusMeaning.contains("open") || $statusMeaning.contains("new") || $statusMeaning.contains("todo") )
+                                        #set ( $statusFormattingClass = "tsb-status-info" )
+                                    #elseif ( $statusMeaning.contains("review") || $statusMeaning.contains("progress") || $statusMeaning.contains("pending") || $statusMeaning.contains("wait") )
+                                        #set ( $statusFormattingClass = "tsb-status-warning" )
+                                    #end
+
                                     #addHeaderFormattingRuleMacro($formattingRules "equals" $statusOptionName $statusFormattingClass "cell")
                                     #set ( $void = $statusFormattingOptionNames.add($statusOptionName) )
                                 #end
@@ -968,6 +994,7 @@
         #set ( $indexLoop = $velocityCount - 1 )
         #set ( $docQuery = $docQueries.get($indexLoop) )
         #set ( $rowRevision = $docRevisions.get($indexLoop) )
+
         #set ( $rowProjectId = $docu.fields().project().projectId() )
         #set ( $oldApiDocument = $docu.getOldApi() )
 
@@ -1387,6 +1414,15 @@
                 #end
 
                 #if ( $includeReferencedWorkItems )
+                    ## ======================================================
+                    ## The default document query counts work items contained
+                    ## in the LiveDoc. When this option is enabled, Polarion's
+                    ## document item list contributes the additional referenced
+                    ## item identities that the current user may read. The OR is
+                    ## intentional: contained items stay in the count, referenced
+                    ## items join it, and duplicate identities collapse naturally
+                    ## in the tracker search result.
+                    ## ======================================================
                     #prepareWorkItemIdentityQueryMacro($docu.items().filtered(""))
                     #set ( $cellQuery = "(($docQuery) OR ($workItemIdentityQuery)) AND ($columnQuery)" )
                     #set ( $workitemSearch = $transaction.workItems().search().query("$cellQuery") )
@@ -1476,9 +1512,9 @@
 #prepareDataRowsMacro()
 #prepareTableSettingsMacro()
 
-## ======================================================================
+## ==========================================================================
 ## Show revision-context warnings without preventing HEAD rendering.
-## ======================================================================
+## ==========================================================================
 #if ( !$revisionWarning.equals("") )
     $widgetContext.renderWarning($revisionWarning)
 #end
@@ -1487,16 +1523,16 @@
     $widgetContext.renderWarning($dataSetWarning)
 #end
 
-## ======================================================================
+## ==========================================================================
 ## Load widget-local DataTables assets.
-## ======================================================================
+## ==========================================================================
 #loadWidgetCssResource("resources/datatables.css")
 #loadWidgetJsResource("resources/datatables.js")
 
-## ======================================================================
+## ==========================================================================
 ## Load files for changing the effects or changing
 ## the design of the table.
-## ======================================================================
+## ==========================================================================
 #loadWidgetJsResource("resources/tableEffects.js")
 #loadWidgetCssResource("resources/tableEffects.css")
 

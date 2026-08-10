@@ -32,4 +32,6 @@
 ## OVERVIEW — tsb.livedoc.matrix — details.vm
 ## ==========================================================================
 
-<b>The tsb.livedoc.matrix widget</b>, developed by Trinity Software and Beyond, provides a document-level matrix for a project, project group, global scope, or a set of unrelated projects selected by the Data Set query. Each configurable column shows work items based on defined query conditions. Teams can add custom query columns, show key document fields (for example status, updated, or author), and optionally display project, space, and signature status for better context. Each matrix cell includes clickable links to open the matching work items and the related document view, helping users move from summary metrics to detailed review and follow-up quickly.
+<b>The tsb.livedoc.matrix widget</b>, developed by Trinity Software and Beyond, provides a configurable document-level matrix for LiveDoc review, traceability, and reporting workflows.
+
+<p>Final Version 4 feature details will be completed after the implementation behavior is finalized.</p>

@@ -204,9 +204,27 @@
         }
 
         // ==================================================================
-        // Read table display settings.
+        // Read table display settings. Widget parameters are intentionally
+        // editable, so the browser validates them before they reach DataTables
+        // or CSS variables. Invalid values fall back to conservative defaults
+        // instead of breaking the rendered matrix.
         // ==================================================================
-        var tableHeight = "$esc.javascript($tableSettings.get("tableHeight"))";
+        function isSafeCssLength(value) {
+            var length = String(value || '').trim();
+
+            return /^(auto|[1-9]\d{0,3}(\.\d+)?(px|vh|vw|rem|em|%))$/.test(length);
+        }
+
+        function normalizeCssLength(value, fallbackValue) {
+            var length = String(value || '').trim();
+
+            return isSafeCssLength(length) ? length : fallbackValue;
+        }
+
+        var tableHeight = normalizeCssLength(
+            "$esc.javascript($tableSettings.get("tableHeight"))",
+            '60vh'
+        );
         var showExportButtons = $tableSettings.get("showExportButtons");
         var showSearchBar = $tableSettings.get("showSearchBar");
         var enablePaging = $tableSettings.get("enablePaging");
@@ -218,6 +236,10 @@
         // ==================================================================
         if (isNaN(rowsPerPage) || rowsPerPage < 1) {
             rowsPerPage = 10;
+        }
+
+        if (rowsPerPage > 500) {
+            rowsPerPage = 500;
         }
 
         // ==================================================================
@@ -427,6 +449,47 @@
             return container.textContent || container.innerText || '';
         }
 
+        // ==================================================================
+        // Server-side row building can provide clean values beside rendered
+        // HTML. Display keeps Polarion links and icons; filtering and global
+        // search use the semantic value when one exists, so users search for
+        // document titles, statuses, and labels instead of hidden markup.
+        // ==================================================================
+        function getSemanticDataValue(rowData, header, prefix) {
+            var semanticKey = prefix + header.key;
+
+            if (Object.prototype.hasOwnProperty.call(rowData, semanticKey)) {
+                return rowData[semanticKey];
+            }
+
+            return null;
+        }
+
+        function getFilterDataValue(rowData, header, fallbackValue) {
+            var searchValue = getSemanticDataValue(
+                rowData,
+                header,
+                '__tsbSearchValue_'
+            );
+            var filterValue;
+
+            if (searchValue !== null) {
+                return searchValue;
+            }
+
+            filterValue = getSemanticDataValue(
+                rowData,
+                header,
+                '__tsbFilterValue_'
+            );
+
+            if (filterValue !== null) {
+                return filterValue;
+            }
+
+            return stripHtml(fallbackValue);
+        }
+
         function getFormattingValue(header, rowData) {
             var filterValueKey = '__tsbFilterValue_' + header.key;
 
@@ -563,6 +626,17 @@
                         }
                     });
                 },
+                render: function (data, type, row) {
+                    if (type === 'display') {
+                        return data;
+                    }
+
+                    if (type === 'filter' || type === 'sort') {
+                        return getFilterDataValue(row, header, data);
+                    }
+
+                    return data;
+                },
                 columnControl: [{
                     extend: 'dropdown',
                     icon: 'filter',
@@ -580,8 +654,12 @@
             if (header.filterType === 'number') {
                 column.type = 'num';
                 column.render = function (data, type, row) {
-                    if (type === 'display' || type === 'filter') {
+                    if (type === 'display') {
                         return data;
+                    }
+
+                    if (type === 'filter') {
+                        return getFilterDataValue(row, header, data);
                     }
 
                     var filterValueKey = '__tsbFilterValue_' + header.key;
@@ -598,8 +676,12 @@
             if (header.filterType === 'date') {
                 column.type = 'date';
                 column.render = function (data, type, row) {
-                    if (type === 'display' || type === 'filter') {
+                    if (type === 'display') {
                         return data;
+                    }
+
+                    if (type === 'filter') {
+                        return getFilterDataValue(row, header, data);
                     }
 
                     return row['__tsbFilterValue_' + header.key] || '';
