@@ -57,7 +57,7 @@
 ## Convert Velocity header and row maps into JavaScript data for DataTables.
 ## The server prepares the maps; this macro serializes them for the client.
 ## ==========================================================================
-#macro ( renderWidgetDataMacro $headersMap $headersKeys $headerFilterTypesMap $headerFilterOptionsMap $headerGlobalSearchMap $headerFormattingRulesMap $dataRows )
+#macro ( renderWidgetDataMacro $headersMap $headersKeys $headerFilterTypesMap $headerFilterOptionsMap $headerGlobalSearchMap $dataRows )
 <script type="text/javascript">
     // ======================================================================
     // This object is passed to DataTables.
@@ -82,8 +82,7 @@
             key: "$esc.javascript($headerKey)",
             filterType: "$esc.javascript($headerFilterTypesMap.get($headerKey))",
             globalSearch: $isGlobalSearchable,
-            filterOptions: [],
-            formattingRules: []
+            filterOptions: []
         };
 
         // ==================================================================
@@ -95,24 +94,6 @@
                 headerData.filterOptions.push({
                     label: "$esc.javascript($filterOption)",
                     value: "$esc.javascript($filterOption)"
-                });
-            #end
-        #end
-
-        // ==================================================================
-        // Column-defined formatting rules. These are internal column metadata,
-        // not widget parameters.
-        // ==================================================================
-        #if ( $headerFormattingRulesMap.containsKey($headerKey) )
-            #foreach ( $formattingRule in $headerFormattingRulesMap.get($headerKey) )
-                headerData.formattingRules.push({
-                    operator: "$esc.javascript($formattingRule.get("operator"))",
-                    value: "$esc.javascript($formattingRule.get("value"))",
-                    className: "$esc.javascript($formattingRule.get("className"))",
-                    textColor: "$esc.javascript($formattingRule.get("textColor"))",
-                    backgroundColor: "$esc.javascript($formattingRule.get("backgroundColor"))",
-                    bold: $formattingRule.get("bold"),
-                    target: "$esc.javascript($formattingRule.get("target"))"
                 });
             #end
         #end
@@ -147,7 +128,7 @@
 ## The caller provides the table id, ordered headers, prepared row data, and
 ## table settings collected from the widget properties panel.
 ## ==========================================================================
-#macro ( initDataTableMacro $widgetTableId $headersKeys $headersMap $headerFilterTypesMap $headerFilterOptionsMap $headerGlobalSearchMap $headerFormattingRulesMap $dataRows $tableSettings )
+#macro ( initDataTableMacro $widgetTableId $headersKeys $headersMap $headerFilterTypesMap $headerFilterOptionsMap $headerGlobalSearchMap $dataRows $tableSettings )
     ## ======================================================================
     ## This is the empty table element.
     ## DataTables will fill it using widgetData.
@@ -173,7 +154,7 @@
     ## ======================================================================
     ## Write the prepared server data into JavaScript.
     ## ======================================================================
-    #renderWidgetDataMacro( $headersMap $headersKeys $headerFilterTypesMap $headerFilterOptionsMap $headerGlobalSearchMap $headerFormattingRulesMap $dataRows )
+    #renderWidgetDataMacro( $headersMap $headersKeys $headerFilterTypesMap $headerFilterOptionsMap $headerGlobalSearchMap $dataRows )
     <script type="text/javascript">
     (function () {
         // ==================================================================
@@ -438,10 +419,6 @@
         // data = the key used to read the value from each row object.
         // name = the stable id used by DataTables ordering configuration.
         // ==================================================================
-        function normalizeFormattingValue(value) {
-            return String(value || '').trim().toLowerCase();
-        }
-
         function stripHtml(value) {
             var container = document.createElement('div');
             container.innerHTML = String(value || '');
@@ -490,83 +467,6 @@
             return stripHtml(fallbackValue);
         }
 
-        function getFormattingValue(header, rowData) {
-            var filterValueKey = '__tsbFilterValue_' + header.key;
-
-            if (Object.prototype.hasOwnProperty.call(rowData, filterValueKey)) {
-                return rowData[filterValueKey];
-            }
-
-            return stripHtml(rowData[header.key]);
-        }
-
-        function normalizeFormattingOperator(value) {
-            var operator = normalizeFormattingValue(value);
-
-            if (!operator || operator === '=' || operator === '==' ||
-                operator === 'is') {
-                return 'equals';
-            }
-
-            if (operator === '!=' || operator === '<>' ||
-                operator === 'not equals') {
-                return 'notEquals';
-            }
-
-            return operator;
-        }
-
-        function formattingRuleMatches(rule, value) {
-            var operator = normalizeFormattingOperator(rule.operator);
-            var actualText = normalizeFormattingValue(value);
-            var expectedText = normalizeFormattingValue(rule.value);
-
-            if (operator === 'equals') {
-                return actualText === expectedText;
-            }
-
-            if (operator === 'notEquals') {
-                return actualText !== expectedText;
-            }
-
-            return false;
-        }
-
-        function isSafeFormattingColor(value) {
-            var color = String(value || '').trim();
-
-            return /^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(color) ||
-                /^rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}(\s*,\s*(0|1|0?\.\d+))?\s*\)$/.test(color);
-        }
-
-        function applyFormattingRule(cell, rule) {
-            var target = cell;
-
-            if (rule.target === 'firstLink') {
-                target = cell.querySelector('a');
-
-                if (!target) {
-                    return;
-                }
-            }
-
-            if (rule.className && /^tsb-[a-z0-9-]+$/.test(rule.className)) {
-                target.classList.add(rule.className);
-            }
-
-            if (isSafeFormattingColor(rule.textColor)) {
-                target.style.color = rule.textColor;
-            }
-
-            if (isSafeFormattingColor(rule.backgroundColor)) {
-                target.style.backgroundColor = rule.backgroundColor;
-            }
-
-            if (rule.bold === true || rule.bold === 'true') {
-                target.style.fontWeight = '700';
-            }
-        }
-
         var columns = widgetData.headers.map(function (header) {
             var filterContent;
 
@@ -611,21 +511,6 @@
                 data: header.key,
                 name: header.key,
                 searchable: header.globalSearch !== false,
-                createdCell: function (cell, cellData, rowData) {
-                    var formattingValue;
-
-                    if (!header.formattingRules.length) {
-                        return;
-                    }
-
-                    formattingValue = getFormattingValue(header, rowData);
-
-                    header.formattingRules.forEach(function (rule) {
-                        if (formattingRuleMatches(rule, formattingValue)) {
-                            applyFormattingRule(cell, rule);
-                        }
-                    });
-                },
                 render: function (data, type, row) {
                     if (type === 'display') {
                         return data;

@@ -55,7 +55,7 @@ $parameters.put("showDocumentBaselines", $factory.bool("Show Document Baselines"
 $parameters.put("showBranchedDocuments", $factory.bool("Show Branched Documents").value(false).dependencyTarget(true).build())
 $parameters.put("showMasterDocument", $factory.bool("Show Master Document").value(false).dependencyTarget(true).build())
 $parameters.put("showUnresolvedComments", $factory.bool("Show Unresolved Comments").value(false).dependencyTarget(true).build())
-$parameters.put("showUnreferencedWorkItems", $factory.bool("Show Unreferenced Work Items").value(false).dependencyTarget(true).build())
+$parameters.put("showUnreferencedWorkItems", $factory.bool("Show Recycle Bin").value(false).dependencyTarget(true).build())
 $parameters.put("showApprovedVersions", $factory.bool("Show Approved Versions").value(true).dependencyTarget(true).build())
 $parameters.put("showProject", $factory.bool("Show Project").value(true).dependencyTarget(true).build())
 $parameters.put("showSpace", $factory.bool("Show Space").value(true).dependencyTarget(true).build())
@@ -73,6 +73,7 @@ $parameters.put("rowBackgroundColor", $factory.string("Row Background Color").va
 $parameters.put("alternateRowBackgroundColor", $factory.string("Alternate Row Background Color").value("#f8fafc").dependencyTarget(true).build())
 $parameters.put("showExportButtons", $factory.bool("Show Export Buttons").value(true).dependencyTarget(true).build())
 $parameters.put("showSearchBar", $factory.bool("Show Search Bar").value(true).dependencyTarget(true).build())
+$parameters.put("showRisksheetLink", $factory.bool("Show Risksheet Link").value(false).dependencyTarget(true).build())
 $parameters.put("enablePaging", $factory.bool("Enable Paging").value(false).dependencySource(true).build())
 $parameters.put("rowsPerPage", $factory.integer("Rows Per Page").value(10).dependencyTarget(true).build())
 
@@ -81,9 +82,7 @@ $parameters.put("rowsPerPage", $factory.integer("Rows Per Page").value(10).depen
 ## ==========================================================================
 #set ( $title = $factory.string("Title").build() )
 #set ( $query = $factory.string("Query (Lucene)").value("").build() )
-#set ( $showRisksheetLink = $factory.bool("Show Risksheet Link").value(false).build() )
-#set ( $includeReferencedWorkItems = $factory.bool("Include Referenced Work Items").value(false).build() )
-#set ( $composite = $factory.composite("Column Query").add("title", $title).add("query", $query).add("showRisksheetLink", $showRisksheetLink).add("includeReferencedWorkItems", $includeReferencedWorkItems).build() )
+#set ( $composite = $factory.composite("Column Query").add("title", $title).add("query", $query).build() )
 $parameters.put("columns", $factory.multi("Additional Columns", $composite).dependencyTarget(true).build())
 
 ## --------------------------------------------------------------------------

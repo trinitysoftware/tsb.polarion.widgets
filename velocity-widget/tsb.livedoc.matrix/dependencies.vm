@@ -74,6 +74,7 @@
 #set ( $void = $parameters.showProject.visuals().setVisible($customPresetSelected) )
 #set ( $void = $parameters.showSpace.visuals().setVisible($customPresetSelected) )
 #set ( $void = $parameters.columnFields.visuals().setVisible($customPresetSelected) )
+#set ( $void = $parameters.showRisksheetLink.visuals().setVisible($customPresetSelected) )
 #set ( $void = $parameters.columns.visuals().setVisible($customPresetSelected) )
 
 ## ==========================================================================
