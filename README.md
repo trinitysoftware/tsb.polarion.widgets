@@ -6,7 +6,7 @@ Polarion Velocity widget source for `tsb.livedoc.matrix`.
 
 | Item | Folder | Description |
 |------|--------|-------------|
-| **TSB LiveDoc Matrix 3.0** | [`velocity-widget/tsb.livedoc.matrix/`](velocity-widget/tsb.livedoc.matrix/) | Polarion widget that renders one table row per LiveDoc from a single-project Data Set. It shows the document, optional project and space columns, selected document fields, optional signatures, and configured query-count columns with work item and document links. |
+| **TSB LiveDoc Matrix 4.0** | [`velocity-widget/tsb.livedoc.matrix/`](velocity-widget/tsb.livedoc.matrix/) | Polarion widget that renders one table row per LiveDoc from Data Set scope, including project, project group, collection, and global selections. It shows document metadata, optional review/status columns, recommended presets, and configured query-count columns with work item, document, and optional risksheet links. |
 | **TSB Velocity Framework** | [`velocity-scripts/`](velocity-scripts/) | Shared Velocity macros used by the widget to load local CSS/JS resources, convert Velocity table data to JavaScript, and initialize DataTables. |
 
 ## Contents
@@ -18,8 +18,8 @@ Polarion Velocity widget source for `tsb.livedoc.matrix`.
 | [`velocity-widget/tsb.livedoc.matrix/parameters.vm`](velocity-widget/tsb.livedoc.matrix/parameters.vm) | Defines the widget parameters shown in Polarion. |
 | [`velocity-widget/tsb.livedoc.matrix/description.vm`](velocity-widget/tsb.livedoc.matrix/description.vm) | Help text shown for the widget parameters. |
 | [`velocity-widget/tsb.livedoc.matrix/details.vm`](velocity-widget/tsb.livedoc.matrix/details.vm) | Widget details text shown in Polarion. |
-| [`velocity-widget/tsb.livedoc.matrix/dependencies.vm`](velocity-widget/tsb.livedoc.matrix/dependencies.vm) | Polarion widget dependency file. It is currently empty except for the license header. |
-| [`velocity-widget/tsb.livedoc.matrix/widget.properties`](velocity-widget/tsb.livedoc.matrix/widget.properties) | Widget label and tags. Current label: `TSB LiveDoc Matrix 3.0`. |
+| [`velocity-widget/tsb.livedoc.matrix/dependencies.vm`](velocity-widget/tsb.livedoc.matrix/dependencies.vm) | Rebuilds dependent parameter values and visibility, including presets, paging controls, Data Set mode handling, and Project Baseline options. |
+| [`velocity-widget/tsb.livedoc.matrix/widget.properties`](velocity-widget/tsb.livedoc.matrix/widget.properties) | Widget label and tags. Current label: `TSB LiveDoc Matrix 4.0`. |
 | [`velocity-widget/tsb.livedoc.matrix/resources/datatables.js`](velocity-widget/tsb.livedoc.matrix/resources/datatables.js) | DataTables JavaScript bundled with the widget. |
 | [`velocity-widget/tsb.livedoc.matrix/resources/datatables.css`](velocity-widget/tsb.livedoc.matrix/resources/datatables.css) | DataTables CSS bundled with the widget. |
 | [`velocity-widget/tsb.livedoc.matrix/icon.png`](velocity-widget/tsb.livedoc.matrix/icon.png) | Widget icon. |
@@ -33,7 +33,7 @@ Polarion Velocity widget source for `tsb.livedoc.matrix`.
 1. Zip the contents of [`velocity-widget/tsb.livedoc.matrix/`](velocity-widget/tsb.livedoc.matrix/).
 2. Make sure the archive root contains `render.vm`, `parameters.vm`, `widget.properties`, and `resources/`.
 3. Upload the zip in Polarion Administration under Velocity Widgets.
-4. Add `TSB LiveDoc Matrix 3.0` to a Polarion page and configure its parameters.
+4. Add `TSB LiveDoc Matrix 4.0` to a Polarion page and configure its parameters.
 
 ## Repository layout
 
@@ -63,7 +63,8 @@ tsb.polarion.widgets/
 
 | Parameter | Description |
 |-----------|-------------|
-| `dataSet` | Selects the project scope and LiveDoc document query. |
+| `dataSet` | Selects the LiveDoc source scope, query, optional Project Baseline, specific revision, and Collection inheritance behavior. |
+| `matrixConfigurationPreset` | Applies a recommended matrix setup or keeps Custom Configuration values. |
 | `showProject` | Shows or hides the Project column. |
 | `showSpace` | Shows or hides the Space column. |
 | `showSignaturesStatus` | Shows or hides the Signatures column. |
@@ -83,5 +84,4 @@ To use macros from another Velocity file in Polarion, place the macro file in `/
 If you cannot access **Repository Browser** yet, navigate to `Administration` -> `Portal` -> `Topics` -> `Create New Topics Configuration`, then add `<topic id="repository_browser"/>`. Click Save. Navigate back to the project, then create this directory: `/.polarion/pages/scripts/velocity`, and add the shared macro file there.
 
 After the file is in that directory, import it from the widget file. For this widget, `render.vm` imports `tsb.framework.vm` and can then use the macros defined in that file.
-
 

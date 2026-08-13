@@ -1,23 +1,22 @@
-## ==========================================================================
+## ===========================================================================
 ## Shared macros for loading widget resources and rendering DataTables output.
 ## Import this file from a widget render file before calling these macros.
-## ==========================================================================
-
-## ==========================================================================
+## ===========================================================================
+## ===========================================================================
 ## Resolve a widget-local JavaScript resource URL, then load the script.
-## ==========================================================================
+## ===========================================================================
 #macro ( loadWidgetJsResource $js )
     #loadJsResource($widgetContext.resourceUrl("$js"))
 #end
 
-## ==========================================================================
+## ===========================================================================
 ## Load JavaScript from a URL and execute it in the page.
 ## Polarion widget resources require this XHR loading pattern.
-## ==========================================================================
+## ===========================================================================
 #macro ( loadJsResource $url )
-    ## ======================================================================
+    ## =======================================================================
     ## Synchronous XHR fetch and eval — required for Polarion widget resources.
-    ## ======================================================================
+    ## =======================================================================
     <script type="text/javascript">
         var xhrObj = new XMLHttpRequest();
         xhrObj.open('GET', '$url', false);
@@ -26,21 +25,21 @@
     </script>
 #end
 
-## ==========================================================================
+## ===========================================================================
 ## Resolve a widget-local CSS resource URL, then load the stylesheet.
-## ==========================================================================
+## ===========================================================================
 #macro ( loadWidgetCssResource $css )
     #loadCssResource( $widgetContext.resourceUrl("$css") )
 #end
 
-## ==========================================================================
+## ===========================================================================
 ## Load CSS from a URL and inject it into a generated <style> element.
 ## Polarion widget resources require this XHR loading pattern.
-## ==========================================================================
+## ===========================================================================
 #macro ( loadCssResource $url )
     ## =======================================================================
     ## Synchronous XHR fetch injected into a <style> tag — required for Polarion widget resources.
-    ## ======================================================================
+    ## =======================================================================
     #set ( $cssId = $widgetContext.generateUniqueElementId() )
 
     <style id="$cssId"></style>
@@ -53,25 +52,25 @@
     </script>
 #end
 
-## ==========================================================================
+## ===========================================================================
 ## Convert Velocity header and row maps into JavaScript data for DataTables.
 ## The server prepares the maps; this macro serializes them for the client.
-## ==========================================================================
+## ===========================================================================
 #macro ( renderWidgetDataMacro $headersMap $headersKeys $headerFilterTypesMap $headerFilterOptionsMap $headerGlobalSearchMap $dataRows )
 <script type="text/javascript">
-    // ======================================================================
+    // =======================================================================
     // This object is passed to DataTables.
     // headers stores the columns; rows stores the row data.
-    // ======================================================================
+    // =======================================================================
     var widgetData = {
         headers: [],
         rows: []
     };
 
-    // ======================================================================
+    // =======================================================================
     // Convert the Velocity headers map into JavaScript header objects.
     // Example: "space" -> "Space" becomes { key: "space", title: "Space" }.
-    // ======================================================================
+    // =======================================================================
     #foreach ( $headerKey in $headersKeys )
         #set ( $isGlobalSearchable = $headerGlobalSearchMap.get($headerKey) )
         #if ( "$!isGlobalSearchable" == "" )
@@ -85,10 +84,10 @@
             filterOptions: []
         };
 
-        // ==================================================================
+        // ===================================================================
         // Catalog options come from Polarion configuration, not table rows.
         // This keeps valid choices visible when no current row uses them.
-        // ==================================================================
+        // ===================================================================
         #if ( $headerFilterOptionsMap.containsKey($headerKey) )
             #foreach ( $filterOption in $headerFilterOptionsMap.get($headerKey) )
                 headerData.filterOptions.push({
@@ -101,44 +100,44 @@
         widgetData.headers.push(headerData);
     #end
 
-    // ======================================================================
+    // =======================================================================
     // Convert each Velocity row map into a JavaScript row object.
     // Each Velocity row map becomes one JavaScript row object.
-    // ======================================================================
+    // =======================================================================
     #foreach ( $rowMap in $dataRows )
         var rowData = {};
 
-        // ==================================================================
+        // ===================================================================
         // Copy every cell from the row map into the JavaScript row object.
-        // ==================================================================
+        // ===================================================================
         #foreach ( $rowKey in $rowMap.keySet() )
             rowData["$esc.javascript($rowKey)"] = "$esc.javascript($rowMap.get($rowKey))";
         #end
 
-        // ==================================================================
+        // ===================================================================
         // This row is ready. Give it to DataTables' row list.
-        // ==================================================================
+        // ===================================================================
         widgetData.rows.push(rowData);
     #end
 </script>
 #end
 
-## ==========================================================================
+## ===========================================================================
 ## Render the table shell, load DataTables assets, and initialize DataTables.
 ## The caller provides the table id, ordered headers, prepared row data, and
 ## table settings collected from the widget properties panel.
-## ==========================================================================
+## ===========================================================================
 #macro ( initDataTableMacro $widgetTableId $headersKeys $headersMap $headerFilterTypesMap $headerFilterOptionsMap $headerGlobalSearchMap $dataRows $tableSettings )
-    ## ======================================================================
+    ## =======================================================================
     ## This is the empty table element.
     ## DataTables will fill it using widgetData.
-    ## ======================================================================
+    ## =======================================================================
     <table id="$widgetTableId" class="stripe hover row-border order-column nowrap">
-        ## ==================================================================
+        ## ===================================================================
         ## Render the header cells before DataTables starts.
         ## ColumnControl otherwise creates a control-only header row that
         ## disables DataTables sorting when the table shell is empty.
-        ## ==================================================================
+        ## ===================================================================
         <thead>
             <tr>
                 #foreach ( $headerKey in $headersKeys )
@@ -147,24 +146,24 @@
             </tr>
         </thead>
     </table>
-    
+
     #set ( $h = "#")
     #set ( $forId = "${h}${widgetTableId}" )
 
-    ## ======================================================================
+    ## =======================================================================
     ## Write the prepared server data into JavaScript.
-    ## ======================================================================
+    ## =======================================================================
     #renderWidgetDataMacro( $headersMap $headersKeys $headerFilterTypesMap $headerFilterOptionsMap $headerGlobalSearchMap $dataRows )
     <script type="text/javascript">
     (function () {
-        // ==================================================================
+        // ===================================================================
         // Find our table shell by its unique id.
         // The unique id lets this widget find its own table.
-        // ==================================================================
+        // ===================================================================
         var tableSelector = "$esc.javascript($forId)";
         var tableNode = document.querySelector(tableSelector);
 
-        // ==================================================================
+        // ===================================================================
         // Polarion replaces the widget markup when a user clicks Apply.
         // FixedHeader renders its floating header outside that markup, so it
         // must be destroyed explicitly when the original table is removed.
@@ -172,7 +171,7 @@
         // Remove disconnected matrix instances before creating this one.
         // This also covers a re-render that occurs before MutationObserver has
         // delivered its removal notification.
-        // ==================================================================
+        // ===================================================================
         var tableInstances = window.tsbLiveDocMatrixTableInstances =
             window.tsbLiveDocMatrixTableInstances || [];
 
@@ -184,12 +183,12 @@
             }
         }
 
-        // ==================================================================
+        // ===================================================================
         // Read table display settings. Widget parameters are intentionally
         // editable, so the browser validates them before they reach DataTables
         // or CSS variables. Invalid values fall back to conservative defaults
         // instead of breaking the rendered matrix.
-        // ==================================================================
+        // ===================================================================
         function isSafeCssLength(value) {
             var length = String(value || '').trim();
 
@@ -211,10 +210,10 @@
         var enablePaging = $tableSettings.get("enablePaging");
         var rowsPerPage = parseInt("$esc.javascript($tableSettings.get("rowsPerPage"))", 10);
 
-        // ==================================================================
+        // ===================================================================
         // Keep the page size valid if a stored widget value is missing or
         // invalid. The properties panel defaults to ten rows per page.
-        // ==================================================================
+        // ===================================================================
         if (isNaN(rowsPerPage) || rowsPerPage < 1) {
             rowsPerPage = 10;
         }
@@ -223,12 +222,12 @@
             rowsPerPage = 500;
         }
 
-        // ==================================================================
+        // ===================================================================
         // Register a checklist that filters against a separate row property.
         // The visible cell text remains available to the global search bar,
         // while catalog and count dropdowns use their dedicated raw values.
         // DataTables' CheckList helper retains the standard dropdown design.
-        // ==================================================================
+        // ===================================================================
         DataTable.ColumnControl.content.tsbOptionList = {
             defaults: {
                 options: [],
@@ -316,11 +315,11 @@
             }
         };
 
-        // ==================================================================
+        // ===================================================================
         // Register an inclusive date-range control for date-typed columns.
         // Native date inputs provide calendar pickers without another library.
         // The fixed search participates in DataTables drawing and cleanup.
-        // ==================================================================
+        // ===================================================================
         DataTable.ColumnControl.content.tsbDateRange = {
             defaults: {},
             init: function (config) {
@@ -411,14 +410,14 @@
             }
         };
 
-        // ==================================================================
+        // ===================================================================
         // DataTables wants columns in this shape:
         // { title: "Human label", data: "rowObjectKey", name: "stableColumnName" }
         //
         // title = the text shown in the column header.
         // data = the key used to read the value from each row object.
         // name = the stable id used by DataTables ordering configuration.
-        // ==================================================================
+        // ===================================================================
         function stripHtml(value) {
             var container = document.createElement('div');
             container.innerHTML = String(value || '');
@@ -426,12 +425,12 @@
             return container.textContent || container.innerText || '';
         }
 
-        // ==================================================================
+        // ===================================================================
         // Server-side row building can provide clean values beside rendered
         // HTML. Display keeps Polarion links and icons; filtering and global
         // search use the semantic value when one exists, so users search for
         // document titles, statuses, and labels instead of hidden markup.
-        // ==================================================================
+        // ===================================================================
         function getSemanticDataValue(rowData, header, prefix) {
             var semanticKey = prefix + header.key;
 
@@ -531,11 +530,11 @@
                 }]
             };
 
-            // ==============================================================
+            // ===============================================================
             // Additional query columns retain their rendered links for display
             // and global searching. Their raw counts provide numeric sorting;
             // the custom option list maps those counts to zero or non-zero.
-            // ==============================================================
+            // ===============================================================
             if (header.filterType === 'number') {
                 column.type = 'num';
                 column.render = function (data, type, row) {
@@ -554,10 +553,10 @@
                 };
             }
 
-            // ==============================================================
+            // ===============================================================
             // Date columns retain rendered values for display/global search.
             // Raw ISO dates provide sorting and date-range comparisons.
-            // ==============================================================
+            // ===============================================================
             if (header.filterType === 'date') {
                 column.type = 'date';
                 column.render = function (data, type, row) {
@@ -576,18 +575,18 @@
             return column;
         });
 
-        // ==================================================================
+        // ===================================================================
         // Define the preferred initial row order.
         // Project and Space keep multi-project results grouped by Polarion
         // structure. Document gives a stable order inside each group.
-        // ==================================================================
+        // ===================================================================
         var defaultSortKeys = ['project', 'space', 'documentHtml'];
 
-        // ==================================================================
+        // ===================================================================
         // Keep only default sort columns that are present in this table.
         // This prevents DataTables from trying to sort by a column that the
         // current widget configuration did not render.
-        // ==================================================================
+        // ===================================================================
         var defaultOrder = defaultSortKeys
             .filter(function (key) {
                 return widgetData.headers.some(function (header) {
@@ -595,10 +594,10 @@
                 });
             })
 
-            // ==============================================================
+            // ===============================================================
             // Convert the existing sort keys into DataTables' named ordering
             // format. The order of this array defines sort priority.
-            // ==============================================================
+            // ===============================================================
             .map(function (key) {
                 return {
                     name: key,
@@ -616,10 +615,10 @@
             topEndLayout.search = {};
         }
 
-        // ==================================================================
+        // ===================================================================
         // ColumnControl does not provide a funnel icon in the downloaded
         // bundle. Register a Lucide-style funnel for the filter dropdown.
-        // ==================================================================
+        // ===================================================================
         DataTable.ColumnControl.icons.filter =
             '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" ' +
             'viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
@@ -630,21 +629,21 @@
             columns: columns,
             data: widgetData.rows,
 
-            // ==============================================================
+            // ===============================================================
             // Enable DataTables ordering explicitly.
             // orderMulti allows users to add secondary and tertiary sorts
             // manually with Shift + click on column headers.
-            // ==============================================================
+            // ===============================================================
             ordering: true,
             orderMulti: true,
             order: defaultOrder.length ? defaultOrder : [],
 
-            // ==============================================================
+            // ===============================================================
             // Paging remains disabled by default to preserve existing widget
             // behavior. When enabled, pageLength limits each page to the row
             // count configured in the widget properties panel. lengthChange
             // keeps the page-size control out of the rendered table.
-            // ==============================================================
+            // ===============================================================
             paging: enablePaging,
             pageLength: rowsPerPage,
             lengthChange: false,
@@ -656,10 +655,10 @@
                 zeroRecords: 'No documents match the selected filters.'
             },
 
-            // ==============================================================
+            // ===============================================================
             // Show the entry count above the table. Set bottomStart to null
             // so DataTables does not render the same information below it.
-            // ==============================================================
+            // ===============================================================
             layout: {
                 topStart: [
                     'info',
@@ -671,10 +670,10 @@
                             init: function (dt) {
                                 var clearFiltersButton = this;
 
-                                // ==========================================
+                                // ===========================================
                                 // Enable the action only while at least one
                                 // ColumnControl filter is active.
-                                // ==========================================
+                                // ===========================================
                                 dt.on('draw.tsbClearFilters', function () {
                                     var hasColumnFilter = false;
 
@@ -717,11 +716,11 @@
             }
         });
 
-        // ==================================================================
+        // ===================================================================
         // Track this DataTable for the lifetime of its rendered widget.
         // Destroying the DataTable invokes FixedHeader's own cleanup and
         // removes the floating header that FixedHeader appends to the page.
-        // ==================================================================
+        // ===================================================================
         var tableInstance = {
             container: tableContainer,
             dataTable: dataTable,
@@ -759,11 +758,11 @@
 
         tableInstances.push(tableInstance);
 
-        // ==================================================================
+        // ===================================================================
         // Polarion's widget editor can resize the rendered widget after
         // DataTables performs its initial column-width calculation.
         // Recalculate header and body widths after the new size settles.
-        // ==================================================================
+        // ===================================================================
         function scheduleColumnAdjustment() {
             if (tableInstance.destroyed || tableInstance.adjustmentFrame !== null) {
                 return;
@@ -798,11 +797,11 @@
 
         scheduleColumnAdjustment();
 
-        // ==================================================================
+        // ===================================================================
         // Polarion does not call DataTables when it removes widget markup.
         // Observe the page so the table can clean up as soon as its generated
         // DataTables container is no longer attached to the document.
-        // ==================================================================
+        // ===================================================================
         tableInstance.observer = new MutationObserver(function () {
             if (!document.documentElement.contains(tableContainer)) {
                 tableInstance.destroy();

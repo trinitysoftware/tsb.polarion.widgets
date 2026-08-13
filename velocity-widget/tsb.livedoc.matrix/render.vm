@@ -1,4 +1,4 @@
-## ==========================================================================
+## ===========================================================================
 ## BSD 3-CLAUSE LICENSE
 ## Copyright (c) 2008-2026, Trinity Software & Beyond Ltd.
 ##
@@ -25,15 +25,14 @@
 ## LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 ## WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
 ## ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-## ==========================================================================
-
+## ===========================================================================
 #import("tsb.framework.vm")
 
-## ==========================================================================
+## ===========================================================================
 ## Resolve document search criteria directly from the Data Set parameter.
 ## The Data Set parameter handles single project, project group, collection,
 ## and global scope.
-## ==========================================================================
+## ===========================================================================
 #set ( $dataSetScope = $parameters.dataSet.scope() )
 #set ( $dataSetCollectionReference = $parameters.dataSet.getCollectionReference() )
 #set ( $dataSetCollectionScopeSelected = false )
@@ -47,11 +46,11 @@
 #set ( $revisionWarning = "" )
 #set ( $dataSetWarning = "" )
 
-## ==========================================================================
+## ===========================================================================
 ## Prefer the active Data Set scope over a stale Collection reference. Polarion
 ## can retain a previous Collection reference after switching back to a normal
 ## scope, while the active scope still exposes project/path/global state.
-## ==========================================================================
+## ===========================================================================
 #if ( $dataSetWidgetContextScopeLower.contains("collection") )
     #set ( $dataSetCollectionScopeSelected = true )
     #set ( $dataSetCollectionInheritanceEnabled = $parameters.dataSet.collectionInheritance.value() )
@@ -62,7 +61,7 @@
     #set ( $dataSetCollectionInheritanceEnabled = $parameters.dataSet.collectionInheritance.value() )
 #end
 
-## ==========================================================================
+## ===========================================================================
 ## Resolve the revision context before any document or work item search runs.
 ## Empty revision means HEAD/current. Project Baseline selection takes
 ## precedence because its base revision is the authoritative snapshot point.
@@ -70,16 +69,16 @@
 ##
 ## Collection scope carries per-document revisions from its Collection elements,
 ## so Project Baseline and Revision are intentionally ignored in that mode.
-## ==========================================================================
+## ===========================================================================
 #set ( $q = '"' )
 #set ( $newWindowLinkAttributes = " target=${q}_blank${q} rel=${q}noopener noreferrer${q}" )
 #set ( $projectBaselineValues = $parameters.dataSet.projectBaseline.values() )
 #set ( $specificRevision = $parameters.dataSet.specificRevision.value().trim() )
 
-## ==========================================================================
-## Replace page-parameter references in Lucene query text. The Data Set query 
+## ===========================================================================
+## Replace page-parameter references in Lucene query text. The Data Set query
 ## is already plain text at this point.
-## ==========================================================================
+## ===========================================================================
 #macro ( resolveQueryPageParametersMacro $sourceQuery )
     #set ( $resolvedQueryText = "$!sourceQuery" )
 
@@ -156,7 +155,13 @@
     #set ( $projectBaselineValue = $projectBaselineValue.trim() )
     #set ( $projectBaselineSeparatorIndex = $projectBaselineValue.indexOf("|") )
 
-    #if ( $projectBaselineSeparatorIndex > 0 )
+    #if ( $projectBaselineValue.equals("") )
+        ## ===================================================================
+        ## No Project Baseline is selected. Polarion can still return a
+        ## one-item values list containing an empty string, so treat that as
+        ## the same HEAD/current behavior as a truly empty list.
+        ## ===================================================================
+    #elseif ( $projectBaselineSeparatorIndex > 0 )
         #set ( $selectedProjectBaselineIsValid = false )
         #set ( $scopeBaselineProjectIds = [] )
 
@@ -231,13 +236,13 @@
     #end
 #end
 
-## ==========================================================================
+## ===========================================================================
 ## $docItems stores the LiveDocs found by the document query.
 ## $docQueries stores the matching work item query for each LiveDoc.
 ## Both lists use the same index so each document can find its own query later.
 ##
 ## $projectIds stores each represented project once for filter catalogs.
-## ==========================================================================
+## ===========================================================================
 #set ( $docItems = [] )
 #set ( $docQueries = [] )
 #set ( $docRevisions = [] )
@@ -251,11 +256,11 @@
     #set ( $void = $projectIds.add($projectId) )
 #end
 
-## ==========================================================================
+## ===========================================================================
 ## Resolve the selected recommended matrix configuration preset.
 ## Presets provide complete, conservative matrix setups for common review
 ## workflows. Custom Configuration keeps the manually entered widget values.
-## ==========================================================================
+## ===========================================================================
 #set ( $matrixPresetValues = $parameters.matrixConfigurationPreset.values() )
 #set ( $selectedMatrixPreset = "custom" )
 
@@ -269,11 +274,11 @@
     #set ( $selectedMatrixPreset = "custom" )
 #end
 
-## ==========================================================================
+## ===========================================================================
 ## Build the effective matrix configuration used by rendering.
 ## Query columns are kept in a normalized map list so preset and custom columns
 ## use the same rendering path and the same Lucene handling.
-## ==========================================================================
+## ===========================================================================
 #set ( $matrixShowSignaturesStatus = $parameters.showSignaturesStatus.value() )
 #set ( $matrixShowDocumentBaselines = $parameters.showDocumentBaselines.value() )
 #set ( $matrixShowBranchedDocuments = $parameters.showBranchedDocuments.value() )
@@ -360,16 +365,16 @@
     #end
 #end
 
-## ==========================================================================
+## ===========================================================================
 ## $widgetTableId gives this widget instance its own table element.
-## ==========================================================================
+## ===========================================================================
 #set ( $tableUniqueId = $widgetContext.generateUniqueElementId() )
 #set ( $widgetTableId = "widget-table-${tableUniqueId}" )
 
-## ==========================================================================
+## ===========================================================================
 ## Collect LiveDocs and build one work item query per LiveDoc.
 ## The row-building step uses the collected documents and matching queries.
-## ==========================================================================
+## ===========================================================================
 #macro ( collectCollectionDocumentsMacro $collection )
     #if ( $collection && !$collection.isUnresolvable() )
         #set ( $collectionReference = $collection.getReference() )
@@ -378,19 +383,19 @@
         #if ( !$collectionKey.equals("") && !$processedCollectionKeys.contains($collectionKey) )
             #set ( $void = $processedCollectionKeys.add($collectionKey) )
 
-            ## ==============================================================
+            ## ===============================================================
             ## Collection elements are stored as document objects. Keep a key
             ## based on project and document path so later Data Set query
             ## results can be intersected without mixing projects.
-            ## ==============================================================
+            ## ===============================================================
             #foreach ( $collectionElement in $collection.fields().elements() )
                 #set ( $collectionObject = $collectionElement.fields().object().get() )
 
-                ## ==========================================================
+                ## ===========================================================
                 ## Collection object references can point to documents outside
                 ## the user's readable scope. Skip them before reading project,
                 ## path, or revision metadata.
-                ## ==========================================================
+                ## ===========================================================
                 #if ( $collectionObject && !$collectionObject.isUnresolvable() && $collectionObject.can().read() )
                     #set ( $collectionProjectId = $collectionObject.fields().project().projectId() )
 
@@ -410,10 +415,10 @@
             #end
 
             #if ( $dataSetCollectionInheritanceEnabled )
-                ## ==========================================================
+                ## ===========================================================
                 ## Inheritance follows direct upstream Collections recursively.
                 ## processedCollectionKeys prevents cycles from repeating rows.
-                ## ==========================================================
+                ## ===========================================================
                 #foreach ( $upstreamCollection in $collection.fields().upstreamCollections() )
                     #collectCollectionDocumentsMacro($upstreamCollection)
                 #end
@@ -431,11 +436,11 @@
 
 #macro ( prepareRowsMacro )
     #if ( $dataSetCollectionScopeSelected )
-        ## ==================================================================
+        ## ===================================================================
         ## Collection mode renders from Collection elements directly. The Data
         ## Set's Collection tab can keep a SQL-shaped query internally, so using
         ## document search as the source can drop valid Collection documents.
-        ## ==================================================================
+        ## ===================================================================
         #foreach ( $rowDocumentKey in $collectionDocumentKeys )
             #set ( $rowDocument = $collectionDocumentMap.get($rowDocumentKey) )
 
@@ -453,21 +458,21 @@
                     #set ( $void = $docItems.add($rowDocument) )
                     #set ( $void = $docRevisions.add($rowRevision) )
 
-                    ## ======================================================
+                    ## =======================================================
                     ## Build the work item query with the document's own project.
                     ## Equal document paths in different projects therefore keep
                     ## independent work item counts.
-                    ## ======================================================
+                    ## =======================================================
                     #set ( $void = $docQueries.add("(project.id:$rowProjectId AND (NOT type:heading) AND document.id:$q$docNameWithSpace$q)") )
                 #end
             #end
         #end
     #else
-        ## ==================================================================
+        ## ===================================================================
         ## Execute the Data Set query through document search. This preserves
         ## Polarion's native scope, project group, query builder, and revision
         ## behavior; each returned row then supplies its own project context.
-        ## ==================================================================
+        ## ===================================================================
         #set ( $_docsSearch = $transaction.documents().search().query($documentQuery) )
 
         #if ( !$effectiveRevision.equals("") )
@@ -477,18 +482,18 @@
         #set ( $_docs = $_docsSearch.sort("project.id space.id title") )
 
         #foreach ( $_doc in $_docs )
-            ## ==============================================================
+            ## ===============================================================
             ## Skip unresolved documents because their fields and links cannot
             ## be rendered safely.
-            ## ==============================================================
+            ## ===============================================================
             #if ( !$_doc.isUnresolvable() )
                 #set ( $rowProjectId = $_doc.fields().project().projectId() )
                 #set ( $rowRevision = "$!effectiveRevision" )
 
-                ## ==========================================================
+                ## ===========================================================
                 ## A valid project context is required for this document's work
                 ## item query and portal links.
-                ## ==========================================================
+                ## ===========================================================
                 #if ( $rowProjectId )
                     #if ( !$projectIds.contains($rowProjectId) )
                         #set ( $void = $projectIds.add($rowProjectId) )
@@ -497,17 +502,17 @@
                     #set ( $void = $docItems.add($_doc) )
                     #set ( $void = $docRevisions.add($rowRevision) )
 
-                    ## ======================================================
+                    ## =======================================================
                     ## Polarion stores the default space with an "_default/"
                     ## prefix that is not part of document.id query values.
-                    ## ======================================================
+                    ## =======================================================
                     #set ( $docNameWithSpace = $_doc.getOldApi().getRelativePath().replace("_default/","") )
 
-                    ## ======================================================
+                    ## =======================================================
                     ## Build the work item query with the document's own project.
                     ## Equal document paths in different projects therefore keep
                     ## independent work item counts.
-                    ## ======================================================
+                    ## =======================================================
                     #set ( $void = $docQueries.add("(project.id:$rowProjectId AND (NOT type:heading) AND document.id:$q$docNameWithSpace$q)") )
                 #end
             #end
@@ -515,7 +520,7 @@
     #end
 #end
 
-## ==========================================================================
+## ===========================================================================
 ## Resolve configured document field metadata once for all later table stages.
 ## Filter behavior comes from Polarion field types rather than field ids:
 ##   - date and date-time fields use the date-range control;
@@ -524,7 +529,7 @@
 ##
 ## A field may be undefined or configured differently in another project.
 ## The list fallback keeps one DataTables column behavior safe for every row.
-## ==========================================================================
+## ===========================================================================
 #macro ( prepareFieldMetadataMacro )
     #set ( $columnFieldIds = [] )
     #set ( $fieldTitlesMap = $objectFactory.newMap() )
@@ -539,11 +544,11 @@
             #set ( $resolvedFilterType = "" )
             #set ( $hasTypeConflict = false )
 
-            ## ==============================================================
+            ## ===============================================================
             ## Inspect every represented document because custom field
             ## definitions can differ by project or document configuration.
             ## Undefined fields are ignored and render as empty cells later.
-            ## ==============================================================
+            ## ===============================================================
             #foreach ( $metadataDoc in $docItems )
                 #set ( $renderingField = $metadataDoc.fields().get($fieldId) )
 
@@ -552,12 +557,12 @@
                         #set ( $fieldTitle = $renderingField.label() )
                     #end
 
-                    ## ======================================================
+                    ## =======================================================
                     ## getFieldType() supports both built-in and custom
                     ## fields. Only date-like primitives get a typed filter;
                     ## enum fields intentionally stay as row-derived lists so
                     ## users see only values present in the rendered table.
-                    ## ======================================================
+                    ## =======================================================
                     #set ( $oldApiDocument = $metadataDoc.getOldApi() )
                     #set ( $fieldType = $oldApiDocument.getFieldType($fieldId) )
                     #set ( $candidateFilterType = "list" )
@@ -567,11 +572,11 @@
                         #set ( $candidateFilterType = "date" )
                     #end
 
-                    ## ======================================================
+                    ## =======================================================
                     ## One table column can have only one filter control.
                     ## Prefer list search when projects disagree about the
                     ## same field id instead of applying invalid typed logic.
-                    ## ======================================================
+                    ## =======================================================
                     #if ( $resolvedFilterType.equals("") )
                         #set ( $resolvedFilterType = $candidateFilterType )
                     #elseif ( !$resolvedFilterType.equals($candidateFilterType) )
@@ -590,11 +595,11 @@
     #end
 #end
 
-## ==========================================================================
+## ===========================================================================
 ## Build explicit filter option lists for built-in identity columns. Configured
 ## document fields use DataTables' row-derived list search instead of configured
 ## enum catalogs, so users select only values visible in the current table.
-## ==========================================================================
+## ===========================================================================
 #macro ( prepareFilterOptionsMacro )
     #set ( $headerFilterOptionsMap = $objectFactory.newMap() )
     #set ( $projectFilterOptions = [] )
@@ -605,11 +610,11 @@
         #set ( $trackerProject = $trackerService.getTrackerProject($catalogProjectId) )
 
         #if ( $trackerProject )
-            ## ==================================================================
+            ## ===============================================================
             ## Project display names are the raw values stored on table rows.
             ## Deduplicate names because filter values are currently strings,
             ## not project-id/label pairs.
-            ## ==================================================================
+            ## ===============================================================
             #set ( $projectName = $trackerProject.getName() )
             #if ( !$projectFilterOptions.contains($projectName) )
                 #set ( $void = $projectFilterOptions.add($projectName) )
@@ -617,10 +622,10 @@
         #end
     #end
 
-    ## ======================================================================
+    ## =======================================================================
     ## The Document column filters by the actual returned documents, not by
     ## module type. Document type can be displayed as a normal field column.
-    ## ======================================================================
+    ## =======================================================================
     #foreach ( $filterDocument in $docItems )
         #set ( $documentName = "$!filterDocument.fields().moduleName().get()" )
         #set ( $spaceLabel = "$!filterDocument.space().label()" )
@@ -638,26 +643,25 @@
         #end
     #end
 
-    ## ======================================================================
+    ## =======================================================================
     ## Publish built-in option lists after collecting the visible row values.
     ## The shared DataTables macro reads these lists by header key.
-    ## ======================================================================
+    ## =======================================================================
     #set ( $void = $headerFilterOptionsMap.put("project", $projectFilterOptions) )
     #set ( $void = $headerFilterOptionsMap.put("space", $spaceFilterOptions) )
     #set ( $void = $headerFilterOptionsMap.put("documentHtml", $documentFilterOptions) )
 #end
 
-## ==========================================================================
+## ===========================================================================
 ## Build the DataTables column definitions in Velocity maps.
 ## $headersKeys preserves display order because map iteration order is not used.
-## ==========================================================================
+## ===========================================================================
 #macro ( prepareWorkItemIdentityQueryMacro $workItems )
-    ## ======================================================================
+    ## =======================================================================
     ## Build a compact exact Lucene identity query from a document-provided
     ## work item list. Recycle-bin items belong to the current document's
-    ## project, so the query keeps one project term and groups raw ids together
-    ## exactly as Polarion's tracker filter chips expect them.
-    ## ======================================================================
+    ## project, so the query keeps one project term and groups raw ids together.
+    ## =======================================================================
     #set ( $workItemIdentityProjectId = "" )
     #set ( $workItemIdentityIds = [] )
     #set ( $workItemIdentityKeys = [] )
@@ -695,11 +699,11 @@
 #end
 
 #macro ( resolveDocumentApiByLocationMacro $documentProjectId $documentSpace $documentName )
-    ## ======================================================================
+    ## =======================================================================
     ## Convert old-API module relationship objects back to Transaction document
     ## objects through the typed selector. This avoids Lucene path ambiguity and
     ## lets related document cells use Polarion's native icon renderer.
-    ## ======================================================================
+    ## =======================================================================
     #set ( $resolvedDocumentApi = false )
     #set ( $resolvedDocumentCandidate = $transaction.documents().getBy().projectSpaceAndName("$documentProjectId", "$documentSpace", "$documentName") )
 
@@ -709,29 +713,28 @@
 #end
 
 #macro ( prepareHeadersMacro )
-    ## ======================================================================
+    ## =======================================================================
     ## This map stores the table columns.
     ## key = the id used by JavaScript/DataTables
     ## value = the text shown in the column header
-    ## ======================================================================
+    ## =======================================================================
     #set ( $headersMap = $objectFactory.newMap() )
 
-    ## ======================================================================
+    ## =======================================================================
     ## This map identifies the filter control for each displayed column.
     ## Catalog, date, list, and computed numeric columns use distinct controls.
-    ## ======================================================================
+    ## =======================================================================
     #set ( $headerFilterTypesMap = $objectFactory.newMap() )
 
-    ## ======================================================================
+    ## =======================================================================
     ## This map decides whether a column contributes to the global search.
     ## Displayed semantic columns use clean values prepared with their metadata.
-    ## Computed columns retain their dedicated numeric filter controls instead.
-    ## ======================================================================
+    ## =======================================================================
     #set ( $headerGlobalSearchMap = $objectFactory.newMap() )
 
-    ## ======================================================================
+    ## =======================================================================
     ## Used to track the order of columns when rendering, since map is unordered.
-    ## ======================================================================
+    ## =======================================================================
     #set ( $headersKeys = [] )
 
     #if ( true == $matrixShowProject )
@@ -753,11 +756,11 @@
     #set ( $void = $headerGlobalSearchMap.put("documentHtml", true) )
     #set ( $void = $headersKeys.add("documentHtml") )
 
-    ## ======================================================================
+    ## =======================================================================
     ## Custom document columns use metadata prepared from every represented
     ## project. The user-facing label remains separate from the field type that
     ## selects the appropriate DataTables filter control.
-    ## ======================================================================
+    ## =======================================================================
     #foreach ( $fieldId in $columnFieldIds )
         #set ( $void = $headersMap.put($fieldId, $fieldTitlesMap.get($fieldId)) )
         #set ( $void = $headerFilterTypesMap.put($fieldId, $fieldFilterTypesMap.get($fieldId)) )
@@ -772,10 +775,10 @@
         #set ( $void = $headersKeys.add("signatureHtml") )
     #end
 
-    ## ======================================================================
+    ## =======================================================================
     ## Optional LiveDoc metadata columns are rendered after document fields and
     ## signatures, before user-defined query-count columns.
-    ## ======================================================================
+    ## =======================================================================
     #if ( true == $matrixShowDocumentBaselines )
         #set ( $void = $headersMap.put("documentBaselinesHtml", "Document Baselines") )
         #set ( $void = $headerFilterTypesMap.put("documentBaselinesHtml", "list") )
@@ -818,11 +821,11 @@
         #set ( $void = $headersKeys.add("approvedVersionsHtml") )
     #end
 
-    ## ======================================================================
+    ## =======================================================================
     ## This is for configured query-count columns in the matrix.
     ## Custom Configuration uses user-defined Lucene queries; recommended
     ## presets provide vetted common queries through the same path.
-    ## ======================================================================
+    ## =======================================================================
     #foreach ( $columnQueryParam in $matrixColumnQueries )
         #set ( $columnQueryTitle = $columnQueryParam.get("title") )
         #set ( $columnQueryText = $columnQueryParam.get("query") )
@@ -835,21 +838,21 @@
     #end
 #end
 
-## ==========================================================================
+## ===========================================================================
 ## Fetching data using Velocity maps, then passing
 ## those maps to Javascript for DataTables.
-## ==========================================================================
+## ===========================================================================
 #macro ( prepareDataRowsMacro )
-    ## ======================================================================
+    ## =======================================================================
     ## $dataRows stores all table rows.
     ## Each $rowsMap inside it stores one table row.
-    ## ======================================================================
+    ## =======================================================================
     #set ( $dataRows = [] )
     #set ( $dataService = $trackerService.getDataService() )
 
-    ## ======================================================================
+    ## =======================================================================
     ## Create one row map for each document.
-    ## ======================================================================
+    ## =======================================================================
     #foreach ( $docu in $docItems )
         #set ( $indexLoop = $velocityCount - 1 )
         #set ( $docQuery = $docQueries.get($indexLoop) )
@@ -858,84 +861,91 @@
         #set ( $rowProjectId = $docu.fields().project().projectId() )
         #set ( $oldApiDocument = $docu.getOldApi() )
 
-        ## ==================================================================
+        ## ===================================================================
         ## This map stores all cells for the current row.
         ## key = column id, value = rendered cell content.
-        ## ==================================================================
+        ## ===================================================================
         #set ( $rowsMap = $objectFactory.newMap() )
 
-        #set ( $spaceHtml = "" )
-        #set ( $projectHtml = "" )
         #set ( $signatureHtml = "" )
 
-        ## ==================================================================
+        ## ===================================================================
         ## Add the Project cell when the Project column is enabled.
-        ## ==================================================================
+        ## ===================================================================
         #if ( true == $matrixShowProject )
-            #set ( $projectHtml = "$!docu.fields().project().render().openLinksInNewWindow()")
-            #set ( $void = $rowsMap.put("project", $projectHtml) )
+            #set ( $void = $rowsMap.put("project", "$!docu.fields().project().render().openLinksInNewWindow()") )
             #set ( $void = $rowsMap.put("__tsbFilterValue_project", $docu.getOldApi().getProject().getName()) )
             #set ( $void = $rowsMap.put("__tsbSearchValue_project", $docu.getOldApi().getProject().getName()) )
         #end
 
-        ## ==================================================================
+        ## ===================================================================
         ## Add the Space cell when the Space column is enabled.
-        ## ==================================================================
+        ## ===================================================================
         #if ( true == $matrixShowSpace )
-            #set ( $spaceHtml = "$!docu.space().render().openLinksInNewWindow()" )
-            #set ( $void = $rowsMap.put("space", $spaceHtml) )
+            #set ( $void = $rowsMap.put("space", "$!docu.space().render().openLinksInNewWindow()") )
             #set ( $void = $rowsMap.put("__tsbFilterValue_space", $docu.space().label()) )
             #set ( $void = $rowsMap.put("__tsbSearchValue_space", $docu.space().label()) )
         #end
 
-        ## ==================================================================
+        ## ===================================================================
         ## Add the Document cell. Display keeps Polarion-rendered link HTML.
         ## Native renderer configuration opens the document in a new window.
         ## The column filter uses the actual document name, while global
         ## search receives only the document's plain title.
-        ## ==================================================================
+        ## ===================================================================
         #set ( $documentHtml = $docu.render().withIcon().withLinks(true).openLinksInNewWindow() )
         #set ( $documentName = "$!docu.fields().moduleName().get()" )
         #if ( $documentName.equals("") )
             #set ( $documentName = "$!oldApiDocument.getTitle()" )
         #end
         #set ( $documentSpace = $oldApiDocument.getModuleFolder() )
-        #set ( $documentPortalLinkBuilder = $transaction.context().createPortalLink() )
-        #if ( !$rowRevision.equals("") )
-            #set ( $documentPortalLinkBuilder = $documentPortalLinkBuilder.baseline("$rowRevision") )
-        #end
-        #set ( $documentLink = $documentPortalLinkBuilder.project("$rowProjectId").document("$documentSpace","$documentName").toEncodedRelativeUrl() )
         #set ( $void = $rowsMap.put("documentHtml", $documentHtml) )
         #set ( $void = $rowsMap.put("__tsbFilterValue_documentHtml", $documentName) )
         #set ( $void = $rowsMap.put("__tsbSearchValue_documentHtml", $oldApiDocument.getTitle()) )
 
-        ## ==================================================================
+        ## ===================================================================
         ## Add the Signatures cell when enabled.
-        ## Only active signature states are shown.
-        ## ==================================================================
+        ## Only active signature states are shown. Each workflow signature
+        ## contributes a bold state label, followed by the individual signer
+        ## verdict rows that belong to that state.
+        ## ===================================================================
         #if ( true == $matrixShowSignaturesStatus )
             #set ( $workflowSignatures = $docu.fields().workflowSignatures().toArrayList )
-            
-            #foreach( $row in $workflowSignatures )
-                #set ( $signatureStatus = $row.fields().signatureState().optionId() )
+
+            #foreach ( $workflowSignature in $workflowSignatures )
+                #set ( $signatureStatus = $workflowSignature.fields().signatureState().optionId() )
+
+                ## ===========================================================
+                ## Obsolete and unavailable states are historical or empty
+                ## workflow metadata. They are intentionally hidden so the
+                ## column tells reviewers only what still needs attention.
+                ## ===========================================================
                 #if ( !($signatureStatus.equals("obsolete")) && !($signatureStatus.equals("notAvailable")) )
-					#set ($sigsHtml = "<b>$row.fields().signatureState().render().withIcon(false).openLinksInNewWindow() - $row.label()</b><br>")
-					#set ($signatureHtml = "${signatureHtml}<br>${sigsHtml}" )
-					
-					#foreach($s in $row.fields().signatures().toArrayList())
-						#set ($renderedSig = "<b>$s.fields().signedBy().render().openLinksInNewWindow()</b> - $s.fields().verdict().render().withIcon(false).openLinksInNewWindow() - $s.fields().verdictTime().render().openLinksInNewWindow()")
-						#set ($signatureHtml = "${signatureHtml}<br>${renderedSig}" )
-					#end
+                    #set ( $signatureStateHtml = $workflowSignature.fields().signatureState().render().withIcon(false).openLinksInNewWindow() )
+                    #set ( $signatureGroupHtml = "<b>$signatureStateHtml - $workflowSignature.label()</b><br>" )
+                    #set ( $signatureHtml = "${signatureHtml}<br>${signatureGroupHtml}" )
+
+                    ## =======================================================
+                    ## Render each signature decision below its workflow state.
+                    ## The signer, verdict, and verdict time all keep Polarion's
+                    ## native renderers so links and formatting stay consistent.
+                    ## =======================================================
+                    #foreach ( $signatureEntry in $workflowSignature.fields().signatures().toArrayList() )
+                        #set ( $signatureSignerHtml = $signatureEntry.fields().signedBy().render().openLinksInNewWindow() )
+                        #set ( $signatureVerdictHtml = $signatureEntry.fields().verdict().render().withIcon(false).openLinksInNewWindow() )
+                        #set ( $signatureVerdictTimeHtml = $signatureEntry.fields().verdictTime().render().openLinksInNewWindow() )
+                        #set ( $renderedSignatureHtml = "<b>$signatureSignerHtml</b> - $signatureVerdictHtml - $signatureVerdictTimeHtml" )
+                        #set ( $signatureHtml = "${signatureHtml}<br>${renderedSignatureHtml}" )
+                    #end
                 #end
             #end
 
             #set ( $void = $rowsMap.put("signatureHtml", $signatureHtml) )
         #end
 
-        ## ==================================================================
-        ## Add document baseline information when enabled. Document baselines
-        ## are object baselines whose base object points to this LiveDoc.
-        ## ==================================================================
+        ## ===================================================================
+        ## Add document baseline information when enabled.
+        ## ===================================================================
         #if ( true == $matrixShowDocumentBaselines )
             #set ( $documentBaselinesHtml = "" )
             #set ( $documentBaselinesSearchText = "" )
@@ -979,11 +989,10 @@
                 #end
             #end
 
-            ## ==============================================================
+            ## ===============================================================
             ## Keep one document baseline compact, but switch to a true list
-            ## when more than one readable baseline exists. This keeps the
-            ## single-value case simple while making multiple baselines clear.
-            ## ==============================================================
+            ## when more than one readable baseline exists.
+            ## ===============================================================
             #if ( $documentBaselineCount > 1 )
                 #set ( $documentBaselinesHtml = "<ul>${documentBaselineItemsHtml}</ul>" )
             #elseif ( $documentBaselineCount == 1 )
@@ -994,9 +1003,9 @@
             #set ( $void = $rowsMap.put("__tsbSearchValue_documentBaselinesHtml", $documentBaselinesSearchText.trim()) )
         #end
 
-        ## ==================================================================
+        ## ===================================================================
         ## Add branched document links when enabled.
-        ## ==================================================================
+        ## ===================================================================
         #if ( true == $matrixShowBranchedDocuments )
             #set ( $branchedDocumentsHtml = "" )
             #set ( $branchedDocumentItemsHtml = "" )
@@ -1006,11 +1015,9 @@
             #set ( $branchedModules = $oldApiDocument.getBranchedModules() )
 
             #foreach ( $branchedModule in $branchedModules )
-                ## ==========================================================
+                ## ===========================================================
                 ## Render only branch targets the current user can read.
-                ## This keeps relationship metadata aligned with Polarion
-                ## permissions before titles and portal links are exposed.
-                ## ==========================================================
+                ## ===========================================================
                 #if ( $branchedModule && $branchedModule.can().read() )
                     #set ( $branchedProjectId = "$!branchedModule.getProject().getId()" )
                     #if ( $branchedProjectId.equals("") )
@@ -1038,11 +1045,11 @@
                     #resolveDocumentApiByLocationMacro($branchedProjectId $branchedSpace $branchedName)
                     #set ( $branchedDocumentLinkHtml = "<a href=${q}${branchedLink}${q}${newWindowLinkAttributes}>$branchedTitleHtml</a>" )
 
-                    ## ======================================================
+                    ## =======================================================
                     ## Use Polarion's document renderer when the related
                     ## document can be resolved, because that safely includes
                     ## the native document icon with the title.
-                    ## ======================================================
+                    ## =======================================================
                     #if ( $resolvedDocumentApi )
                         #set ( $branchedDocumentLinkHtml = "$!resolvedDocumentApi.render().withIcon().withLinks(true).openLinksInNewWindow()" )
                     #end
@@ -1055,10 +1062,10 @@
                 #end
             #end
 
-            ## ==============================================================
+            ## ===============================================================
             ## Keep one branch compact, but use bullets when several readable
             ## branch targets exist for the same source document.
-            ## ==============================================================
+            ## ===============================================================
             #if ( $branchedDocumentCount > 1 )
                 #set ( $branchedDocumentsHtml = "<ul>${branchedDocumentItemsHtml}</ul>" )
             #elseif ( $branchedDocumentCount == 1 )
@@ -1069,11 +1076,9 @@
             #set ( $void = $rowsMap.put("__tsbSearchValue_branchedDocumentsHtml", $branchedDocumentsSearchText.trim()) )
         #end
 
-        ## ==================================================================
+        ## ===================================================================
         ## Add the master/source document for branched or derived documents.
-        ## Branched source takes precedence because it is the stronger document
-        ## relationship; derived source is used when no branch source exists.
-        ## ==================================================================
+        ## ===================================================================
         #if ( true == $matrixShowMasterDocument )
             #set ( $masterDocumentHtml = "" )
             #set ( $masterDocumentSearchText = "" )
@@ -1084,11 +1089,9 @@
                 #set ( $masterModule = $oldApiDocument.getDerivedFrom() )
             #end
 
-            ## ==============================================================
+            ## ===============================================================
             ## Render only source documents the current user can read.
-            ## The matrix should not expose hidden branch/derivation metadata
-            ## through titles, search text, or generated portal links.
-            ## ==============================================================
+            ## ===============================================================
             #if ( $masterModule && $masterModule.can().read() )
                 #set ( $masterProjectId = "$!masterModule.getProject().getId()" )
                 #if ( $masterProjectId.equals("") )
@@ -1116,10 +1119,10 @@
                 #resolveDocumentApiByLocationMacro($masterProjectId $masterSpace $masterName)
                 #set ( $masterDocumentLinkHtml = "<a href=${q}${masterLink}${q}${newWindowLinkAttributes}>$masterTitleHtml</a>" )
 
-                ## ==========================================================
+                ## ===========================================================
                 ## Use Polarion's document renderer when available so the
                 ## master/source document keeps the native document icon.
-                ## ==========================================================
+                ## ===========================================================
                 #if ( $resolvedDocumentApi )
                     #set ( $masterDocumentLinkHtml = "$!resolvedDocumentApi.render().withIcon().withLinks(true).openLinksInNewWindow()" )
                 #end
@@ -1132,12 +1135,17 @@
             #set ( $void = $rowsMap.put("__tsbSearchValue_masterDocumentHtml", $masterDocumentSearchText) )
         #end
 
-        ## ==================================================================
+        ## ===================================================================
         ## Add unresolved root comments when enabled. The column shows the
         ## comment text directly; multiple comments are separated into bullets
         ## so users can scan the actual review feedback from the table.
-        ## ==================================================================
+        ## ===================================================================
         #if ( true == $matrixShowUnresolvedComments )
+            #set ( $documentPortalLinkBuilder = $transaction.context().createPortalLink() )
+            #if ( !$rowRevision.equals("") )
+                #set ( $documentPortalLinkBuilder = $documentPortalLinkBuilder.baseline("$rowRevision") )
+            #end
+            #set ( $documentLink = $documentPortalLinkBuilder.project("$rowProjectId").document("$documentSpace","$documentName").toEncodedRelativeUrl() )
             #set ( $unresolvedRootComments = $oldApiDocument.getRootComments(false) )
             #set ( $unresolvedCommentCount = $unresolvedRootComments.size() )
             #set ( $unresolvedCommentsHtml = "" )
@@ -1164,10 +1172,10 @@
                 #set ( $unresolvedCommentsSearchText = "${unresolvedCommentsSearchText} ${unresolvedCommentText}" )
             #end
 
-            ## ==================================================================
+            ## ===============================================================
             ## Keep one comment compact, but switch to a bulleted list when the
             ## same document has several unresolved root comments.
-            ## ==================================================================
+            ## ===============================================================
             #if ( $unresolvedCommentCount > 1 )
                 #set ( $unresolvedCommentsHtml = "<ul>${unresolvedCommentItemsHtml}</ul>" )
             #elseif ( $unresolvedCommentCount == 1 )
@@ -1178,11 +1186,11 @@
             #set ( $void = $rowsMap.put("__tsbSearchValue_unresolvedCommentsHtml", $unresolvedCommentsSearchText.trim()) )
         #end
 
-        ## ==================================================================
+        ## ===================================================================
         ## Resolve recycle-bin work items once for this document row. Additional
         ## query-count columns exclude these identities so normal counts do not
         ## include items that are no longer referenced by the LiveDoc.
-        ## ==================================================================
+        ## ===================================================================
         #set ( $recycleBinWorkItems = $docu.items().unreferenced() )
         #prepareWorkItemIdentityQueryMacro($recycleBinWorkItems)
         #set ( $recycleBinWorkItemQuery = $workItemIdentityQuery )
@@ -1199,11 +1207,10 @@
             #set ( $recycleBinWorkItemCount = $recycleBinWorkItemSearch.size() )
         #end
 
-        ## ==================================================================
+        ## ===================================================================
         ## Add the recycle-bin count when enabled. The count and tracker link
-        ## are built from exact unreferenced item identities, not from the
-        ## normal document.id query.
-        ## ==================================================================
+        ## are built from exact unreferenced item identities.
+        ## ===================================================================
         #if ( true == $matrixShowUnreferencedWorkItems )
             #set ( $recycleBinPortalLinkBuilder = $transaction.context().createPortalLink() )
 
@@ -1223,10 +1230,10 @@
             #set ( $void = $rowsMap.put("__tsbFilterValue_unreferencedWorkItemsHtml", $recycleBinWorkItemCount) )
         #end
 
-        ## ==================================================================
+        ## ===================================================================
         ## Add approved version information from document workflow signatures.
         ## Each approved transition links to the versioned document revision.
-        ## ==================================================================
+        ## ===================================================================
         #if ( true == $matrixShowApprovedVersions )
             #set ( $approvedVersionsHtml = "" )
             #set ( $approvedVersionItemsHtml = "" )
@@ -1240,10 +1247,10 @@
                     #set ( $approvedVersionedDoc = false )
                     #set ( $approvedVersionedDoc = $dataService.getVersionedInstance($oldApiDocument.getUri(), $approvedRevision) )
 
-                    ## ======================================================
+                    ## =======================================================
                     ## Render approved version metadata only when the user can
                     ## read the versioned document object.
-                    ## ======================================================
+                    ## =======================================================
                     #if ( $approvedVersionedDoc && $approvedVersionedDoc.can().read() )
                         #set ( $approvedVersionValue = "" )
                         #set ( $approvedVersionValue = $approvedVersionedDoc.getValue("version") )
@@ -1276,11 +1283,11 @@
                         #set ( $approvedRevisionHtml = $esc.html($approvedRevision) )
                         #set ( $approvedUpdatedHtml = $esc.html($approvedUpdated) )
 
-                        ## ==================================================
+                        ## ===================================================
                         ## Each approved transition becomes one list item
                         ## with explicit version, revision, and date details
                         ## so multiple approved versions remain scannable.
-                        ## ==================================================
+                        ## ===================================================
                         #set ( $approvedVersionItemsHtml = "${approvedVersionItemsHtml}<li><strong>Version:</strong> <a href=${q}${approvedLink}${q}${newWindowLinkAttributes}>$approvedVersionHtml</a><br><strong>Revision:</strong> $approvedRevisionHtml" )
                         #set ( $approvedVersionItemsHtml = "${approvedVersionItemsHtml}<br><strong>Date:</strong> $approvedUpdatedHtml" )
                         #set ( $approvedVersionItemsHtml = "${approvedVersionItemsHtml}</li>" )
@@ -1289,10 +1296,10 @@
                 #end
             #end
 
-            ## ==============================================================
+            ## ===============================================================
             ## Wrap approved version entries in a bulleted list only when at
             ## least one readable approved revision was found.
-            ## ==============================================================
+            ## ===============================================================
             #if ( !$approvedVersionItemsHtml.equals("") )
                 #set ( $approvedVersionsHtml = "<ul>${approvedVersionItemsHtml}</ul>" )
             #end
@@ -1301,12 +1308,12 @@
             #set ( $void = $rowsMap.put("__tsbSearchValue_approvedVersionsHtml", $approvedVersionsSearchText.trim()) )
         #end
 
-        ## ==================================================================
+        ## ===================================================================
         ## Add one cell for each configured document field id. Visible cells
         ## keep Polarion-rendered HTML. Date filters receive normalized raw
         ## values; list filters intentionally use the rendered cell text so
         ## DataTables offers only values present in the visible table.
-        ## ==================================================================
+        ## ===================================================================
         #foreach ( $fieldId in $columnFieldIds )
             #set ( $documentField = $docu.fields().get($fieldId) )
             #set ( $fieldHtml = "$!documentField.render().openLinksInNewWindow()" )
@@ -1315,11 +1322,11 @@
             #set ( $filterValueKey = "__tsbFilterValue_${fieldId}" )
             #set ( $searchValueKey = "__tsbSearchValue_${fieldId}" )
 
-            ## ==============================================================
+            ## ===============================================================
             ## Date and DateOnly values have different old-API representations.
             ## Normalize both to yyyy-MM-dd for DataTables sorting and range
             ## comparisons without changing their rendered cell content.
-            ## ==============================================================
+            ## ===============================================================
             #if ( $fieldFilterType.equals("date") )
                 #set ( $oldApiDocument = $docu.getOldApi() )
                 #set ( $oldFieldValue = $oldApiDocument.getValue($fieldId) )
@@ -1339,41 +1346,40 @@
                 #set ( $void = $rowsMap.put($searchValueKey, $rawFilterValue) )
             #end
         #end
-        
-        ## ==================================================================
+
+        ## ===================================================================
         ## This is for configured query-count columns in the matrix.
         ## Custom Configuration uses user-defined Lucene queries; recommended
         ## presets provide vetted common queries through the same path.
-        ## ==================================================================
+        ## ===================================================================
         #foreach ( $columnQueryParam in $matrixColumnQueries )
             #set ( $columnQueryTitle = $columnQueryParam.get("title") )
             #set ( $columnQueryText = $columnQueryParam.get("query") )
             #if ( !$columnQueryTitle.equals("") && !$columnQueryText.equals("") )
-                ## ==========================================================
+                ## ===========================================================
                 ## Count matching work items and build links to the tracker,
                 ## filtered document, and optional risksheet views.
                 ## Zero counts receive a dedicated CSS class.
                 ## The class applies only to additional-column count links.
-                ## ==========================================================
+                ## ===========================================================
                 #set ( $columnQuery = "$!columnQueryText" )
                 #resolveQueryPageParametersMacro($columnQuery)
                 #set ( $columnQuery = $resolvedQueryText )
                 #set ( $cellQuery = "$docQuery AND ($columnQuery)" )
 
-                ## ==========================================================
+                ## ===========================================================
                 ## Recycle-bin identities are excluded automatically from every
-                ## additional column. Users should not have to remember to add
-                ## this NOT clause to each configured Lucene query.
-                ## ==========================================================
+                ## additional column.
+                ## ===========================================================
                 #if ( $recycleBinWorkItemHasIdentities )
                     #set ( $cellQuery = "$cellQuery AND NOT ($recycleBinWorkItemQuery)" )
                 #end
 
-                ## ==========================================================
+                ## ===========================================================
                 ## Count only work items contained in the current LiveDoc.
                 ## The column query narrows the document-specific base query,
                 ## and the same query is reused for tracker and document links.
-                ## ==========================================================
+                ## ===========================================================
                 #set ( $workitemSearch = $transaction.workItems().search().query("$cellQuery") )
                 #if ( !$rowRevision.equals("") )
                     #set ( $workitemSearch = $workitemSearch.baseline("$rowRevision") )
@@ -1404,32 +1410,32 @@
                 #end
                 #set ( $void = $rowsMap.put($columnQueryTitle, $cellHtml) )
 
-                ## ==========================================================
+                ## ===========================================================
                 ## Keep the raw count separate from the rendered links.
                 ## DataTables uses this value for numeric filtering.
-                ## ==========================================================
+                ## ===========================================================
                 #set ( $filterValueKey = "__tsbFilterValue_${columnQueryTitle}" )
                 #set ( $void = $rowsMap.put($filterValueKey, $workitemCount) )
             #end
         #end
 
-        ## ==================================================================
+        ## ===================================================================
         ## The row is complete.
         ## Add it to the list of all rows.
-        ## ==================================================================
+        ## ===================================================================
         #set ( $void = $dataRows.add($rowsMap) )
     #end
 #end
 
-## ==========================================================================
+## ===========================================================================
 ## Build DataTables settings from widget parameters.
 ## Translate user-facing widget parameters into a smaller settings map so
 ## the shared framework does not need to know every widget parameter.
-## ==========================================================================
+## ===========================================================================
 #macro ( prepareTableSettingsMacro )
-    ## ======================================================================
+    ## =======================================================================
     ## $tableSettings stores only values needed by DataTables and TableEffects.
-    ## ======================================================================
+    ## =======================================================================
     #set ( $tableSettings = $objectFactory.newMap() )
 
     #set ( $void = $tableSettings.put("tableHeight", $parameters.tableHeight.value()) )
@@ -1443,9 +1449,9 @@
     #set ( $void = $tableSettings.put("rowsPerPage", $parameters.rowsPerPage.value()) )
 #end
 
-## ==========================================================================
-## Main 
-## ==========================================================================
+## ===========================================================================
+## Main
+## ===========================================================================
 #prepareCollectionScopeMacro()
 #prepareRowsMacro()
 #prepareFieldMetadataMacro()
@@ -1454,9 +1460,9 @@
 #prepareDataRowsMacro()
 #prepareTableSettingsMacro()
 
-## ==========================================================================
+## ===========================================================================
 ## Show revision-context warnings without preventing HEAD rendering.
-## ==========================================================================
+## ===========================================================================
 #if ( !$revisionWarning.equals("") )
     $widgetContext.renderWarning($revisionWarning)
 #end
@@ -1465,16 +1471,16 @@
     $widgetContext.renderWarning($dataSetWarning)
 #end
 
-## ==========================================================================
+## ===========================================================================
 ## Load widget-local DataTables assets.
-## ==========================================================================
+## ===========================================================================
 #loadWidgetCssResource("resources/datatables.css")
 #loadWidgetJsResource("resources/datatables.js")
 
-## ==========================================================================
+## ===========================================================================
 ## Load files for changing the effects or changing
 ## the design of the table.
-## ==========================================================================
+## ===========================================================================
 #loadWidgetJsResource("resources/tableEffects.js")
 #loadWidgetCssResource("resources/tableEffects.css")
 

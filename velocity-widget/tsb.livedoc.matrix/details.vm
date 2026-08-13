@@ -1,4 +1,4 @@
-## ==========================================================================
+## ===========================================================================
 ## LICENSE
 ## BSD 3-CLAUSE LICENSE
 ## Copyright (c) 2008-2026, Trinity Software & Beyond Ltd.
@@ -26,12 +26,10 @@
 ## LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 ## WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
 ## ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-## ==========================================================================
-
-## ==========================================================================
+## ===========================================================================
+## ===========================================================================
 ## OVERVIEW — tsb.livedoc.matrix — details.vm
-## ==========================================================================
-
+## ===========================================================================
 <b>The tsb.livedoc.matrix widget</b>, developed by Trinity Software and Beyond, provides a configurable document-level matrix for LiveDoc review, traceability, and reporting workflows.
 
-<p>Final Version 4 feature details will be completed after the implementation behavior is finalized.</p>
+<p>The widget renders Data Set scoped LiveDocs with optional project, space, document field, signature, baseline, branch, comment, recycle-bin, approved-version, and query-count columns. Recommended presets provide curated configurations for common review workflows, while Custom Configuration keeps full control in the widget properties panel.</p>

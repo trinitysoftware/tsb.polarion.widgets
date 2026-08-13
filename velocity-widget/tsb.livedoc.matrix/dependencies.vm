@@ -1,4 +1,4 @@
-## ==========================================================================
+## ===========================================================================
 ## BSD 3-CLAUSE LICENSE
 ##
 ## Copyright (c) 2008-2026, Trinity Software & Beyond Ltd.
@@ -26,18 +26,16 @@
 ## LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 ## WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
 ## ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-## ==========================================================================
-
-## ==========================================================================
+## ===========================================================================
+## ===========================================================================
 ## OVERVIEW — tsb.livedoc.matrix — dependencies.vm
-## ==========================================================================
-
-## ==========================================================================
+## ===========================================================================
+## ===========================================================================
 ## Validate the selected recommended matrix configuration preset.
 ## Custom Configuration keeps the existing manual fields and query columns.
 ## The other presets are applied at render time so user-entered custom values
 ## remain intact when switching back to Custom Configuration.
-## ==========================================================================
+## ===========================================================================
 #set ( $presetSetter = $parameters.matrixConfigurationPreset.set().clear().allowNoValue(false).allowMultipleValues(false) )
 #set ( $void = $presetSetter.addEnumItem("custom", "Custom Configuration") )
 #set ( $void = $presetSetter.addEnumItem("basicLiveDocStatus", "Basic LiveDoc Status") )
@@ -57,12 +55,12 @@
     #set ( $void = $presetSetter.singleValue("custom") )
 #end
 
-## ==========================================================================
+## ===========================================================================
 ## Show manual matrix configuration only when Custom Configuration is active.
 ## Presets own the server-rendered columns and query-count definitions.
 ## Display behavior parameters such as height, paging, search, and export stay
 ## visible because they do not change the matrix's semantic configuration.
-## ==========================================================================
+## ===========================================================================
 #set ( $customPresetSelected = $selectedPreset.equals("custom") )
 #set ( $void = $parameters.showSignaturesStatus.visuals().setVisible($customPresetSelected) )
 #set ( $void = $parameters.showDocumentBaselines.visuals().setVisible($customPresetSelected) )
@@ -77,18 +75,18 @@
 #set ( $void = $parameters.showRisksheetLink.visuals().setVisible($customPresetSelected) )
 #set ( $void = $parameters.columns.visuals().setVisible($customPresetSelected) )
 
-## ==========================================================================
+## ===========================================================================
 ## Update dependent paging parameters.
 ## Rows Per Page is visible only when Enable Paging is selected.
-## ==========================================================================
+## ===========================================================================
 #set ( $enablePagingParameter = $parameters.enablePaging )
 #set ( $rowsPerPageParameter = $parameters.rowsPerPage )
 #set ( $pagingEnabled = $enablePagingParameter.value() )
 #set ( $void = $rowsPerPageParameter.visuals().setVisible($pagingEnabled) )
 
-## ==========================================================================
+## ===========================================================================
 ## Populate Project Baseline options from the projects in the Data Set scope.
-## ==========================================================================
+## ===========================================================================
 #set ( $projectBaselineSetter = $parameters.dataSet.projectBaseline.set().clear().allowNoValue(true).allowMultipleValues(false) )
 #set ( $dataSetScope = $parameters.dataSet.scope() )
 #set ( $dataSetCollectionReference = $parameters.dataSet.getCollectionReference() )
@@ -101,11 +99,13 @@
 #set ( $baselineProjectIds = [] )
 #set ( $baselineOptions = [] )
 #set ( $baselineValues = [] )
+#set ( $documentQuery = "" )
+#set ( $documentQueryIsSql = false )
 
-## ==========================================================================
+## ===========================================================================
 ## Resolve page-parameter tokens in the Data Set query before using it to find
 ## projects for Project Baseline options.
-## ==========================================================================
+## ===========================================================================
 #macro ( resolveQueryPageParametersMacro $sourceQuery )
     #set ( $resolvedQueryText = "$!sourceQuery" )
 
@@ -158,23 +158,12 @@
     #end
 #end
 
-#set ( $documentQuery = $parameters.dataSet.getFor().revision("").queryToShow() )
-#resolveQueryPageParametersMacro($documentQuery)
-#set ( $documentQueryText = $resolvedQueryText )
-#set ( $documentQuery = $documentQueryText )
-#set ( $documentQueryLower = $documentQueryText.toLowerCase() )
-#set ( $documentQueryIsSql = false )
-
-#if ( $documentQueryLower.contains("select ") || $documentQueryLower.contains(" from ") )
-    #set ( $documentQueryIsSql = true )
-#end
-
-## ==========================================================================
+## ===========================================================================
 ## Prefer the active Data Set scope over a stale Collection reference. Polarion
 ## can keep the previous Collection reference populated after switching back to
 ## Project/Project Group/Global, and treating that stale value as active would
 ## leave Project Baseline with no rebuilt options.
-## ==========================================================================
+## ===========================================================================
 #if ( $dataSetWidgetContextScopeLower.contains("collection") )
     #set ( $dataSetCollectionScopeSelected = true )
 #elseif ( $projectId || $scopePath || $dataSetScopeIsGlobal )
@@ -183,11 +172,11 @@
     #set ( $dataSetCollectionScopeSelected = true )
 #end
 
-## ==========================================================================
+## ===========================================================================
 ## Keep all nested Data Set parameters visible. Polarion does not repaint nested
 ## visibility immediately when only the Data Set scope tab changes, so rendering
 ## ignores fields that do not apply to the selected mode instead.
-## ==========================================================================
+## ===========================================================================
 #set ( $void = $parameters.dataSet.collectionInheritance.visuals().setVisible(true) )
 #set ( $void = $parameters.dataSet.projectBaseline.visuals().setVisible(true) )
 #set ( $void = $parameters.dataSet.specificRevision.visuals().setVisible(true) )
@@ -195,11 +184,21 @@
 #if ( $projectId )
     #set ( $void = $baselineProjectIds.add($projectId) )
 #elseif ( !$dataSetCollectionScopeSelected && !$dataSetScopeIsGlobal && $scopePath )
-    ## ======================================================================
+    ## =======================================================================
     ## Collect accessible project ids through document search. Direct
     ## project-group traversal can fail when the group contains unreadable
     ## projects, even though readable documents from the same group can render.
-    ## ======================================================================
+    ## =======================================================================
+    #set ( $documentQuery = $parameters.dataSet.getFor().revision("").queryToShow() )
+    #resolveQueryPageParametersMacro($documentQuery)
+    #set ( $documentQueryText = $resolvedQueryText )
+    #set ( $documentQuery = $documentQueryText )
+    #set ( $documentQueryLower = $documentQueryText.toLowerCase() )
+
+    #if ( $documentQueryLower.contains("select ") || $documentQueryLower.contains(" from ") )
+        #set ( $documentQueryIsSql = true )
+    #end
+
     #if ( $documentQueryIsSql )
         #set ( $documentQuery = "project.id:__tsb_no_matching_project__" )
     #end
@@ -250,15 +249,16 @@
     #end
 #end
 
-## ==========================================================================
+## ===========================================================================
 ## Clear a stale Project Baseline when the Data Set scope changes and the
 ## previous baseline is no longer available in the rebuilt option list.
-## ==========================================================================
+## ===========================================================================
 #set ( $projectBaselineValues = $parameters.dataSet.projectBaseline.values() )
 
 #if ( !$projectBaselineValues.isEmpty() )
     #set ( $projectBaselineValue = "$!projectBaselineValues.get(0)" )
-    #if ( !$baselineValues.contains($projectBaselineValue) )
+    #set ( $projectBaselineValue = $projectBaselineValue.trim() )
+    #if ( !$projectBaselineValue.equals("") && !$baselineValues.contains($projectBaselineValue) )
         #set ( $void = $projectBaselineSetter.singleValue("") )
     #end
 #end
