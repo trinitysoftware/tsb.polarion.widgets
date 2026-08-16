@@ -945,13 +945,18 @@
 
         ## ===================================================================
         ## Add document baseline information when enabled.
+        ## The baseline object gives us the display name and revision, but the
+        ## link should behave like Polarion's revision view for a document: keep
+        ## the normal document route and carry the historical revision as a query
+        ## parameter. The repository revision renderer supplies the native
+        ## revision icon and revision number once, while this column keeps
+        ## control of the final document link target and baseline name.
         ## ===================================================================
         #if ( true == $matrixShowDocumentBaselines )
             #set ( $documentBaselinesHtml = "" )
             #set ( $documentBaselinesSearchText = "" )
             #set ( $documentBaselineCount = 0 )
             #set ( $documentBaselineItemsHtml = "" )
-            #set ( $documentBaselineSingleLinkHtml = "" )
             #set ( $documentBaseObjectPath = "document/$oldApiDocument.getModuleLocation().getLocationPath()" )
             #set ( $documentBaselineQuery = "project.id:$q$rowProjectId$q AND baseObject:$q$documentBaseObjectPath$q" )
             #set ( $documentBaselines = $dataService.searchInstances("Baseline", $documentBaselineQuery, "baseRevision") )
@@ -969,7 +974,6 @@
                     #set ( $baselineDocument = $documentBaseline.getBaseObject() )
 
                     #if ( $baselineDocument && $baselineDocument.can().read() )
-                        #set ( $baselineLinkBuilder = $transaction.context().createPortalLink().baseline("$documentBaselineRevision") )
                         #set ( $baselineDocumentSpace = "$!baselineDocument.getModuleFolder()" )
                         #set ( $baselineDocumentName = "$!baselineDocument.getModuleName()" )
                         #if ( $baselineDocumentSpace.equals("") )
@@ -978,25 +982,51 @@
                         #if ( $baselineDocumentName.equals("") )
                             #set ( $baselineDocumentName = $documentName )
                         #end
-                        #set ( $baselineLink = $baselineLinkBuilder.project("$rowProjectId").document("$baselineDocumentSpace","$baselineDocumentName").toEncodedRelativeUrl() )
-                        #set ( $baselineLabel = "$documentBaselineName ($documentBaselineRevision)" )
-                        #set ( $baselineLabelHtml = $esc.html($baselineLabel) )
-                        #set ( $documentBaselineCount = $documentBaselineCount + 1 )
-                        #set ( $documentBaselineSingleLinkHtml = "<a href=${q}${baselineLink}${q}${newWindowLinkAttributes}>$baselineLabelHtml</a>" )
-                        #set ( $documentBaselineItemsHtml = "${documentBaselineItemsHtml}<li><a href=${q}${baselineLink}${q}${newWindowLinkAttributes}>$baselineLabelHtml</a></li>" )
-                        #set ( $documentBaselinesSearchText = "${documentBaselinesSearchText} ${baselineLabel}" )
+                        #set ( $baselineRevisionDocument = false )
+                        #set ( $baselineRevision = false )
+                        #set ( $baselineRevisionDocument = $docu.getReference().getFromRevision($transaction, $documentBaselineRevision) )
+                        #set ( $baselineRevision = $transaction.revisions().getBy().id($documentBaselineRevision) )
+
+                        ## ===================================================
+                        ## The versioned document proves the user can read the
+                        ## target, and the repository revision supplies only the
+                        ## native revision marker plus revision number. The link
+                        ## is deliberately built from a
+                        ## non-baseline portal link, then amended with the
+                        ## revision query parameter, so the target opens as
+                        ## #/project/.../Document?revision=123 instead of the
+                        ## legacy #/baseline/123/... route.
+                        ## ===================================================
+                        #if ( $baselineRevisionDocument && $baselineRevisionDocument.can().read() && $baselineRevision && !$baselineRevision.isUnresolvable() )
+                            #set ( $baselineLink = $transaction.context().createPortalLink().project("$rowProjectId").document("$baselineDocumentSpace","$baselineDocumentName").toEncodedRelativeUrl() )
+                            #set ( $baselineRevisionSeparator = "?" )
+                            #if ( $baselineLink.indexOf("?") >= 0 )
+                                #set ( $baselineRevisionSeparator = "&" )
+                            #end
+                            #set ( $baselineLink = "${baselineLink}${baselineRevisionSeparator}revision=${documentBaselineRevision}" )
+                            #set ( $baselineLabel = "$documentBaselineName ($documentBaselineRevision)" )
+                            #set ( $baselineNameHtml = $esc.html($documentBaselineName) )
+                            #set ( $baselineRevisionHtml = "$!baselineRevision.render().withIcon().withText(true).withLinks(false)" )
+                            #set ( $documentBaselineCount = $documentBaselineCount + 1 )
+                            #set ( $baselineRowStyle = "display:block;white-space:nowrap;" )
+                            #set ( $baselineLinkStyle = "white-space:nowrap;" )
+                            #set ( $documentBaselineRowHtml = "<div style=${q}${baselineRowStyle}${q}>" )
+                            #set ( $documentBaselineRowHtml = "${documentBaselineRowHtml}<a href=${q}${baselineLink}${q}${newWindowLinkAttributes} style=${q}${baselineLinkStyle}${q}>" )
+                            #set ( $documentBaselineRowHtml = "${documentBaselineRowHtml}${baselineRevisionHtml} $baselineNameHtml</a></div>" )
+                            #set ( $documentBaselineItemsHtml = "${documentBaselineItemsHtml}${documentBaselineRowHtml}" )
+                            #set ( $documentBaselinesSearchText = "${documentBaselinesSearchText} ${baselineLabel}" )
+                        #end
                     #end
                 #end
             #end
 
             ## ===============================================================
-            ## Keep one document baseline compact, but switch to a true list
-            ## when more than one readable baseline exists.
+            ## Each readable baseline has already been collected as its own
+            ## block row. One baseline and many baselines therefore share the
+            ## same rendering path, while the DOM never introduces list bullets.
             ## ===============================================================
-            #if ( $documentBaselineCount > 1 )
-                #set ( $documentBaselinesHtml = "<ul>${documentBaselineItemsHtml}</ul>" )
-            #elseif ( $documentBaselineCount == 1 )
-                #set ( $documentBaselinesHtml = $documentBaselineSingleLinkHtml )
+            #if ( $documentBaselineCount > 0 )
+                #set ( $documentBaselinesHtml = $documentBaselineItemsHtml )
             #end
 
             #set ( $void = $rowsMap.put("documentBaselinesHtml", $documentBaselinesHtml) )
@@ -1005,11 +1035,14 @@
 
         ## ===================================================================
         ## Add branched document links when enabled.
+        ## Branch targets are rendered as a compact location trail:
+        ## Project - Space - Document. The project, space, and document parts use
+        ## native Polarion renderers when the branch target can be resolved
+        ## through the Transaction API, preserving icons and display labels.
         ## ===================================================================
         #if ( true == $matrixShowBranchedDocuments )
             #set ( $branchedDocumentsHtml = "" )
             #set ( $branchedDocumentItemsHtml = "" )
-            #set ( $branchedDocumentSingleHtml = "" )
             #set ( $branchedDocumentCount = 0 )
             #set ( $branchedDocumentsSearchText = "" )
             #set ( $branchedModules = $oldApiDocument.getBranchedModules() )
@@ -1044,32 +1077,35 @@
                     #set ( $branchedSpaceLabelHtml = $esc.html($branchedSpaceLabel) )
                     #resolveDocumentApiByLocationMacro($branchedProjectId $branchedSpace $branchedName)
                     #set ( $branchedDocumentLinkHtml = "<a href=${q}${branchedLink}${q}${newWindowLinkAttributes}>$branchedTitleHtml</a>" )
+                    #set ( $branchedProjectHtml = $branchedProjectNameHtml )
+                    #set ( $branchedSpaceHtml = $branchedSpaceLabelHtml )
 
                     ## =======================================================
-                    ## Use Polarion's document renderer when the related
-                    ## document can be resolved, because that safely includes
-                    ## the native document icon with the title.
+                    ## Use native project, space, and document renderers when the
+                    ## branch target resolves. The document link is controlled
+                    ## here so only the document opens the branch target.
                     ## =======================================================
                     #if ( $resolvedDocumentApi )
-                        #set ( $branchedDocumentLinkHtml = "$!resolvedDocumentApi.render().withIcon().withLinks(true).openLinksInNewWindow()" )
+                        #set ( $branchedProjectHtml = "$!resolvedDocumentApi.fields().project().render().withLinks(false)" )
+                        #set ( $branchedSpaceHtml = "$!resolvedDocumentApi.space().render().withLinks(false)" )
+                        #set ( $branchedDocumentRenderedHtml = "$!resolvedDocumentApi.render().withIcon().withLinks(false)" )
+                        #set ( $branchedDocumentLinkHtml = "<a href=${q}${branchedLink}${q}${newWindowLinkAttributes}>$branchedDocumentRenderedHtml</a>" )
                     #end
 
                     #set ( $branchedDocumentCount = $branchedDocumentCount + 1 )
-                    #set ( $branchedDocumentRowHtml = "$branchedProjectNameHtml / $branchedSpaceLabelHtml / $branchedDocumentLinkHtml" )
-                    #set ( $branchedDocumentSingleHtml = $branchedDocumentRowHtml )
-                    #set ( $branchedDocumentItemsHtml = "${branchedDocumentItemsHtml}<li>$branchedDocumentRowHtml</li>" )
+                    #set ( $branchedDocumentRowHtml = "<div style=${q}white-space:nowrap;${q}>" )
+                    #set ( $branchedDocumentRowHtml = "${branchedDocumentRowHtml}$branchedProjectHtml - $branchedSpaceHtml - $branchedDocumentLinkHtml</div>" )
+                    #set ( $branchedDocumentItemsHtml = "${branchedDocumentItemsHtml}${branchedDocumentRowHtml}" )
                     #set ( $branchedDocumentsSearchText = "${branchedDocumentsSearchText} ${branchedTitle} ${branchedProjectName} ${branchedSpaceLabel}" )
                 #end
             #end
 
             ## ===============================================================
-            ## Keep one branch compact, but use bullets when several readable
-            ## branch targets exist for the same source document.
+            ## Each branch target is already a block row, so long cells stay
+            ## readable without bullets and each target starts on a new line.
             ## ===============================================================
-            #if ( $branchedDocumentCount > 1 )
-                #set ( $branchedDocumentsHtml = "<ul>${branchedDocumentItemsHtml}</ul>" )
-            #elseif ( $branchedDocumentCount == 1 )
-                #set ( $branchedDocumentsHtml = $branchedDocumentSingleHtml )
+            #if ( $branchedDocumentCount > 0 )
+                #set ( $branchedDocumentsHtml = $branchedDocumentItemsHtml )
             #end
 
             #set ( $void = $rowsMap.put("branchedDocumentsHtml", $branchedDocumentsHtml) )
@@ -1078,6 +1114,10 @@
 
         ## ===================================================================
         ## Add the master/source document for branched or derived documents.
+        ## The source is displayed with the same Project - Space - Document trail
+        ## as branch targets. When Polarion exposes the source revision carried by
+        ## the branch relationship, the document renderer and URL both point at
+        ## that historical revision; otherwise the current source is shown.
         ## ===================================================================
         #if ( true == $matrixShowMasterDocument )
             #set ( $masterDocumentHtml = "" )
@@ -1118,16 +1158,39 @@
                 #set ( $masterSpaceLabelHtml = $esc.html($masterSpaceLabel) )
                 #resolveDocumentApiByLocationMacro($masterProjectId $masterSpace $masterName)
                 #set ( $masterDocumentLinkHtml = "<a href=${q}${masterLink}${q}${newWindowLinkAttributes}>$masterTitleHtml</a>" )
+                #set ( $masterProjectHtml = $masterProjectNameHtml )
+                #set ( $masterSpaceHtml = $masterSpaceLabelHtml )
+                #set ( $masterSourceRevision = "$!masterModule.getRevision()" )
 
                 ## ===========================================================
-                ## Use Polarion's document renderer when available so the
-                ## master/source document keeps the native document icon.
+                ## Use the revisioned shared document when the branch source
+                ## carries a revision. The link follows the normal document route
+                ## with ?revision=... so it opens the historical source view.
                 ## ===========================================================
                 #if ( $resolvedDocumentApi )
-                    #set ( $masterDocumentLinkHtml = "$!resolvedDocumentApi.render().withIcon().withLinks(true).openLinksInNewWindow()" )
+                    #set ( $masterProjectHtml = "$!resolvedDocumentApi.fields().project().render().withLinks(false)" )
+                    #set ( $masterSpaceHtml = "$!resolvedDocumentApi.space().render().withLinks(false)" )
+                    #set ( $masterRenderedDocumentApi = $resolvedDocumentApi )
+
+                    #if ( !$masterSourceRevision.equals("") )
+                        #set ( $masterRevisionDocument = false )
+                        #set ( $masterRevisionDocument = $resolvedDocumentApi.getFromRevision($masterSourceRevision) )
+
+                        #if ( $masterRevisionDocument && !$masterRevisionDocument.isUnresolvable() && $masterRevisionDocument.can().read() )
+                            #set ( $masterRenderedDocumentApi = $masterRevisionDocument )
+                            #set ( $masterRevisionSeparator = "?" )
+                            #if ( $masterLink.indexOf("?") >= 0 )
+                                #set ( $masterRevisionSeparator = "&" )
+                            #end
+                            #set ( $masterLink = "${masterLink}${masterRevisionSeparator}revision=${masterSourceRevision}" )
+                        #end
+                    #end
+
+                    #set ( $masterDocumentRenderedHtml = "$!masterRenderedDocumentApi.render().withIcon().withRevisionIcon().withLinks(false)" )
+                    #set ( $masterDocumentLinkHtml = "<a href=${q}${masterLink}${q}${newWindowLinkAttributes}>$masterDocumentRenderedHtml</a>" )
                 #end
 
-                #set ( $masterDocumentHtml = "$masterProjectNameHtml / $masterSpaceLabelHtml / $masterDocumentLinkHtml" )
+                #set ( $masterDocumentHtml = "$masterProjectHtml - $masterSpaceHtml - $masterDocumentLinkHtml" )
                 #set ( $masterDocumentSearchText = "$masterTitle $masterProjectName $masterSpaceLabel" )
             #end
 
@@ -1137,8 +1200,9 @@
 
         ## ===================================================================
         ## Add unresolved root comments when enabled. The column shows the
-        ## comment text directly; multiple comments are separated into bullets
-        ## so users can scan the actual review feedback from the table.
+        ## comment text directly. Each comment is kept on its own row without
+        ## bullets so multi-comment cells stay compact and scan like the other
+        ## multi-value document metadata columns.
         ## ===================================================================
         #if ( true == $matrixShowUnresolvedComments )
             #set ( $documentPortalLinkBuilder = $transaction.context().createPortalLink() )
@@ -1150,7 +1214,6 @@
             #set ( $unresolvedCommentCount = $unresolvedRootComments.size() )
             #set ( $unresolvedCommentsHtml = "" )
             #set ( $unresolvedCommentItemsHtml = "" )
-            #set ( $unresolvedCommentSingleHtml = "" )
             #set ( $unresolvedCommentsSearchText = "" )
 
             #foreach ( $unresolvedComment in $unresolvedRootComments )
@@ -1167,19 +1230,17 @@
                 #end
                 #set ( $unresolvedCommentTextHtml = $esc.html($unresolvedCommentText) )
                 #set ( $unresolvedCommentLinkHtml = "<a href=${q}${documentLink}${q}${newWindowLinkAttributes}>$unresolvedCommentTextHtml</a>" )
-                #set ( $unresolvedCommentSingleHtml = $unresolvedCommentLinkHtml )
-                #set ( $unresolvedCommentItemsHtml = "${unresolvedCommentItemsHtml}<li>$unresolvedCommentLinkHtml</li>" )
+                #set ( $unresolvedCommentRowHtml = "<div style=${q}white-space:nowrap;${q}>$unresolvedCommentLinkHtml</div>" )
+                #set ( $unresolvedCommentItemsHtml = "${unresolvedCommentItemsHtml}${unresolvedCommentRowHtml}" )
                 #set ( $unresolvedCommentsSearchText = "${unresolvedCommentsSearchText} ${unresolvedCommentText}" )
             #end
 
             ## ===============================================================
-            ## Keep one comment compact, but switch to a bulleted list when the
-            ## same document has several unresolved root comments.
+            ## Comments were collected as block rows, so every comment starts on
+            ## a separate line without introducing list bullets.
             ## ===============================================================
-            #if ( $unresolvedCommentCount > 1 )
-                #set ( $unresolvedCommentsHtml = "<ul>${unresolvedCommentItemsHtml}</ul>" )
-            #elseif ( $unresolvedCommentCount == 1 )
-                #set ( $unresolvedCommentsHtml = $unresolvedCommentSingleHtml )
+            #if ( $unresolvedCommentCount > 0 )
+                #set ( $unresolvedCommentsHtml = $unresolvedCommentItemsHtml )
             #end
 
             #set ( $void = $rowsMap.put("unresolvedCommentsHtml", $unresolvedCommentsHtml) )
@@ -1232,7 +1293,9 @@
 
         ## ===================================================================
         ## Add approved version information from document workflow signatures.
-        ## Each approved transition links to the versioned document revision.
+        ## Each approved transition is one row: Version (revision) date. The
+        ## version and revision are linked to the normal document route with the
+        ## matching ?revision=... query parameter.
         ## ===================================================================
         #if ( true == $matrixShowApprovedVersions )
             #set ( $approvedVersionsHtml = "" )
@@ -1265,7 +1328,6 @@
                         #if ( $approvedUpdated.equals("") )
                             #set ( $approvedUpdated = "Unknown" )
                         #end
-                        #set ( $approvedLinkBuilder = $transaction.context().createPortalLink().baseline("$approvedRevision") )
                         #set ( $approvedDocumentSpace = "$!approvedVersionedDoc.getModuleFolder()" )
                         #set ( $approvedDocumentName = "$!approvedVersionedDoc.getModuleName()" )
                         #if ( $approvedDocumentSpace.equals("") )
@@ -1274,34 +1336,37 @@
                         #if ( $approvedDocumentName.equals("") )
                             #set ( $approvedDocumentName = $documentName )
                         #end
-                        #set ( $approvedLink = $approvedLinkBuilder.project("$rowProjectId").document("$approvedDocumentSpace","$approvedDocumentName").toEncodedRelativeUrl() )
-                        #set ( $approvedLabel = "$approvedVersion" )
-                        #set ( $approvedLabel = "$approvedLabel - $approvedRevision" )
-                        #set ( $approvedLabel = "$approvedLabel - $approvedUpdated" )
+                        #set ( $approvedLink = $transaction.context().createPortalLink().project("$rowProjectId").document("$approvedDocumentSpace","$approvedDocumentName").toEncodedRelativeUrl() )
+                        #set ( $approvedRevisionSeparator = "?" )
+                        #if ( $approvedLink.indexOf("?") >= 0 )
+                            #set ( $approvedRevisionSeparator = "&" )
+                        #end
+                        #set ( $approvedLink = "${approvedLink}${approvedRevisionSeparator}revision=${approvedRevision}" )
+                        #set ( $approvedLabel = "$approvedVersion ($approvedRevision) $approvedUpdated" )
 
                         #set ( $approvedVersionHtml = $esc.html($approvedVersion) )
                         #set ( $approvedRevisionHtml = $esc.html($approvedRevision) )
                         #set ( $approvedUpdatedHtml = $esc.html($approvedUpdated) )
 
                         ## ===================================================
-                        ## Each approved transition becomes one list item
-                        ## with explicit version, revision, and date details
-                        ## so multiple approved versions remain scannable.
+                        ## The version and revision act as the historical
+                        ## document link; the approval date follows as plain text.
                         ## ===================================================
-                        #set ( $approvedVersionItemsHtml = "${approvedVersionItemsHtml}<li><strong>Version:</strong> <a href=${q}${approvedLink}${q}${newWindowLinkAttributes}>$approvedVersionHtml</a><br><strong>Revision:</strong> $approvedRevisionHtml" )
-                        #set ( $approvedVersionItemsHtml = "${approvedVersionItemsHtml}<br><strong>Date:</strong> $approvedUpdatedHtml" )
-                        #set ( $approvedVersionItemsHtml = "${approvedVersionItemsHtml}</li>" )
+                        #set ( $approvedVersionLinkTextHtml = "$approvedVersionHtml ($approvedRevisionHtml)" )
+                        #set ( $approvedVersionRowHtml = "<div style=${q}white-space:nowrap;${q}>" )
+                        #set ( $approvedVersionRowHtml = "${approvedVersionRowHtml}<a href=${q}${approvedLink}${q}${newWindowLinkAttributes}>$approvedVersionLinkTextHtml</a> $approvedUpdatedHtml</div>" )
+                        #set ( $approvedVersionItemsHtml = "${approvedVersionItemsHtml}${approvedVersionRowHtml}" )
                         #set ( $approvedVersionsSearchText = "${approvedVersionsSearchText} ${approvedLabel}" )
                     #end
                 #end
             #end
 
             ## ===============================================================
-            ## Wrap approved version entries in a bulleted list only when at
-            ## least one readable approved revision was found.
+            ## Approved versions were collected as block rows, so multiple
+            ## approvals stay separated without list bullets.
             ## ===============================================================
             #if ( !$approvedVersionItemsHtml.equals("") )
-                #set ( $approvedVersionsHtml = "<ul>${approvedVersionItemsHtml}</ul>" )
+                #set ( $approvedVersionsHtml = $approvedVersionItemsHtml )
             #end
 
             #set ( $void = $rowsMap.put("approvedVersionsHtml", $approvedVersionsHtml) )
@@ -1372,7 +1437,7 @@
                 ## additional column.
                 ## ===========================================================
                 #if ( $recycleBinWorkItemHasIdentities )
-                    #set ( $cellQuery = "$cellQuery AND NOT ($recycleBinWorkItemQuery)" )
+                    #set ( $cellQuery = "$cellQuery AND (NOT ($recycleBinWorkItemQuery))" )
                 #end
 
                 ## ===========================================================
