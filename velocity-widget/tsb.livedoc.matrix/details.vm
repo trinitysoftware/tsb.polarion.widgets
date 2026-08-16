@@ -30,6 +30,10 @@
 ## ===========================================================================
 ## OVERVIEW — tsb.livedoc.matrix — details.vm
 ## ===========================================================================
-<b>The tsb.livedoc.matrix widget</b>, developed by Trinity Software and Beyond, provides a configurable document-level matrix for LiveDoc review, traceability, and reporting workflows.
+<b>The tsb.livedoc.matrix widget</b>, developed by Trinity Software and Beyond, provides a configurable document-level matrix for LiveDoc review, traceability, release-readiness, and reporting workflows.
 
-<p>The widget renders Data Set scoped LiveDocs with optional project, space, document field, signature, baseline, branch, comment, recycle-bin, approved-version, and query-count columns. Recommended presets provide curated configurations for common review workflows, while Custom Configuration keeps full control in the widget properties panel.</p>
+<p>The widget renders readable LiveDocs from project, project group, global, Collection, inherited Collection, Project Baseline, specific revision, or HEAD scopes. Each row keeps its own project and revision context so document links, work item counts, Recycle Bin exclusions, and computed query links stay aligned with the LiveDoc being shown.</p>
+
+<p>Optional columns include Project, Space, configured document fields, signature status, document baselines, branched documents, master document, unresolved comments, Recycle Bin, approved versions, and additional query-count columns. Additional query-count columns can show a work item count, filtered document link, and optional Risksheet link using the same effective query.</p>
+
+<p>Recommended presets provide curated configurations for basic status, review and approval, traceability counts, and release readiness. Custom Configuration keeps full control in the widget properties panel. DataTables provides multi-sort, smart per-column filters, optional search, optional export, optional paging, fixed header behavior, configurable colors, and red zero-count highlighting.</p>

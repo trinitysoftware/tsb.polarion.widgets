@@ -184,12 +184,17 @@ Documentation update only. No widget behavior changes and no code fixes.
 
 ### 2026-07-28
 
-- [ENHANCEMENT] Removed the Reset Table Settings parameter from the widget properties panel.
 - [ENHANCEMENT] Updated column filters to use Polarion catalog values for Spaces, document types, and document statuses.
 - [ENHANCEMENT] Added an inclusive date-range filter for Updated and retained zero/non-zero choices for computed columns.
 - [ENHANCEMENT] Added empty-state messages for data sets and filter combinations with no matching documents.
 - [FIX] Removed duplicate document status and document type choices from filter dropdowns.
 - [FIX] Restored global search across visible cell values while keeping column filters on their dedicated raw values.
+
+### 2026-07-29
+
+- [ENHANCEMENT] Removed the Reset Table Settings parameter from the widget properties panel.
+- [ENHANCEMENT] Refined smart column filtering so catalog, date, list, and computed numeric columns use the appropriate filter controls.
+- [FIX] Improved filter state handling so global search, column filters, and computed count filters can operate together without hiding valid rows.
 
 ### 2026-08-05
 
@@ -216,7 +221,39 @@ Documentation update only. No widget behavior changes and no code fixes.
 
 - [ENHANCEMENT] Added page-parameter query resolution for dynamic Data Set query values.
 - [ENHANCEMENT] Added recommended matrix configuration presets.
-- [FIX] Added explicit read checks for related documents and work items before rendering metadata or identity-based query links.
+- [FIX] Added explicit read checks for Data Set documents, related documents, and work items before rendering metadata or identity-based query links.
 - [FIX] Deduplicated identity-based work item queries so referenced and contained items are not counted twice.
+- [FIX] Hardened widget resource loading and DataTables setup with safer values, scoped loader variables, and clearer failure behavior.
 - [FIX] Hardened table settings validation for table height, rows per page, and configurable colors.
 - [FIX] Updated status formatting to use semantic status classes with a neutral fallback for custom statuses.
+
+### 2026-08-11
+
+- [ENHANCEMENT] Refined LiveDoc metadata rendering for review, traceability, and release-readiness workflows.
+- [ENHANCEMENT] Improved query-count column handling so computed cells consistently render count, document, and optional Risksheet links from the same effective query.
+- [FIX] Cleaned up duplicated and outdated row-building logic after the v4 feature additions.
+- [FIX] Removed the referenced-work-items toggle and the referenced-work-item count path so computed columns count work items contained in the current LiveDoc query only.
+- [FIX] Removed custom status background-color formatting so status fields render through Polarion's native field output and the table keeps a cleaner, less intrusive visual style.
+- [FIX] Simplified table styling rules so DataTables, ColumnControl, and widget-owned effects remain easier to maintain together.
+
+### 2026-08-13
+
+- [DOCS] Updated root and widget README content for the v4 Data Set, baseline, preset, and DataTables feature set.
+- [DOCS] Updated widget description and details text for the current configurable LiveDoc matrix behavior.
+- [FIX] Polished framework resource loading and DataTables initialization comments for maintainability.
+
+### 2026-08-16
+
+- [ENHANCEMENT] Added stable generated internal keys for configured document fields and additional query columns so user labels and field ids cannot collide with built-in table keys.
+- [ENHANCEMENT] Preserved selected-Collection precedence when inherited Collections contain the same document, preventing upstream duplicates from replacing the selected document revision.
+- [ENHANCEMENT] Refined Document Baselines rendering so readable baseline targets open through normal document links with the selected revision preserved.
+- [ENHANCEMENT] Refined Branched Documents and Master Document rendering so readable related documents use clearer project, space, document, and revision-aware link output.
+- [ENHANCEMENT] Refined Approved Versions rendering so approved workflow transition revisions show readable version metadata and revision-aware document links.
+- [ENHANCEMENT] Reduced the vendored DataTables bundle to the required official components: jQuery, JSZip, DataTables, Buttons HTML5 export, ColumnControl, and FixedHeader.
+- [FIX] Escaped dynamic header titles and workflow signature labels before they are rendered into table HTML.
+- [FIX] Kept all DataTables columns searchable internally so custom column filters continue to work while computed numeric columns stay out of global search.
+- [FIX] Limited recycle-bin identity lookup to configurations that display Recycle Bin or need computed-column exclusion.
+- [FIX] Restored the grouped Recycle Bin identity query shape requested for additional-column exclusion: `project.id:PROJECT_A AND id:(REQ-1 REQ-2)`.
+- [FIX] Normalized stored boolean table settings and added a defensive guard for rare empty ResizeObserver events.
+- [FIX] Added stronger safe-color validation for runtime table colors.
+- [DOCS] Updated version 4 documentation for permissions, Collection inheritance, baseline/revision behavior, filters, optional columns, Recycle Bin behavior, Risksheet links, presets, and packaging.

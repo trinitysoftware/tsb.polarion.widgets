@@ -15,13 +15,27 @@
 ## ===========================================================================
 #macro ( loadJsResource $url )
     ## =======================================================================
-    ## Synchronous XHR fetch and eval — required for Polarion widget resources.
+    ## Polarion widget resources must be fetched synchronously before the table
+    ## initializes. Execute only a successful response and keep loader variables
+    ## local so multiple widget instances cannot overwrite one another.
     ## =======================================================================
     <script type="text/javascript">
-        var xhrObj = new XMLHttpRequest();
-        xhrObj.open('GET', '$url', false);
-        xhrObj.send(null);
-        eval(xhrObj.responseText);
+        (function (resourceUrl) {
+            var request = new XMLHttpRequest();
+
+            request.open('GET', resourceUrl, false);
+            request.send(null);
+
+            if ((request.status >= 200 && request.status < 300) || request.status === 0) {
+                window.eval(request.responseText);
+                return;
+            }
+
+            throw new Error(
+                'Unable to load widget JavaScript resource: ' +
+                resourceUrl + ' (HTTP ' + request.status + ')'
+            );
+        }('$esc.javascript($url)'));
     </script>
 #end
 
@@ -38,17 +52,35 @@
 ## ===========================================================================
 #macro ( loadCssResource $url )
     ## =======================================================================
-    ## Synchronous XHR fetch injected into a <style> tag — required for Polarion widget resources.
+    ## Fetch the stylesheet before table initialization. textContent treats the
+    ## response strictly as CSS and avoids parsing it as generated HTML.
     ## =======================================================================
     #set ( $cssId = $widgetContext.generateUniqueElementId() )
 
     <style id="$cssId"></style>
 
     <script type="text/javascript">
-        var xhrObj = new XMLHttpRequest();
-        xhrObj.open('GET', '$url', false);
-        xhrObj.send(null);
-        document.getElementById("$cssId").innerHTML = xhrObj.responseText;
+        (function (resourceUrl, styleElementId) {
+            var request = new XMLHttpRequest();
+            var styleElement = document.getElementById(styleElementId);
+
+            if (!styleElement) {
+                throw new Error('Unable to find widget style element: ' + styleElementId);
+            }
+
+            request.open('GET', resourceUrl, false);
+            request.send(null);
+
+            if ((request.status >= 200 && request.status < 300) || request.status === 0) {
+                styleElement.textContent = request.responseText;
+                return;
+            }
+
+            throw new Error(
+                'Unable to load widget CSS resource: ' +
+                resourceUrl + ' (HTTP ' + request.status + ')'
+            );
+        }('$esc.javascript($url)', '$esc.javascript($cssId)'));
     </script>
 #end
 
@@ -73,11 +105,12 @@
     // =======================================================================
     #foreach ( $headerKey in $headersKeys )
         #set ( $isGlobalSearchable = $headerGlobalSearchMap.get($headerKey) )
+        #set ( $headerTitleHtml = $esc.html($headersMap.get($headerKey)) )
         #if ( "$!isGlobalSearchable" == "" )
             #set ( $isGlobalSearchable = true )
         #end
         var headerData = {
-            title: "$esc.javascript($headersMap.get($headerKey))",
+            title: "$esc.javascript($headerTitleHtml)",
             key: "$esc.javascript($headerKey)",
             filterType: "$esc.javascript($headerFilterTypesMap.get($headerKey))",
             globalSearch: $isGlobalSearchable,
@@ -163,6 +196,10 @@
         var tableSelector = "$esc.javascript($forId)";
         var tableNode = document.querySelector(tableSelector);
 
+        if (!tableNode) {
+            throw new Error('Unable to find DataTable element: ' + tableSelector);
+        }
+
         // ===================================================================
         // Polarion replaces the widget markup when a user clicks Apply.
         // FixedHeader renders its floating header outside that markup, so it
@@ -201,13 +238,36 @@
             return isSafeCssLength(length) ? length : fallbackValue;
         }
 
+        function normalizeBoolean(value, fallbackValue) {
+            var normalizedValue = String(value).trim().toLowerCase();
+
+            if (normalizedValue === 'true') {
+                return true;
+            }
+
+            if (normalizedValue === 'false') {
+                return false;
+            }
+
+            return fallbackValue;
+        }
+
         var tableHeight = normalizeCssLength(
             "$esc.javascript($tableSettings.get("tableHeight"))",
             '60vh'
         );
-        var showExportButtons = $tableSettings.get("showExportButtons");
-        var showSearchBar = $tableSettings.get("showSearchBar");
-        var enablePaging = $tableSettings.get("enablePaging");
+        var showExportButtons = normalizeBoolean(
+            "$esc.javascript($tableSettings.get("showExportButtons"))",
+            true
+        );
+        var showSearchBar = normalizeBoolean(
+            "$esc.javascript($tableSettings.get("showSearchBar"))",
+            true
+        );
+        var enablePaging = normalizeBoolean(
+            "$esc.javascript($tableSettings.get("enablePaging"))",
+            false
+        );
         var rowsPerPage = parseInt("$esc.javascript($tableSettings.get("rowsPerPage"))", 10);
 
         // ===================================================================
@@ -509,7 +569,7 @@
                 title: header.title,
                 data: header.key,
                 name: header.key,
-                searchable: header.globalSearch !== false,
+                searchable: true,
                 render: function (data, type, row) {
                     if (type === 'display') {
                         return data;
@@ -543,6 +603,14 @@
                     }
 
                     if (type === 'filter') {
+                        // DataTables uses one filter value for both global and
+                        // column searches. Keep the column searchable so its
+                        // custom filter runs, but hide opted-out values from the
+                        // global search text.
+                        if (header.globalSearch === false) {
+                            return '';
+                        }
+
                         return getFilterDataValue(row, header, data);
                     }
 
@@ -784,6 +852,10 @@
             var observedContainerWidth = -1;
 
             tableInstance.resizeObserver = new ResizeObserver(function (entries) {
+                if (!entries.length) {
+                    return;
+                }
+
                 var containerWidth = entries[0].contentRect.width;
 
                 if (containerWidth > 0 && containerWidth !== observedContainerWidth) {

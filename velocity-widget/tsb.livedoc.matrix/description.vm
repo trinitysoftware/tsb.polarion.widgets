@@ -30,6 +30,8 @@
 ## OVERVIEW — tsb.livedoc.matrix — description.vm
 ## ===========================================================================
 <ul>
-    <li><b>LiveDoc Matrix</b> — Renders a configurable document matrix for review, traceability, and reporting workflows.</li>
-    <li><b>Configuration</b> — Supports scoped Data Sets, recommended presets, document metadata columns, baseline-aware rendering, and DataTables filtering/export controls.</li>
+    <li><b>LiveDoc Matrix</b> - Renders a permission-aware document matrix for review, traceability, release-readiness, and reporting workflows.</li>
+    <li><b>Data Set Scope</b> - Supports project, project group, global, Collection, inherited Collection, Project Baseline, specific revision, and HEAD rendering modes where applicable.</li>
+    <li><b>Configuration</b> - Provides recommended presets or full custom configuration for document metadata columns, LiveDoc status columns, computed query-count columns, Recycle Bin counts, and optional Risksheet links.</li>
+    <li><b>Table Experience</b> - Uses DataTables with multi-sort, smart per-column filters, optional global search, optional export buttons, optional paging, fixed header, configurable colors, and zero-count highlighting.</li>
 </ul>

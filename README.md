@@ -6,7 +6,7 @@ Polarion Velocity widget source for `tsb.livedoc.matrix`.
 
 | Item | Folder | Description |
 |------|--------|-------------|
-| **TSB LiveDoc Matrix 4.0** | [`velocity-widget/tsb.livedoc.matrix/`](velocity-widget/tsb.livedoc.matrix/) | Polarion widget that renders one table row per LiveDoc from Data Set scope, including project, project group, collection, and global selections. It shows document metadata, optional review/status columns, recommended presets, and configured query-count columns with work item, document, and optional risksheet links. |
+| **TSB LiveDoc Matrix 4.0** | [`velocity-widget/tsb.livedoc.matrix/`](velocity-widget/tsb.livedoc.matrix/) | Polarion widget that renders one table row per readable LiveDoc from Data Set scope, including project, project group, collection, inherited collection, baseline, revision, and global selections. It shows document metadata, review/status columns, recommended presets, recycle-bin counts, and configured query-count columns with work item, document, and optional Risksheet links. |
 | **TSB Velocity Framework** | [`velocity-scripts/`](velocity-scripts/) | Shared Velocity macros used by the widget to load local CSS/JS resources, convert Velocity table data to JavaScript, and initialize DataTables. |
 
 ## Contents
@@ -22,6 +22,8 @@ Polarion Velocity widget source for `tsb.livedoc.matrix`.
 | [`velocity-widget/tsb.livedoc.matrix/widget.properties`](velocity-widget/tsb.livedoc.matrix/widget.properties) | Widget label and tags. Current label: `TSB LiveDoc Matrix 4.0`. |
 | [`velocity-widget/tsb.livedoc.matrix/resources/datatables.js`](velocity-widget/tsb.livedoc.matrix/resources/datatables.js) | DataTables JavaScript bundled with the widget. |
 | [`velocity-widget/tsb.livedoc.matrix/resources/datatables.css`](velocity-widget/tsb.livedoc.matrix/resources/datatables.css) | DataTables CSS bundled with the widget. |
+| [`velocity-widget/tsb.livedoc.matrix/resources/tableEffects.js`](velocity-widget/tsb.livedoc.matrix/resources/tableEffects.js) | Widget-owned table styling helper for safe runtime colors. |
+| [`velocity-widget/tsb.livedoc.matrix/resources/tableEffects.css`](velocity-widget/tsb.livedoc.matrix/resources/tableEffects.css) | Widget-owned CSS for table layout, filters, paging, and count highlighting. |
 | [`velocity-widget/tsb.livedoc.matrix/icon.png`](velocity-widget/tsb.livedoc.matrix/icon.png) | Widget icon. |
 | [`velocity-widget/tsb.livedoc.matrix/CHANGELOG.md`](velocity-widget/tsb.livedoc.matrix/CHANGELOG.md) | Widget change history. |
 | [`velocity-widget/tsb.livedoc.matrix/LICENSE`](velocity-widget/tsb.livedoc.matrix/LICENSE) | BSD 3-Clause license for the widget. |
@@ -30,10 +32,12 @@ Polarion Velocity widget source for `tsb.livedoc.matrix`.
 
 ## Deploy the widget
 
-1. Zip the contents of [`velocity-widget/tsb.livedoc.matrix/`](velocity-widget/tsb.livedoc.matrix/).
-2. Make sure the archive root contains `render.vm`, `parameters.vm`, `widget.properties`, and `resources/`.
-3. Upload the zip in Polarion Administration under Velocity Widgets.
-4. Add `TSB LiveDoc Matrix 4.0` to a Polarion page and configure its parameters.
+1. Zip the [`velocity-widget/tsb.livedoc.matrix/`](velocity-widget/tsb.livedoc.matrix/) widget folder.
+2. Make sure the archive has exactly one top-level folder: `tsb.livedoc.matrix/`.
+3. Inside that top-level folder, make sure the archive contains `render.vm`, `parameters.vm`, `widget.properties`, and `resources/`.
+4. Do not place those files directly at the zip root, and do not add extra top-level folders or files; Polarion can reject that with a "too many entries" upload error.
+5. Upload the zip in Polarion Administration under Velocity Widgets.
+6. Add `TSB LiveDoc Matrix 4.0` to a Polarion page and configure its parameters.
 
 ## Repository layout
 
@@ -57,6 +61,8 @@ tsb.polarion.widgets/
         +-- resources/
             +-- datatables.css                   # DataTables stylesheet
             +-- datatables.js                    # DataTables script
+            +-- tableEffects.css                 # Widget table styles
+            +-- tableEffects.js                  # Runtime table style helper
 ```
 
 ## Widget parameters
@@ -68,8 +74,20 @@ tsb.polarion.widgets/
 | `showProject` | Shows or hides the Project column. |
 | `showSpace` | Shows or hides the Space column. |
 | `showSignaturesStatus` | Shows or hides the Signatures column. |
+| `showDocumentBaselines` | Shows or hides document baselines whose base object is the LiveDoc. |
+| `showBranchedDocuments` | Shows or hides readable branch targets. |
+| `showMasterDocument` | Shows or hides the readable source document for branched or derived LiveDocs. |
+| `showUnresolvedComments` | Shows or hides unresolved root comments. |
+| `showUnreferencedWorkItems` | Shows or hides the Recycle Bin count for unreferenced work items. |
+| `showApprovedVersions` | Shows or hides approved workflow transition revisions. |
 | `columnFields` | Comma-separated Polarion document field IDs shown as columns. |
+| `showRisksheetLink` | Adds an optional Risksheet link to additional query-count columns. |
 | `columns` | Repeatable title and Lucene query pairs for additional count columns. |
+| `tableHeight` | Sets the DataTables vertical scroll height. |
+| `headerBackgroundColor`, `headerTextColor`, `rowBackgroundColor`, `alternateRowBackgroundColor` | Configure safe table colors from the widget properties panel. |
+| `showExportButtons` | Shows or hides DataTables copy, CSV, and Excel export buttons. |
+| `showSearchBar` | Shows or hides the global DataTables search box. |
+| `enablePaging`, `rowsPerPage` | Enable paging and choose the page size. |
 
 ## Development
 
@@ -84,4 +102,3 @@ To use macros from another Velocity file in Polarion, place the macro file in `/
 If you cannot access **Repository Browser** yet, navigate to `Administration` -> `Portal` -> `Topics` -> `Create New Topics Configuration`, then add `<topic id="repository_browser"/>`. Click Save. Navigate back to the project, then create this directory: `/.polarion/pages/scripts/velocity`, and add the shared macro file there.
 
 After the file is in that directory, import it from the widget file. For this widget, `render.vm` imports `tsb.framework.vm` and can then use the macros defined in that file.
-

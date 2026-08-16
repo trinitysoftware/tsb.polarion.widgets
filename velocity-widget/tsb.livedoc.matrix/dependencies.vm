@@ -28,7 +28,7 @@
 ## ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## ===========================================================================
 ## ===========================================================================
-## OVERVIEW — tsb.livedoc.matrix — dependencies.vm
+## OVERVIEW - tsb.livedoc.matrix - dependencies.vm
 ## ===========================================================================
 ## ===========================================================================
 ## Validate the selected recommended matrix configuration preset.
@@ -191,9 +191,8 @@
     ## =======================================================================
     #set ( $documentQuery = $parameters.dataSet.getFor().revision("").queryToShow() )
     #resolveQueryPageParametersMacro($documentQuery)
-    #set ( $documentQueryText = $resolvedQueryText )
-    #set ( $documentQuery = $documentQueryText )
-    #set ( $documentQueryLower = $documentQueryText.toLowerCase() )
+    #set ( $documentQuery = $resolvedQueryText )
+    #set ( $documentQueryLower = $documentQuery.toLowerCase() )
 
     #if ( $documentQueryLower.contains("select ") || $documentQueryLower.contains(" from ") )
         #set ( $documentQueryIsSql = true )
@@ -206,7 +205,7 @@
     #set ( $scopeDocuments = $transaction.documents().search().query($documentQuery).sort("project.id") )
 
     #foreach ( $scopeDocument in $scopeDocuments )
-        #if ( !$scopeDocument.isUnresolvable() )
+        #if ( !$scopeDocument.isUnresolvable() && $scopeDocument.can().read() )
             #set ( $scopeProjectId = $scopeDocument.fields().project().projectId() )
 
             #if ( $scopeProjectId && !$baselineProjectIds.contains($scopeProjectId) )
