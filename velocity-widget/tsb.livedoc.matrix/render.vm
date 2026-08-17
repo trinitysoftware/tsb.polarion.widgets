@@ -951,8 +951,8 @@
                 #if ( !($signatureStatus.equals("obsolete")) && !($signatureStatus.equals("notAvailable")) )
                     #set ( $signatureStateHtml = $workflowSignature.fields().signatureState().render().withIcon(false).openLinksInNewWindow() )
                     #set ( $signatureLabelHtml = $esc.html($workflowSignature.label()) )
-                    #set ( $signatureGroupHtml = "<b>$signatureStateHtml - $signatureLabelHtml</b><br>" )
-                    #set ( $signatureHtml = "${signatureHtml}<br>${signatureGroupHtml}" )
+                    #set ( $signatureGroupHtml = "<div style=${q}margin:0 0 12px 0;white-space:nowrap;${q}>" )
+                    #set ( $signatureGroupHtml = "${signatureGroupHtml}<div><b>$signatureStateHtml - $signatureLabelHtml</b></div>" )
 
                     ## =======================================================
                     ## Render each signature decision below its workflow state.
@@ -963,9 +963,12 @@
                         #set ( $signatureSignerHtml = $signatureEntry.fields().signedBy().render().openLinksInNewWindow() )
                         #set ( $signatureVerdictHtml = $signatureEntry.fields().verdict().render().withIcon(false).openLinksInNewWindow() )
                         #set ( $signatureVerdictTimeHtml = $signatureEntry.fields().verdictTime().render().openLinksInNewWindow() )
-                        #set ( $renderedSignatureHtml = "<b>$signatureSignerHtml</b> - $signatureVerdictHtml - $signatureVerdictTimeHtml" )
-                        #set ( $signatureHtml = "${signatureHtml}<br>${renderedSignatureHtml}" )
+                        #set ( $renderedSignatureHtml = "<div><b>$signatureSignerHtml</b> - $signatureVerdictHtml - $signatureVerdictTimeHtml</div>" )
+                        #set ( $signatureGroupHtml = "${signatureGroupHtml}${renderedSignatureHtml}" )
                     #end
+
+                    #set ( $signatureGroupHtml = "${signatureGroupHtml}</div>" )
+                    #set ( $signatureHtml = "${signatureHtml}${signatureGroupHtml}" )
                 #end
             #end
 
