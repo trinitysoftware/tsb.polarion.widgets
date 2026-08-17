@@ -48,25 +48,9 @@ window.TableEffects = class TableEffects {
 
     isSafeColor(value) {
         const color = String(value || '').trim();
-        const hexadecimalColorPattern = /^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/;
-        const rgbColorPattern = /^rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$/;
-        const rgbaColorPattern = /^rgba\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(0(?:\.\d+)?|1(?:\.0+)?)\s*\)$/;
-        const functionalColorMatch = color.match(rgbColorPattern) ||
-            color.match(rgbaColorPattern);
 
-        if (hexadecimalColorPattern.test(color)) {
-            return true;
-        }
-
-        if (!functionalColorMatch) {
-            return false;
-        }
-
-        // RGB channels are limited to the range accepted by CSS. The alpha
-        // pattern above already limits optional RGBA opacity to zero through one.
-        return functionalColorMatch.slice(1, 4).every((channel) => {
-            return Number(channel) <= 255;
-        });
+        return /^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(color) ||
+            /^rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}(\s*,\s*(0|1|0?\.\d+))?\s*\)$/.test(color);
     }
 
     setColorVar(name, value) {
@@ -74,4 +58,4 @@ window.TableEffects = class TableEffects {
             this.setVar(name, String(value).trim());
         }
     }
-};
+}
