@@ -1,67 +1,169 @@
 # Changelog
 
-## Version 1.0 - 2026-05-20
+## Version 4.0
 
-- Initial release under `new-widget-1` for Polarion ALM 2512 testing.
-- Widget id: `tsb.livedoc.matrix` (≤30 characters; required by Polarion upload).
-- Renamed from `tsb.livedoc.workitems.matrix` (32 chars) after upload error.
-- LiveDoc rows; enumeration or Lucene columns; row total column; footer totals row.
+### 2026-08-17
 
-## Version 1.1 - 2026-05-26
-- This contains minor fixes in naming in `CHANGELOG.md`, `README.md`, 
-- [FIX] Removed the version name from the folder name; removed `v.1.0` or `v.1`
+- [FIX] Reverted the vendored DataTables bundle.
+- [ENHANCEMENT] Rendered Branched Documents and Master Document values with Polarion's native document renderer using `withSpace()`.
+- [DOCS] Updated the root README as a multi-widget repository catalog and documentation convention guide.
+- [DOCS] Reordered this changelog so the latest changes appear first.
 
-## Version 1.2 - 2026-05-28
-- [FIX] BSD-3 Clause licenses made consistent all throughout files
-- [FIX] Removed wrong table columns, revised to live document matrix
+### 2026-08-16
 
-## Version 1.3 - 2026-05-28
-- [FIX] Revised version count inconsistencies between the files
-- [FIX] Changed widget naming inconsistencies in the files
-- [FIX] Changed details into a more fitting detail of the general purpose of the matrix
-- [FIX] Configured descriptions of parameters fit better descriptions of the features
-- [FIX] Updated feature matrix and repository description to align with implemented behavior.
+- [ENHANCEMENT] Added stable generated internal keys for configured document fields and additional query columns so user labels and field ids cannot collide with built-in table keys.
+- [ENHANCEMENT] Preserved selected-Collection precedence when inherited Collections contain the same document, preventing upstream duplicates from replacing the selected document revision.
+- [ENHANCEMENT] Refined Document Baselines rendering so readable baseline targets open through normal document links with the selected revision preserved.
+- [ENHANCEMENT] Refined Branched Documents and Master Document rendering so readable related documents use clearer project, space, document, and revision-aware link output.
+- [ENHANCEMENT] Refined Approved Versions rendering so approved workflow transition revisions show readable version metadata and revision-aware document links.
+- [ENHANCEMENT] Reduced the vendored DataTables bundle to the required official components: jQuery, JSZip, DataTables, Buttons HTML5 export, ColumnControl, and FixedHeader.
+- [FIX] Escaped dynamic header titles and workflow signature labels before they are rendered into table HTML.
+- [FIX] Kept all DataTables columns searchable internally so custom column filters continue to work while computed numeric columns stay out of global search.
+- [FIX] Limited recycle-bin identity lookup to configurations that display Recycle Bin or need computed-column exclusion.
+- [FIX] Restored the grouped Recycle Bin identity query shape requested for additional-column exclusion: `project.id:PROJECT_A AND id:(REQ-1 REQ-2)`.
+- [FIX] Normalized stored boolean table settings and added a defensive guard for rare empty ResizeObserver events.
+- [FIX] Added stronger safe-color validation for runtime table colors.
+- [DOCS] Updated version 4 documentation for permissions, Collection inheritance, baseline/revision behavior, filters, optional columns, Recycle Bin behavior, Risksheet links, presets, and packaging.
 
-## Version 1.4 - 2026-06-01
+### 2026-08-13
 
-Trinity naming and coding conventions applied. Version remains in `widget.properties` label and this changelog only — not in the folder name.
+- [DOCS] Updated root and widget README content for the v4 Data Set, baseline, preset, and DataTables feature set.
+- [DOCS] Updated widget description and details text for the current configurable LiveDoc matrix behavior.
+- [FIX] Polished framework resource loading and DataTables initialization comments for maintainability.
 
-### Repository layout
-- [FIX] Moved widget from repo root into `velocity-widget/tsb.livedoc.matrix/` (parent folder marks deliverable type).
-- [FIX] Updated root `README.md` and widget `README.md` for new paths and deploy instructions.
+### 2026-08-11
 
-### Velocity directive spacing
-- [FIX] Applied spaces after directive keywords and around parentheses throughout `render.vm` and `parameters.vm`.
-- [FIX] Examples: `#if ( !$projectId )`, `#set ( $allowRendering = true )`, `#foreach ( $doc in $docs )`, `#macro ( prepareColumnsMacro )`.
+- [ENHANCEMENT] Refined LiveDoc metadata rendering for review, traceability, and release-readiness workflows.
+- [ENHANCEMENT] Improved query-count column handling so computed cells consistently render count, document, and optional Risksheet links from the same effective query.
+- [FIX] Cleaned up duplicated and outdated row-building logic after the v4 feature additions.
+- [FIX] Removed the referenced-work-items toggle and the referenced-work-item count path so computed columns count work items contained in the current LiveDoc query only.
+- [FIX] Removed custom status background-color formatting so status fields render through Polarion's native field output and the table keeps a cleaner, less intrusive visual style.
+- [FIX] Simplified table styling rules so DataTables, ColumnControl, and widget-owned effects remain easier to maintain together.
 
-### Widget-local macros (`render.vm` only)
-- [FIX] Renamed macros to lowerCamelCase with `Macro` suffix:
-  - `prepareColumns` → `prepareColumnsMacro`
-  - `prepareRows` → `prepareRowsMacro`
-  - `renderTableStart` → `renderTableStartMacro`
-  - `renderTableEnd` → `renderTableEndMacro`
-  - `renderTableHeader` → `renderTableHeaderMacro`
-  - `renderTableRows` → `renderTableRowsMacro`
-- [FIX] Updated all macro call sites in main render block to match.
-- [FIX] Widget-local macros remain in `render.vm`.
+### 2026-08-10
 
-### `parameters.vm` cleanup
-- [FIX] Applied Velocity directive spacing on `#set ( $title = ... )`, `#set ( $query = ... )`, `#set ( $composite = ... )`.
+- [ENHANCEMENT] Added page-parameter query resolution for dynamic Data Set query values.
+- [ENHANCEMENT] Added recommended matrix configuration presets.
+- [FIX] Added explicit read checks for Data Set documents, related documents, and work items before rendering metadata or identity-based query links.
+- [FIX] Deduplicated identity-based work item queries so referenced and contained items are not counted twice.
+- [FIX] Hardened widget resource loading and DataTables setup with safer values, scoped loader variables, and clearer failure behavior.
+- [FIX] Hardened table settings validation for table height, rows per page, and configurable colors.
+- [FIX] Updated status formatting to use semantic status classes with a neutral fallback for custom statuses.
 
-## Version 2.0 - 2026-06-04
+### 2026-08-09
 
-Major enhancement release: interactive in-page toolbar, JavaScript table rendering, and scoped CSS styling. Version remains in `widget.properties` label and this changelog only — not in the folder name.
+- [ENHANCEMENT] Moved baseline and revision configuration under the Data Set section.
+- [ENHANCEMENT] Added Collection scope support, including inherited Collection documents where configured.
+- [ENHANCEMENT] Added per-column filter and formatting improvements for document fields and computed count columns.
+- [ENHANCEMENT] Added optional LiveDoc metadata columns for document baselines, branched documents, master documents, approved versions, unresolved comments, and unreferenced work items.
+- [ENHANCEMENT] Added support for computed columns to include referenced work items in addition to contained document work items.
+- [FIX] Removed saved sorting controls from the widget properties panel.
+- [FIX] Refined Project Baseline option loading and validation.
 
-### Interactive toolbar (in-page, no widget reload)
-- [ENHANCEMENT] **Row filter** — text input filters visible rows by document title, name, and space (client-side).
-- [ENHANCEMENT] **Column toggles** — checkboxes for Project, Space, and Signatures; defaults follow widget parameters (`showProject`, `showSpace`, `showSignaturesStatus`).
-- [ENHANCEMENT] **Add field** — enter a document field id to show an extra column; pre-rendered cell HTML is read from hidden spans (field catalog includes `columnFields` plus common ids such as `status`, `author`, `updated`).
-- [ENHANCEMENT] **Add column** — enter title + Lucene query to add a query-count column at runtime; counts fetched via Polarion REST (`getRestApiToken`) with the same work-item / Doc link pattern as configured columns.
-- [ENHANCEMENT] **Column and field pickers** — checkbox chips to show or hide added field columns and query columns without reloading the widget.
-- [ENHANCEMENT] **Reset** — clears row filter, user-added columns/fields, visibility overrides, and restores toolbar defaults from widget parameters.
+### 2026-08-06
 
-### Removed / replaced
-- [ENHANCEMENT] Removed Velocity table macros (`prepareColumnsMacro`, `prepareRowsMacro`, `renderTableStartMacro`, `renderTableEndMacro`, `renderTableHeaderMacro`, `renderTableRowsMacro`); logic moved to span serialization (server) and DOM rendering (client).
+- [FIX] Improved stale Project Baseline handling so invalid saved selections fall back safely instead of rendering against the wrong baseline.
+
+### 2026-08-05
+
+- [ENHANCEMENT] Added multi-project row handling so rendered LiveDocs preserve their own project context for links, work item queries, and counts.
+- [ENHANCEMENT] Added Project Baseline and Revision controls for rendering the matrix against a selected revision context.
+- [ENHANCEMENT] Added default sorting presets for Project, Space, and Document where those columns are available.
+- [ENHANCEMENT] Added initial formatting support for matrix status and count cells.
+
+### 2026-07-29
+
+- [ENHANCEMENT] Removed the Reset Table Settings parameter from the widget properties panel.
+- [ENHANCEMENT] Refined smart column filtering so catalog, date, list, and computed numeric columns use the appropriate filter controls.
+- [FIX] Improved filter state handling so global search, column filters, and computed count filters can operate together without hiding valid rows.
+
+### 2026-07-28
+
+- [ENHANCEMENT] Updated column filters to use Polarion catalog values for Spaces, document types, and document statuses.
+- [ENHANCEMENT] Added an inclusive date-range filter for Updated and retained zero/non-zero choices for computed columns.
+- [ENHANCEMENT] Added empty-state messages for data sets and filter combinations with no matching documents.
+- [FIX] Removed duplicate document status and document type choices from filter dropdowns.
+- [FIX] Restored global search across visible cell values while keeping column filters on their dedicated raw values.
+
+### 2026-07-27
+
+- [ENHANCEMENT] Added optional paging with a configurable rows-per-page value that defaults to `10` and remains hidden while paging is disabled.
+- [ENHANCEMENT] Centered pagination controls and added corporate-blue hover and active states.
+- [ENHANCEMENT] Added per-column distinct-value dropdowns for ordinary columns and zero/non-zero choices for computed columns.
+- [ENHANCEMENT] Added funnel and active-filter indicators, retained column sorting controls, and positioned both controls consistently across all columns.
+- [ENHANCEMENT] Added a `Clear filters` action beside the DataTables entry count.
+- [ENHANCEMENT] Left-aligned additional query-column headers and values with the other table content.
+- [FIX] Recalculated DataTables column widths after Polarion resizes the widget.
+- [FIX] Applied fixed table layout to keep DataTables scroll-header and body columns aligned during widget editing and redraws.
+- [FIX] Limited internal sizing-header cleanup to the DataTables master table.
+- [DOCS] Updated the documented DataTables macro signature for column filter metadata and table settings.
+
+### 2026-07-26
+
+- [ENHANCEMENT] Added widget properties for table height, header colors, row colors, export buttons, and the search bar.
+- [ENHANCEMENT] Moved the DataTables entry count above the table.
+- [ENHANCEMENT] Highlighted zero work item counts in red across all additional query columns.
+- [FIX] Applied configured header colors consistently to the visible header and sorting indicators.
+- [FIX] Destroyed disconnected DataTables instances during widget rerenders to prevent stray FixedHeader elements.
+- [FIX] Updated the widget label to `TSB LiveDoc Matrix 4.0`.
+
+### 2026-07-25
+
+- [ENHANCEMENT] Enabled DataTables multi-column sorting with default ordering by Project, Space, and Document.
+
+## Version 3.0
+
+### 2026-07-14
+- [FIX] Changed and reuploaded the datatables to include the libraries: `jQuery 3.7.0, JSZip 3.10.1, pdfmake 0.2.7, DataTables 2.3.8, Buttons 3.2.6, Column visibility 3.2.6, HTML5 export 3.2.6, Print view 3.2.6, ColumnControl 1.2.1, FixedHeader 4.0.6, SearchBuilder 1.8.4, SearchPanes 2.3.5`, resulting to a resolved conflict in fixedHeader
+- [ENHANCEMENT] Added back the fixedHeader in the `tsb.framework.vm`
+- [ENHANCEMENT] Added hover in the table class, resulting to `<table id="$widgetTableId" class="stripe hover row-border order-column nowrap">`
+- [DOCS] Changed the documentation
+
+### 2026-07-10
+- [FIX] Removed use of sticky headers in Datatables; code failed to render
+- [FIX] Removed hover effects in rows in Table Effects
+- [FIX] Created additional Datatables configuration to: `paging:false, scrollY: '60vh', autoWidth: true`
+- [FIX] Removed icons in Signature fields
+- [FIX] Removed the nesting div that uses $divId for the table in tsb.framework.vm
+- [FIX] Removed the use of $divId
+
+### 2026-07-01
+
+Documentation update only. No widget behavior changes and no code fixes.
+
+- [DOCS] Replaced the root `README.md` opening description with a specific repository description for `tsb.livedoc.matrix`.
+- [DOCS] Updated the root widget table from one generic widget row to two current entries: `TSB LiveDoc Matrix 3.0` and `TSB Velocity Framework`.
+- [DOCS] Added `velocity-scripts/tsb.framework.vm` to the root README because `render.vm` imports it.
+- [DOCS] Added a root `Contents` table with exact paths for widget files, DataTables resources, license, changelog, icon, and shared framework macros.
+- [DOCS] Updated root deployment steps to zip `velocity-widget/tsb.livedoc.matrix/` contents and include `resources/` at the archive root.
+- [DOCS] Updated the root repository layout to include `velocity-scripts/`, `icon.png`, and `resources/datatables.css` / `resources/datatables.js`.
+- [DOCS] Added a root widget parameter table for `dataSet`, `showProject`, `showSpace`, `showSignaturesStatus`, `columnFields`, and `columns`.
+- [DOCS] Replaced widget README metadata from old trial values (`trial-widget-5`, `trial5`, `trials`) to current values (`tsb.livedoc.matrix`, `TSB LiveDoc Matrix 3.0`, `Trinity`).
+- [DOCS] Replaced outdated widget README rendering notes for `headersJson()` and `rowsJson($rowTitles)` with the current `initDataTableMacro()` flow from `tsb.framework.vm`.
+- [DOCS] Added widget README sections for current contents, parameters, rendering flow, rendered columns, additional query columns, and deployment.
+- [DOCS] Added shared macro usage notes to both README files: macro files must be placed in `/.polarion/pages/scripts/velocity` before they can be imported and used by widget files.
+
+### 2026-06-30
+
+- [ENHANCEMENT] Split DataTables rendering helpers out of `render.vm` and into `velocity-scripts/tsb.framework.vm`.
+- [ENHANCEMENT] Replaced the old `#parse("loadResources.vm")` usage with `#import("tsb.framework.vm")`.
+- [ENHANCEMENT] Moved widget resource loading macros (`loadWidgetCssResource`, `loadWidgetJsResource`, `loadCssResource`, `loadJsResource`) into the shared framework file.
+- [ENHANCEMENT] Moved `renderWidgetDataMacro()` and `initDataTableMacro()` into the shared framework file so `render.vm` prepares data and the framework renders the table.
+- [ENHANCEMENT] Replaced manual JSON array generation in `headersJson()` and `rowsJson()` with Velocity maps and lists: `$headersMap`, `$headersKeys`, and `$dataRows`.
+- [ENHANCEMENT] Added `prepareHeadersMacro()` to build table headers before passing them to DataTables.
+- [ENHANCEMENT] Added `prepareDataRowsMacro()` to build one Velocity row map per LiveDoc before passing rows to DataTables.
+- [ENHANCEMENT] Added support for configured additional query columns from the repeatable `columns` parameter.
+- [ENHANCEMENT] Added work item count links and filtered `Doc` links for each additional query column cell.
+- [ENHANCEMENT] Generated a unique table id with `$widgetContext.generateUniqueElementId()` so multiple widget instances can render on the same page without sharing `widget-table`.
+- [FIX] Changed document collection from the broken `$docItem.add($doc)` reference to `$docItems.add($_doc)`.
+- [FIX] Skipped unresolvable documents before adding them to the matrix row list.
+- [FIX] Built each document work item query with the project id from the document object instead of the outer `$projectId`.
+- [FIX] Rendered the Project value directly with `docu.fields().project().render()` instead of checking a separate project field variable.
+- [FIX] Rendered the Space value with `docu.space().render()` instead of manually parsing the old API relative path.
+- [FIX] Kept signature rendering filtered to skip `obsolete` and `notAvailable` states.
+- [FIX] Removed inline JavaScript object comments from manually generated row JSON by moving row data into Velocity maps before JavaScript conversion.
+- [FIX] Resolved old CR comments about mixing Velocity and JSON by keeping the data in Velocity maps until `renderWidgetDataMacro()` converts it for DataTables.
+- [FIX] Resolved old CR comments about moving JSON/resource helper functions out of `render.vm` by moving them to `tsb.framework.vm`.
 
 ## Version 2.1 - 2026-06-08
 
@@ -100,160 +202,65 @@ Documentation and formatting pass for readability and maintainability. No new wi
 - [FIX] Restored the complete `readSpanValue()` function wrapper — an orphaned function body caused a JavaScript syntax error that stopped the entire `<script>` block and prevented the matrix from rendering.
 - [FIX] Kept `$transaction.context().createPortalLink().project(…).workItems().query(…).toEncodedRelativeUrl()` and the matching `.document(…).filter(…).toEncodedRelativeUrl()` assignments on single lines; Velocity does not support splitting method chains across lines.
 
-## Version 3.0 
+## Version 2.0 - 2026-06-04
 
-### 2026-06-30
+Major enhancement release: interactive in-page toolbar, JavaScript table rendering, and scoped CSS styling. Version remains in `widget.properties` label and this changelog only — not in the folder name.
 
-- [ENHANCEMENT] Split DataTables rendering helpers out of `render.vm` and into `velocity-scripts/tsb.framework.vm`.
-- [ENHANCEMENT] Replaced the old `#parse("loadResources.vm")` usage with `#import("tsb.framework.vm")`.
-- [ENHANCEMENT] Moved widget resource loading macros (`loadWidgetCssResource`, `loadWidgetJsResource`, `loadCssResource`, `loadJsResource`) into the shared framework file.
-- [ENHANCEMENT] Moved `renderWidgetDataMacro()` and `initDataTableMacro()` into the shared framework file so `render.vm` prepares data and the framework renders the table.
-- [ENHANCEMENT] Replaced manual JSON array generation in `headersJson()` and `rowsJson()` with Velocity maps and lists: `$headersMap`, `$headersKeys`, and `$dataRows`.
-- [ENHANCEMENT] Added `prepareHeadersMacro()` to build table headers before passing them to DataTables.
-- [ENHANCEMENT] Added `prepareDataRowsMacro()` to build one Velocity row map per LiveDoc before passing rows to DataTables.
-- [ENHANCEMENT] Added support for configured additional query columns from the repeatable `columns` parameter.
-- [ENHANCEMENT] Added work item count links and filtered `Doc` links for each additional query column cell.
-- [ENHANCEMENT] Generated a unique table id with `$widgetContext.generateUniqueElementId()` so multiple widget instances can render on the same page without sharing `widget-table`.
-- [FIX] Changed document collection from the broken `$docItem.add($doc)` reference to `$docItems.add($_doc)`.
-- [FIX] Skipped unresolvable documents before adding them to the matrix row list.
-- [FIX] Built each document work item query with the project id from the document object instead of the outer `$projectId`.
-- [FIX] Rendered the Project value directly with `docu.fields().project().render()` instead of checking a separate project field variable.
-- [FIX] Rendered the Space value with `docu.space().render()` instead of manually parsing the old API relative path.
-- [FIX] Kept signature rendering filtered to skip `obsolete` and `notAvailable` states.
-- [FIX] Removed inline JavaScript object comments from manually generated row JSON by moving row data into Velocity maps before JavaScript conversion.
-- [FIX] Resolved old CR comments about mixing Velocity and JSON by keeping the data in Velocity maps until `renderWidgetDataMacro()` converts it for DataTables.
-- [FIX] Resolved old CR comments about moving JSON/resource helper functions out of `render.vm` by moving them to `tsb.framework.vm`.
+### Interactive toolbar (in-page, no widget reload)
+- [ENHANCEMENT] **Row filter** — text input filters visible rows by document title, name, and space (client-side).
+- [ENHANCEMENT] **Column toggles** — checkboxes for Project, Space, and Signatures; defaults follow widget parameters (`showProject`, `showSpace`, `showSignaturesStatus`).
+- [ENHANCEMENT] **Add field** — enter a document field id to show an extra column; pre-rendered cell HTML is read from hidden spans (field catalog includes `columnFields` plus common ids such as `status`, `author`, `updated`).
+- [ENHANCEMENT] **Add column** — enter title + Lucene query to add a query-count column at runtime; counts fetched via Polarion REST (`getRestApiToken`) with the same work-item / Doc link pattern as configured columns.
+- [ENHANCEMENT] **Column and field pickers** — checkbox chips to show or hide added field columns and query columns without reloading the widget.
+- [ENHANCEMENT] **Reset** — clears row filter, user-added columns/fields, visibility overrides, and restores toolbar defaults from widget parameters.
 
-### 2026-07-01
+### Removed / replaced
+- [ENHANCEMENT] Removed Velocity table macros (`prepareColumnsMacro`, `prepareRowsMacro`, `renderTableStartMacro`, `renderTableEndMacro`, `renderTableHeaderMacro`, `renderTableRowsMacro`); logic moved to span serialization (server) and DOM rendering (client).
 
-Documentation update only. No widget behavior changes and no code fixes.
+## Version 1.4 - 2026-06-01
 
-- [DOCS] Replaced the root `README.md` opening description with a specific repository description for `tsb.livedoc.matrix`.
-- [DOCS] Updated the root widget table from one generic widget row to two current entries: `TSB LiveDoc Matrix 3.0` and `TSB Velocity Framework`.
-- [DOCS] Added `velocity-scripts/tsb.framework.vm` to the root README because `render.vm` imports it.
-- [DOCS] Added a root `Contents` table with exact paths for widget files, DataTables resources, license, changelog, icon, and shared framework macros.
-- [DOCS] Updated root deployment steps to zip `velocity-widget/tsb.livedoc.matrix/` contents and include `resources/` at the archive root.
-- [DOCS] Updated the root repository layout to include `velocity-scripts/`, `icon.png`, and `resources/datatables.css` / `resources/datatables.js`.
-- [DOCS] Added a root widget parameter table for `dataSet`, `showProject`, `showSpace`, `showSignaturesStatus`, `columnFields`, and `columns`.
-- [DOCS] Replaced widget README metadata from old trial values (`trial-widget-5`, `trial5`, `trials`) to current values (`tsb.livedoc.matrix`, `TSB LiveDoc Matrix 3.0`, `Trinity`).
-- [DOCS] Replaced outdated widget README rendering notes for `headersJson()` and `rowsJson($rowTitles)` with the current `initDataTableMacro()` flow from `tsb.framework.vm`.
-- [DOCS] Added widget README sections for current contents, parameters, rendering flow, rendered columns, additional query columns, and deployment.
-- [DOCS] Added shared macro usage notes to both README files: macro files must be placed in `/.polarion/pages/scripts/velocity` before they can be imported and used by widget files.
+Trinity naming and coding conventions applied. Version remains in `widget.properties` label and this changelog only — not in the folder name.
 
-### 2026-07-10
-- [FIX] Removed use of sticky headers in Datatables; code failed to render
-- [FIX] Removed hover effects in rows in Table Effects
-- [FIX] Created additional Datatables configuration to: `paging:false, scrollY: '60vh', autoWidth: true`
-- [FIX] Removed icons in Signature fields 
-- [FIX] Removed the nesting div that uses $divId for the table in tsb.framework.vm
-- [FIX] Removed the use of $divId
+### Repository layout
+- [FIX] Moved widget from repo root into `velocity-widget/tsb.livedoc.matrix/` (parent folder marks deliverable type).
+- [FIX] Updated root `README.md` and widget `README.md` for new paths and deploy instructions.
 
-### 2026-07-14
-- [FIX] Changed and reuploaded the datatables to include the libraries: `jQuery 3.7.0, JSZip 3.10.1, pdfmake 0.2.7, DataTables 2.3.8, Buttons 3.2.6, Column visibility 3.2.6, HTML5 export 3.2.6, Print view 3.2.6, ColumnControl 1.2.1, FixedHeader 4.0.6, SearchBuilder 1.8.4, SearchPanes 2.3.5`, resulting to a resolved conflict in fixedHeader
-- [ENHANCEMENT] Added back the fixedHeader in the `tsb.framework.vm`
-- [ENHANCEMENT] Added hover in the table class, resulting to `<table id="$widgetTableId" class="stripe hover row-border order-column nowrap">`
-- [DOCS] Changed the documentation
+### Velocity directive spacing
+- [FIX] Applied spaces after directive keywords and around parentheses throughout `render.vm` and `parameters.vm`.
+- [FIX] Examples: `#if ( !$projectId )`, `#set ( $allowRendering = true )`, `#foreach ( $doc in $docs )`, `#macro ( prepareColumnsMacro )`.
 
-## Version 4.0
+### Widget-local macros (`render.vm` only)
+- [FIX] Renamed macros to lowerCamelCase with `Macro` suffix:
+  - `prepareColumns` → `prepareColumnsMacro`
+  - `prepareRows` → `prepareRowsMacro`
+  - `renderTableStart` → `renderTableStartMacro`
+  - `renderTableEnd` → `renderTableEndMacro`
+  - `renderTableHeader` → `renderTableHeaderMacro`
+  - `renderTableRows` → `renderTableRowsMacro`
+- [FIX] Updated all macro call sites in main render block to match.
+- [FIX] Widget-local macros remain in `render.vm`.
 
-### 2026-07-25
+### `parameters.vm` cleanup
+- [FIX] Applied Velocity directive spacing on `#set ( $title = ... )`, `#set ( $query = ... )`, `#set ( $composite = ... )`.
 
-- [ENHANCEMENT] Enabled DataTables multi-column sorting with default ordering by Project, Space, and Document.
+## Version 1.3 - 2026-05-28
+- [FIX] Revised version count inconsistencies between the files
+- [FIX] Changed widget naming inconsistencies in the files
+- [FIX] Changed details into a more fitting detail of the general purpose of the matrix
+- [FIX] Configured descriptions of parameters fit better descriptions of the features
+- [FIX] Updated feature matrix and repository description to align with implemented behavior.
 
-### 2026-07-26
+## Version 1.2 - 2026-05-28
+- [FIX] BSD-3 Clause licenses made consistent all throughout files
+- [FIX] Removed wrong table columns, revised to live document matrix
 
-- [ENHANCEMENT] Added widget properties for table height, header colors, row colors, export buttons, and the search bar.
-- [ENHANCEMENT] Moved the DataTables entry count above the table.
-- [ENHANCEMENT] Highlighted zero work item counts in red across all additional query columns.
-- [FIX] Applied configured header colors consistently to the visible header and sorting indicators.
-- [FIX] Destroyed disconnected DataTables instances during widget rerenders to prevent stray FixedHeader elements.
-- [FIX] Updated the widget label to `TSB LiveDoc Matrix 4.0`.
+## Version 1.1 - 2026-05-26
+- This contains minor fixes in naming in `CHANGELOG.md`, `README.md`,
+- [FIX] Removed the version name from the folder name; removed `v.1.0` or `v.1`
 
-### 2026-07-27
+## Version 1.0 - 2026-05-20
 
-- [ENHANCEMENT] Added optional paging with a configurable rows-per-page value that defaults to `10` and remains hidden while paging is disabled.
-- [ENHANCEMENT] Centered pagination controls and added corporate-blue hover and active states.
-- [ENHANCEMENT] Added per-column distinct-value dropdowns for ordinary columns and zero/non-zero choices for computed columns.
-- [ENHANCEMENT] Added funnel and active-filter indicators, retained column sorting controls, and positioned both controls consistently across all columns.
-- [ENHANCEMENT] Added a `Clear filters` action beside the DataTables entry count.
-- [ENHANCEMENT] Left-aligned additional query-column headers and values with the other table content.
-- [FIX] Recalculated DataTables column widths after Polarion resizes the widget.
-- [FIX] Applied fixed table layout to keep DataTables scroll-header and body columns aligned during widget editing and redraws.
-- [FIX] Limited internal sizing-header cleanup to the DataTables master table.
-- [DOCS] Updated the documented DataTables macro signature for column filter metadata and table settings.
-
-### 2026-07-28
-
-- [ENHANCEMENT] Updated column filters to use Polarion catalog values for Spaces, document types, and document statuses.
-- [ENHANCEMENT] Added an inclusive date-range filter for Updated and retained zero/non-zero choices for computed columns.
-- [ENHANCEMENT] Added empty-state messages for data sets and filter combinations with no matching documents.
-- [FIX] Removed duplicate document status and document type choices from filter dropdowns.
-- [FIX] Restored global search across visible cell values while keeping column filters on their dedicated raw values.
-
-### 2026-07-29
-
-- [ENHANCEMENT] Removed the Reset Table Settings parameter from the widget properties panel.
-- [ENHANCEMENT] Refined smart column filtering so catalog, date, list, and computed numeric columns use the appropriate filter controls.
-- [FIX] Improved filter state handling so global search, column filters, and computed count filters can operate together without hiding valid rows.
-
-### 2026-08-05
-
-- [ENHANCEMENT] Added multi-project row handling so rendered LiveDocs preserve their own project context for links, work item queries, and counts.
-- [ENHANCEMENT] Added Project Baseline and Revision controls for rendering the matrix against a selected revision context.
-- [ENHANCEMENT] Added default sorting presets for Project, Space, and Document where those columns are available.
-- [ENHANCEMENT] Added initial formatting support for matrix status and count cells.
-
-### 2026-08-06
-
-- [FIX] Improved stale Project Baseline handling so invalid saved selections fall back safely instead of rendering against the wrong baseline.
-
-### 2026-08-09
-
-- [ENHANCEMENT] Moved baseline and revision configuration under the Data Set section.
-- [ENHANCEMENT] Added Collection scope support, including inherited Collection documents where configured.
-- [ENHANCEMENT] Added per-column filter and formatting improvements for document fields and computed count columns.
-- [ENHANCEMENT] Added optional LiveDoc metadata columns for document baselines, branched documents, master documents, approved versions, unresolved comments, and unreferenced work items.
-- [ENHANCEMENT] Added support for computed columns to include referenced work items in addition to contained document work items.
-- [FIX] Removed saved sorting controls from the widget properties panel.
-- [FIX] Refined Project Baseline option loading and validation.
-
-### 2026-08-10
-
-- [ENHANCEMENT] Added page-parameter query resolution for dynamic Data Set query values.
-- [ENHANCEMENT] Added recommended matrix configuration presets.
-- [FIX] Added explicit read checks for Data Set documents, related documents, and work items before rendering metadata or identity-based query links.
-- [FIX] Deduplicated identity-based work item queries so referenced and contained items are not counted twice.
-- [FIX] Hardened widget resource loading and DataTables setup with safer values, scoped loader variables, and clearer failure behavior.
-- [FIX] Hardened table settings validation for table height, rows per page, and configurable colors.
-- [FIX] Updated status formatting to use semantic status classes with a neutral fallback for custom statuses.
-
-### 2026-08-11
-
-- [ENHANCEMENT] Refined LiveDoc metadata rendering for review, traceability, and release-readiness workflows.
-- [ENHANCEMENT] Improved query-count column handling so computed cells consistently render count, document, and optional Risksheet links from the same effective query.
-- [FIX] Cleaned up duplicated and outdated row-building logic after the v4 feature additions.
-- [FIX] Removed the referenced-work-items toggle and the referenced-work-item count path so computed columns count work items contained in the current LiveDoc query only.
-- [FIX] Removed custom status background-color formatting so status fields render through Polarion's native field output and the table keeps a cleaner, less intrusive visual style.
-- [FIX] Simplified table styling rules so DataTables, ColumnControl, and widget-owned effects remain easier to maintain together.
-
-### 2026-08-13
-
-- [DOCS] Updated root and widget README content for the v4 Data Set, baseline, preset, and DataTables feature set.
-- [DOCS] Updated widget description and details text for the current configurable LiveDoc matrix behavior.
-- [FIX] Polished framework resource loading and DataTables initialization comments for maintainability.
-
-### 2026-08-16
-
-- [ENHANCEMENT] Added stable generated internal keys for configured document fields and additional query columns so user labels and field ids cannot collide with built-in table keys.
-- [ENHANCEMENT] Preserved selected-Collection precedence when inherited Collections contain the same document, preventing upstream duplicates from replacing the selected document revision.
-- [ENHANCEMENT] Refined Document Baselines rendering so readable baseline targets open through normal document links with the selected revision preserved.
-- [ENHANCEMENT] Refined Branched Documents and Master Document rendering so readable related documents use clearer project, space, document, and revision-aware link output.
-- [ENHANCEMENT] Refined Approved Versions rendering so approved workflow transition revisions show readable version metadata and revision-aware document links.
-- [ENHANCEMENT] Reduced the vendored DataTables bundle to the required official components: jQuery, JSZip, DataTables, Buttons HTML5 export, ColumnControl, and FixedHeader.
-- [FIX] Escaped dynamic header titles and workflow signature labels before they are rendered into table HTML.
-- [FIX] Kept all DataTables columns searchable internally so custom column filters continue to work while computed numeric columns stay out of global search.
-- [FIX] Limited recycle-bin identity lookup to configurations that display Recycle Bin or need computed-column exclusion.
-- [FIX] Restored the grouped Recycle Bin identity query shape requested for additional-column exclusion: `project.id:PROJECT_A AND id:(REQ-1 REQ-2)`.
-- [FIX] Normalized stored boolean table settings and added a defensive guard for rare empty ResizeObserver events.
-- [FIX] Added stronger safe-color validation for runtime table colors.
-- [DOCS] Updated version 4 documentation for permissions, Collection inheritance, baseline/revision behavior, filters, optional columns, Recycle Bin behavior, Risksheet links, presets, and packaging.
+- Initial release under `new-widget-1` for Polarion ALM 2512 testing.
+- Widget id: `tsb.livedoc.matrix` (≤30 characters; required by Polarion upload).
+- Renamed from `tsb.livedoc.workitems.matrix` (32 chars) after upload error.
+- LiveDoc rows; enumeration or Lucene columns; row total column; footer totals row.
