@@ -1055,10 +1055,9 @@
 
         ## ===================================================================
         ## Add branched document links when enabled.
-        ## Branch targets are rendered as a compact location trail:
-        ## Project - Space - Document. The project, space, and document parts use
-        ## native Polarion renderers when the branch target can be resolved
-        ## through the Transaction API, preserving icons and display labels.
+        ## Branch targets are rendered as a compact location trail. When the
+        ## target resolves through the Transaction API, the document renderer
+        ## carries its space via withSpace(), preserving native icons and labels.
         ## ===================================================================
         #if ( true == $matrixShowBranchedDocuments )
             #set ( $branchedDocumentItemsHtml = "" )
@@ -1096,22 +1095,22 @@
                     #resolveDocumentApiByLocationMacro($branchedProjectId $branchedSpace $branchedName)
                     #set ( $branchedDocumentLinkHtml = "<a href=${q}${branchedLink}${q}${newWindowLinkAttributes}>$branchedTitleHtml</a>" )
                     #set ( $branchedProjectHtml = $branchedProjectNameHtml )
-                    #set ( $branchedSpaceHtml = $branchedSpaceLabelHtml )
+                    #set ( $branchedDocumentLocationHtml = "$branchedProjectHtml - $branchedDocumentLinkHtml" )
 
                     ## =======================================================
-                    ## Use native project, space, and document renderers when the
-                    ## branch target resolves. The document link is controlled
-                    ## here so only the document opens the branch target.
+                    ## Use native project and document renderers when the branch
+                    ## target resolves. The document link is controlled here so
+                    ## only the document opens the branch target.
                     ## =======================================================
                     #if ( $resolvedDocumentApi )
                         #set ( $branchedProjectHtml = "$!resolvedDocumentApi.fields().project().render().withLinks(false)" )
-                        #set ( $branchedSpaceHtml = "$!resolvedDocumentApi.space().render().withLinks(false)" )
-                        #set ( $branchedDocumentRenderedHtml = "$!resolvedDocumentApi.render().withIcon().withLinks(false)" )
+                        #set ( $branchedDocumentRenderedHtml = "$!resolvedDocumentApi.render().withIcon().withSpace().withLinks(false)" )
                         #set ( $branchedDocumentLinkHtml = "<a href=${q}${branchedLink}${q}${newWindowLinkAttributes}>$branchedDocumentRenderedHtml</a>" )
+                        #set ( $branchedDocumentLocationHtml = "$branchedProjectHtml - $branchedDocumentLinkHtml" )
                     #end
 
                     #set ( $branchedDocumentRowHtml = "<div style=${q}white-space:nowrap;${q}>" )
-                    #set ( $branchedDocumentRowHtml = "${branchedDocumentRowHtml}$branchedProjectHtml - $branchedSpaceHtml - $branchedDocumentLinkHtml</div>" )
+                    #set ( $branchedDocumentRowHtml = "${branchedDocumentRowHtml}$branchedDocumentLocationHtml</div>" )
                     #set ( $branchedDocumentItemsHtml = "${branchedDocumentItemsHtml}${branchedDocumentRowHtml}" )
                     #set ( $branchedDocumentsSearchText = "${branchedDocumentsSearchText} ${branchedTitle} ${branchedProjectName} ${branchedSpaceLabel}" )
                 #end
@@ -1123,10 +1122,10 @@
 
         ## ===================================================================
         ## Add the master/source document for branched or derived documents.
-        ## The source is displayed with the same Project - Space - Document trail
-        ## as branch targets. When Polarion exposes the source revision carried by
-        ## the branch relationship, the document renderer and URL both point at
-        ## that historical revision; otherwise the current source is shown.
+        ## The source is displayed with the same project/document trail as branch
+        ## targets. When Polarion exposes the source revision carried by the
+        ## branch relationship, the document renderer and URL both point at that
+        ## historical revision; otherwise the current source is shown.
         ## ===================================================================
         #if ( true == $matrixShowMasterDocument )
             #set ( $masterDocumentHtml = "" )
@@ -1168,7 +1167,7 @@
                 #resolveDocumentApiByLocationMacro($masterProjectId $masterSpace $masterName)
                 #set ( $masterDocumentLinkHtml = "<a href=${q}${masterLink}${q}${newWindowLinkAttributes}>$masterTitleHtml</a>" )
                 #set ( $masterProjectHtml = $masterProjectNameHtml )
-                #set ( $masterSpaceHtml = $masterSpaceLabelHtml )
+                #set ( $masterDocumentLocationHtml = "$masterProjectHtml - $masterDocumentLinkHtml" )
                 #set ( $masterSourceRevision = "$!masterModule.getRevision()" )
 
                 ## ===========================================================
@@ -1178,7 +1177,6 @@
                 ## ===========================================================
                 #if ( $resolvedDocumentApi )
                     #set ( $masterProjectHtml = "$!resolvedDocumentApi.fields().project().render().withLinks(false)" )
-                    #set ( $masterSpaceHtml = "$!resolvedDocumentApi.space().render().withLinks(false)" )
                     #set ( $masterRenderedDocumentApi = $resolvedDocumentApi )
 
                     #if ( !$masterSourceRevision.equals("") )
@@ -1195,11 +1193,12 @@
                         #end
                     #end
 
-                    #set ( $masterDocumentRenderedHtml = "$!masterRenderedDocumentApi.render().withIcon().withRevisionIcon().withLinks(false)" )
+                    #set ( $masterDocumentRenderedHtml = "$!masterRenderedDocumentApi.render().withIcon().withSpace().withRevisionIcon().withLinks(false)" )
                     #set ( $masterDocumentLinkHtml = "<a href=${q}${masterLink}${q}${newWindowLinkAttributes}>$masterDocumentRenderedHtml</a>" )
+                    #set ( $masterDocumentLocationHtml = "$masterProjectHtml - $masterDocumentLinkHtml" )
                 #end
 
-                #set ( $masterDocumentHtml = "$masterProjectHtml - $masterSpaceHtml - $masterDocumentLinkHtml" )
+                #set ( $masterDocumentHtml = $masterDocumentLocationHtml )
                 #set ( $masterDocumentSearchText = "$masterTitle $masterProjectName $masterSpaceLabel" )
             #end
 
