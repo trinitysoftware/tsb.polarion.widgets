@@ -715,6 +715,7 @@
             paging: enablePaging,
             pageLength: rowsPerPage,
             lengthChange: false,
+            scrollX: true,
             scrollY: tableHeight,
             autoWidth: true,
             fixedHeader: true,

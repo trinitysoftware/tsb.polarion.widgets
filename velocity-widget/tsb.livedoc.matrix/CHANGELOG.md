@@ -2,6 +2,11 @@
 
 ## Version 4.0
 
+### 2026-08-18
+
+- [FIX] Prevented long rendered table cell content from going beyond its assigned cell.
+- [FIX] Avoided duplicate revision labels when an approved workflow transition has no document version value.
+
 ### 2026-08-17
 
 - [FIX] Reverted the vendored DataTables bundle.

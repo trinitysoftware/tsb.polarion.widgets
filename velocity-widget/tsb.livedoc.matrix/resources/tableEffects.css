@@ -54,10 +54,21 @@
     flex: 0 0 12px;
 }
 
-/* Keep the scrolling header and body on DataTables' shared column widths. */
+/* Let DataTables size columns from single-line content and scroll horizontally. */
 .tsb-table-effects div.dt-scroll-head table.dataTable,
 .tsb-table-effects div.dt-scroll-body > table.dataTable {
-    table-layout: fixed;
+    table-layout: auto;
+    min-width: 100%;
+}
+
+/* Keep rendered values on one line so columns expand instead of text bleeding. */
+.tsb-table-effects table.dataTable tbody td,
+.tsb-table-effects table.dataTable tbody td * {
+    box-sizing: border-box;
+    max-width: none;
+    white-space: nowrap !important;
+    overflow-wrap: normal;
+    word-break: normal;
 }
 
 /* Replace the funnel with ColumnControl's check mark when a filter is active. */
