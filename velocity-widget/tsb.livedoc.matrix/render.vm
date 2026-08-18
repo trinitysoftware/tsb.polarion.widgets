@@ -1320,8 +1320,12 @@
                         #set ( $approvedVersionValue = "" )
                         #set ( $approvedVersionValue = $approvedVersionedDoc.getValue("version") )
                         #set ( $approvedVersion = "$!approvedVersionValue" )
+                        #set ( $approvedHasNamedVersion = true )
                         #if ( $approvedVersion.equals("") )
-                            #set ( $approvedVersion = "r$approvedRevision" )
+                            ## If the approved revision has no document version value, use
+                            ## the plain revision as the label and avoid rendering it twice.
+                            #set ( $approvedVersion = "$approvedRevision" )
+                            #set ( $approvedHasNamedVersion = false )
                         #end
                         #set ( $approvedUpdated = "" )
                         #if ( $approvedVersionedDoc.getUpdated() )
@@ -1345,6 +1349,9 @@
                         #end
                         #set ( $approvedLink = "${approvedLink}${approvedRevisionSeparator}revision=${approvedRevision}" )
                         #set ( $approvedLabel = "$approvedVersion ($approvedRevision) $approvedUpdated" )
+                        #if ( !$approvedHasNamedVersion )
+                            #set ( $approvedLabel = "$approvedVersion $approvedUpdated" )
+                        #end
 
                         #set ( $approvedVersionHtml = $esc.html($approvedVersion) )
                         #set ( $approvedRevisionHtml = $esc.html($approvedRevision) )
@@ -1355,6 +1362,9 @@
                         ## document link; the approval date follows as plain text.
                         ## ===================================================
                         #set ( $approvedVersionLinkTextHtml = "$approvedVersionHtml ($approvedRevisionHtml)" )
+                        #if ( !$approvedHasNamedVersion )
+                            #set ( $approvedVersionLinkTextHtml = "$approvedVersionHtml" )
+                        #end
                         #set ( $approvedVersionRowHtml = "<div style=${q}white-space:nowrap;${q}>" )
                         #set ( $approvedVersionRowHtml = "${approvedVersionRowHtml}<a href=${q}${approvedLink}${q}${newWindowLinkAttributes}>$approvedVersionLinkTextHtml</a> $approvedUpdatedHtml</div>" )
                         #set ( $approvedVersionItemsHtml = "${approvedVersionItemsHtml}${approvedVersionRowHtml}" )
