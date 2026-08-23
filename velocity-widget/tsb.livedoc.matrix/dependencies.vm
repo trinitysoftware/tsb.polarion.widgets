@@ -100,63 +100,6 @@
 #set ( $baselineOptions = [] )
 #set ( $baselineValues = [] )
 #set ( $documentQuery = "" )
-#set ( $documentQueryIsSql = false )
-
-## ===========================================================================
-## Resolve page-parameter tokens in the Data Set query before using it to find
-## projects for Project Baseline options.
-## ===========================================================================
-#macro ( resolveQueryPageParametersMacro $sourceQuery )
-    #set ( $resolvedQueryText = "$!sourceQuery" )
-
-    #if ( $resolvedQueryText.contains("$") && $pageParameters )
-        #foreach ( $pageParameterId in $pageParameters.keySet() )
-            #set ( $pageParameter = $pageParameters.get($pageParameterId) )
-            #set ( $pageParameterToken = "${esc.d}pageParameters.${pageParameterId}" )
-            #set ( $pageParameterTokenSilent = "${esc.d}!pageParameters.${pageParameterId}" )
-            #set ( $pageParameterTokenBraced = "${esc.d}{pageParameters.${pageParameterId}}" )
-            #set ( $pageParameterTokenSilentBraced = "${esc.d}!{pageParameters.${pageParameterId}}" )
-            #set ( $pageParameterValue = "$!pageParameter.value" )
-            #set ( $pageParameterValues = "$!pageParameter.values" )
-            #set ( $pageParameterSingleValue = "$!pageParameter.singleValue" )
-            #set ( $pageParameterSingleValueId = "$!pageParameter.singleValue.id" )
-            #set ( $pageParameterSingleValueName = "$!pageParameter.singleValue.name" )
-            #set ( $pageParameterLuceneValue = "$!pageParameter.toLucene()" )
-            #set ( $pageParameterSqlValue = "$!pageParameter.toSql()" )
-
-            #if ( $pageParameterLuceneValue.equals("") )
-                #set ( $pageParameterLuceneValue = $pageParameterValue )
-            #end
-            #if ( $pageParameterValue.equals("") )
-                #set ( $pageParameterValue = $pageParameterSingleValueId )
-            #end
-            #if ( $pageParameterValue.equals("") )
-                #set ( $pageParameterValue = $pageParameterSingleValueName )
-            #end
-            #if ( $pageParameterValue.equals("") )
-                #set ( $pageParameterValue = $pageParameterLuceneValue )
-            #end
-
-            #foreach ( $parameterToken in [$pageParameterToken, $pageParameterTokenSilent] )
-                #set ( $resolvedQueryText = $resolvedQueryText.replace("${parameterToken}.singleValue.id", $pageParameterSingleValueId) )
-                #set ( $resolvedQueryText = $resolvedQueryText.replace("${parameterToken}.singleValue.name", $pageParameterSingleValueName) )
-                #set ( $resolvedQueryText = $resolvedQueryText.replace("${parameterToken}.singleValue", $pageParameterSingleValue) )
-                #set ( $resolvedQueryText = $resolvedQueryText.replace("${parameterToken}.values()", $pageParameterValues) )
-                #set ( $resolvedQueryText = $resolvedQueryText.replace("${parameterToken}.values", $pageParameterValues) )
-                #set ( $resolvedQueryText = $resolvedQueryText.replace("${parameterToken}.value()", $pageParameterValue) )
-                #set ( $resolvedQueryText = $resolvedQueryText.replace("${parameterToken}.value", $pageParameterValue) )
-                #set ( $resolvedQueryText = $resolvedQueryText.replace("${parameterToken}.toLucene()", $pageParameterLuceneValue) )
-                #set ( $resolvedQueryText = $resolvedQueryText.replace("${parameterToken}.toLucene", $pageParameterLuceneValue) )
-                #set ( $resolvedQueryText = $resolvedQueryText.replace("${parameterToken}.toSql()", $pageParameterSqlValue) )
-                #set ( $resolvedQueryText = $resolvedQueryText.replace("${parameterToken}.toSql", $pageParameterSqlValue) )
-                #set ( $resolvedQueryText = $resolvedQueryText.replace($parameterToken, $pageParameterLuceneValue) )
-            #end
-
-            #set ( $resolvedQueryText = $resolvedQueryText.replace($pageParameterTokenBraced, $pageParameterLuceneValue) )
-            #set ( $resolvedQueryText = $resolvedQueryText.replace($pageParameterTokenSilentBraced, $pageParameterLuceneValue) )
-        #end
-    #end
-#end
 
 ## ===========================================================================
 ## Prefer the active Data Set scope over a stale Collection reference. Polarion
@@ -190,18 +133,6 @@
     ## projects, even though readable documents from the same group can render.
     ## =======================================================================
     #set ( $documentQuery = $parameters.dataSet.getFor().revision("").queryToShow() )
-    #resolveQueryPageParametersMacro($documentQuery)
-    #set ( $documentQuery = $resolvedQueryText )
-    #set ( $documentQueryLower = $documentQuery.toLowerCase() )
-
-    #if ( $documentQueryLower.contains("select ") || $documentQueryLower.contains(" from ") )
-        #set ( $documentQueryIsSql = true )
-    #end
-
-    #if ( $documentQueryIsSql )
-        #set ( $documentQuery = "project.id:__tsb_no_matching_project__" )
-    #end
-
     #set ( $scopeDocuments = $transaction.documents().search().query($documentQuery).sort("project.id") )
 
     #foreach ( $scopeDocument in $scopeDocuments )

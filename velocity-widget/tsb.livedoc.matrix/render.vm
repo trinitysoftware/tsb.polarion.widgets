@@ -44,7 +44,6 @@
 #set ( $dataSetScopeIsGlobal = $dataSetScope.isGlobal() )
 #set ( $effectiveRevision = "" )
 #set ( $revisionWarning = "" )
-#set ( $dataSetWarning = "" )
 
 ## ===========================================================================
 ## Prefer the active Data Set scope over a stale Collection reference. Polarion
@@ -75,79 +74,7 @@
 #set ( $projectBaselineValues = $parameters.dataSet.projectBaseline.values() )
 #set ( $specificRevision = $parameters.dataSet.specificRevision.value().trim() )
 
-## ===========================================================================
-## Replace page-parameter references in Lucene query text. The Data Set query
-## is already plain text at this point.
-## ===========================================================================
-#macro ( resolveQueryPageParametersMacro $sourceQuery )
-    #set ( $resolvedQueryText = "$!sourceQuery" )
-
-    #if ( $resolvedQueryText.contains("$") && $pageParameters )
-        #foreach ( $pageParameterId in $pageParameters.keySet() )
-            #set ( $pageParameter = $pageParameters.get($pageParameterId) )
-            #set ( $pageParameterToken = "${esc.d}pageParameters.${pageParameterId}" )
-            #set ( $pageParameterTokenSilent = "${esc.d}!pageParameters.${pageParameterId}" )
-            #set ( $pageParameterTokenBraced = "${esc.d}{pageParameters.${pageParameterId}}" )
-            #set ( $pageParameterTokenSilentBraced = "${esc.d}!{pageParameters.${pageParameterId}}" )
-            #set ( $pageParameterValue = "$!pageParameter.value" )
-            #set ( $pageParameterValues = "$!pageParameter.values" )
-            #set ( $pageParameterSingleValue = "$!pageParameter.singleValue" )
-            #set ( $pageParameterSingleValueId = "$!pageParameter.singleValue.id" )
-            #set ( $pageParameterSingleValueName = "$!pageParameter.singleValue.name" )
-            #set ( $pageParameterLuceneValue = "$!pageParameter.toLucene()" )
-            #set ( $pageParameterSqlValue = "$!pageParameter.toSql()" )
-
-            #if ( $pageParameterLuceneValue.equals("") )
-                #set ( $pageParameterLuceneValue = $pageParameterValue )
-            #end
-            #if ( $pageParameterValue.equals("") )
-                #set ( $pageParameterValue = $pageParameterSingleValueId )
-            #end
-            #if ( $pageParameterValue.equals("") )
-                #set ( $pageParameterValue = $pageParameterSingleValueName )
-            #end
-            #if ( $pageParameterValue.equals("") )
-                #set ( $pageParameterValue = $pageParameterLuceneValue )
-            #end
-
-            #foreach ( $parameterToken in [$pageParameterToken, $pageParameterTokenSilent] )
-                #set ( $resolvedQueryText = $resolvedQueryText.replace("${parameterToken}.singleValue.id", $pageParameterSingleValueId) )
-                #set ( $resolvedQueryText = $resolvedQueryText.replace("${parameterToken}.singleValue.name", $pageParameterSingleValueName) )
-                #set ( $resolvedQueryText = $resolvedQueryText.replace("${parameterToken}.singleValue", $pageParameterSingleValue) )
-                #set ( $resolvedQueryText = $resolvedQueryText.replace("${parameterToken}.values()", $pageParameterValues) )
-                #set ( $resolvedQueryText = $resolvedQueryText.replace("${parameterToken}.values", $pageParameterValues) )
-                #set ( $resolvedQueryText = $resolvedQueryText.replace("${parameterToken}.value()", $pageParameterValue) )
-                #set ( $resolvedQueryText = $resolvedQueryText.replace("${parameterToken}.value", $pageParameterValue) )
-                #set ( $resolvedQueryText = $resolvedQueryText.replace("${parameterToken}.toLucene()", $pageParameterLuceneValue) )
-                #set ( $resolvedQueryText = $resolvedQueryText.replace("${parameterToken}.toLucene", $pageParameterLuceneValue) )
-                #set ( $resolvedQueryText = $resolvedQueryText.replace("${parameterToken}.toSql()", $pageParameterSqlValue) )
-                #set ( $resolvedQueryText = $resolvedQueryText.replace("${parameterToken}.toSql", $pageParameterSqlValue) )
-                #set ( $resolvedQueryText = $resolvedQueryText.replace($parameterToken, $pageParameterLuceneValue) )
-            #end
-
-            #set ( $resolvedQueryText = $resolvedQueryText.replace($pageParameterTokenBraced, $pageParameterLuceneValue) )
-            #set ( $resolvedQueryText = $resolvedQueryText.replace($pageParameterTokenSilentBraced, $pageParameterLuceneValue) )
-        #end
-    #end
-#end
-
 #set ( $currentDocumentQuery = $parameters.dataSet.getFor().revision("").queryToShow() )
-#resolveQueryPageParametersMacro($currentDocumentQuery)
-#set ( $currentDocumentQuery = $resolvedQueryText )
-#set ( $currentDocumentQueryLower = $currentDocumentQuery.toLowerCase() )
-#set ( $currentDocumentQueryIsSql = false )
-
-#if ( $currentDocumentQueryLower.contains("select ") || $currentDocumentQueryLower.contains(" from ") )
-    #set ( $currentDocumentQueryIsSql = true )
-#end
-
-#if ( !$dataSetCollectionScopeSelected && $currentDocumentQueryIsSql )
-    #if ( $projectId )
-        #set ( $currentDocumentQuery = "project.id:$projectId" )
-    #else
-        #set ( $currentDocumentQuery = "project.id:__tsb_no_matching_project__" )
-    #end
-#end
 
 #if ( !$dataSetCollectionScopeSelected && !$projectBaselineValues.isEmpty() )
     #set ( $projectBaselineValue = "$!projectBaselineValues.get(0)" )
@@ -215,24 +142,6 @@
 #end
 
 #set ( $documentQuery = $parameters.dataSet.getFor().revision("$!effectiveRevision").queryToShow() )
-#resolveQueryPageParametersMacro($documentQuery)
-#set ( $documentQuery = $resolvedQueryText )
-#set ( $documentQueryLower = $documentQuery.toLowerCase() )
-#set ( $documentQueryIsSql = false )
-
-#if ( $documentQueryLower.contains("select ") || $documentQueryLower.contains(" from ") )
-    #set ( $documentQueryIsSql = true )
-#end
-
-#if ( !$dataSetCollectionScopeSelected && $documentQueryIsSql )
-    #if ( $projectId )
-        #set ( $documentQuery = "project.id:$projectId" )
-        #set ( $dataSetWarning = "Rows are rendered from the selected Project scope; switch Query Type to Lucene to use document query criteria." )
-    #else
-        #set ( $documentQuery = "project.id:__tsb_no_matching_project__" )
-        #set ( $dataSetWarning = "Switch Query Type to Lucene before rendering Project Group or Global scopes." )
-    #end
-#end
 
 ## ===========================================================================
 ## $docItems stores the LiveDocs found by the document query.
@@ -443,9 +352,8 @@
 #macro ( prepareRowsMacro )
     #if ( $dataSetCollectionScopeSelected )
         ## ===================================================================
-        ## Collection mode renders from Collection elements directly. The Data
-        ## Set's Collection tab can keep a SQL-shaped query internally, so using
-        ## document search as the source can drop valid Collection documents.
+        ## Collection mode renders from Collection elements directly so selected
+        ## and inherited Collection contents keep their configured revisions.
         ## ===================================================================
         #foreach ( $rowDocumentKey in $collectionDocumentKeys )
             #set ( $rowDocument = $collectionDocumentMap.get($rowDocumentKey) )
@@ -1502,8 +1410,6 @@
                 ## The class applies only to additional-column count links.
                 ## ===========================================================
                 #set ( $columnQuery = "$!columnQueryText" )
-                #resolveQueryPageParametersMacro($columnQuery)
-                #set ( $columnQuery = $resolvedQueryText )
                 #set ( $cellQuery = "$docQuery AND ($columnQuery)" )
 
                 ## ===========================================================
@@ -1605,10 +1511,6 @@
 ## ===========================================================================
 #if ( !$revisionWarning.equals("") )
     $widgetContext.renderWarning($revisionWarning)
-#end
-
-#if ( !$dataSetWarning.equals("") )
-    $widgetContext.renderWarning($dataSetWarning)
 #end
 
 ## ===========================================================================
