@@ -616,6 +616,11 @@
     #set ( $projectFilterOptions = [] )
     #set ( $spaceFilterOptions = [] )
     #set ( $documentFilterOptions = [] )
+    #set ( $signatureFilterOptions = [] )
+    #set ( $documentBaselineFilterOptions = [] )
+    #set ( $branchedDocumentFilterOptions = [] )
+    #set ( $unresolvedCommentFilterOptions = [] )
+    #set ( $approvedVersionFilterOptions = [] )
 
     #foreach ( $catalogProjectId in $projectIds )
         #set ( $trackerProject = $trackerService.getTrackerProject($catalogProjectId) )
@@ -668,6 +673,20 @@
     #set ( $void = $headerFilterOptionsMap.put("project", $projectFilterOptions) )
     #set ( $void = $headerFilterOptionsMap.put("space", $spaceFilterOptions) )
     #set ( $void = $headerFilterOptionsMap.put("documentHtml", $documentFilterOptions) )
+    #set ( $void = $headerFilterOptionsMap.put("signatureHtml", $signatureFilterOptions) )
+    #set ( $void = $headerFilterOptionsMap.put("documentBaselinesHtml", $documentBaselineFilterOptions) )
+    #set ( $void = $headerFilterOptionsMap.put("branchedDocumentsHtml", $branchedDocumentFilterOptions) )
+    #set ( $void = $headerFilterOptionsMap.put("unresolvedCommentsHtml", $unresolvedCommentFilterOptions) )
+    #set ( $void = $headerFilterOptionsMap.put("approvedVersionsHtml", $approvedVersionFilterOptions) )
+#end
+
+#macro ( addFilterOptionMacro $filterOptions $filterOption )
+    #set ( $normalizedFilterOption = "$!filterOption" )
+    #set ( $normalizedFilterOption = $normalizedFilterOption.trim() )
+
+    #if ( !$normalizedFilterOption.equals("") && !$filterOptions.contains($normalizedFilterOption) )
+        #set ( $void = $filterOptions.add($normalizedFilterOption) )
+    #end
 #end
 
 ## ===========================================================================
@@ -866,6 +885,7 @@
     ## =======================================================================
     #set ( $dataRows = [] )
     #set ( $dataService = false )
+    #set ( $filterValueSeparator = "|||TSB_FILTER_VALUE|||" )
 
     #if ( $matrixShowDocumentBaselines || $matrixShowApprovedVersions )
         #set ( $dataService = $trackerService.getDataService() )
@@ -938,6 +958,7 @@
         ## ===================================================================
         #if ( true == $matrixShowSignaturesStatus )
             #set ( $signatureHtml = "" )
+            #set ( $signatureFilterValue = "" )
             #set ( $workflowSignatures = $docu.fields().workflowSignatures().toArrayList )
 
             #foreach ( $workflowSignature in $workflowSignatures )
@@ -950,9 +971,22 @@
                 ## ===========================================================
                 #if ( !($signatureStatus.equals("obsolete")) && !($signatureStatus.equals("notAvailable")) )
                     #set ( $signatureStateHtml = $workflowSignature.fields().signatureState().render().withIcon(false).openLinksInNewWindow() )
+                    #set ( $signatureStateLabel = "$!workflowSignature.fields().signatureState().optionId()" )
                     #set ( $signatureLabelHtml = $esc.html($workflowSignature.label()) )
+                    #set ( $signatureFilterLabel = "$!workflowSignature.label()" )
+                    #if ( !$signatureStateLabel.equals("") )
+                        #set ( $signatureFilterLabel = "$signatureFilterLabel - $signatureStateLabel" )
+                    #end
                     #set ( $signatureGroupHtml = "<div style=${q}margin:0 0 12px 0;white-space:nowrap;${q}>" )
                     #set ( $signatureGroupHtml = "${signatureGroupHtml}<div><b>$signatureStateHtml - $signatureLabelHtml</b></div>" )
+                    #if ( !$signatureFilterLabel.trim().equals("") )
+                        #if ( $signatureFilterValue.equals("") )
+                            #set ( $signatureFilterValue = $signatureFilterLabel )
+                        #else
+                            #set ( $signatureFilterValue = "${signatureFilterValue}${filterValueSeparator}${signatureFilterLabel}" )
+                        #end
+                        #addFilterOptionMacro($signatureFilterOptions $signatureFilterLabel)
+                    #end
 
                     ## =======================================================
                     ## Render each signature decision below its workflow state.
@@ -973,6 +1007,7 @@
             #end
 
             #set ( $void = $rowsMap.put("signatureHtml", $signatureHtml) )
+            #set ( $void = $rowsMap.put("__tsbFilterValue_signatureHtml", $signatureFilterValue) )
         #end
 
         ## ===================================================================
@@ -986,6 +1021,7 @@
         ## ===================================================================
         #if ( true == $matrixShowDocumentBaselines )
             #set ( $documentBaselinesSearchText = "" )
+            #set ( $documentBaselinesFilterValue = "" )
             #set ( $documentBaselineItemsHtml = "" )
             #set ( $documentBaseObjectPath = "document/$oldApiDocument.getModuleLocation().getLocationPath()" )
             #set ( $documentBaselineQuery = "project.id:$q$rowProjectId$q AND baseObject:$q$documentBaseObjectPath$q" )
@@ -1044,12 +1080,19 @@
                             #set ( $documentBaselineRowHtml = "${documentBaselineRowHtml}${baselineRevisionHtml} $baselineNameHtml</a></div>" )
                             #set ( $documentBaselineItemsHtml = "${documentBaselineItemsHtml}${documentBaselineRowHtml}" )
                             #set ( $documentBaselinesSearchText = "${documentBaselinesSearchText} ${baselineLabel}" )
+                            #if ( $documentBaselinesFilterValue.equals("") )
+                                #set ( $documentBaselinesFilterValue = $baselineLabel )
+                            #else
+                                #set ( $documentBaselinesFilterValue = "${documentBaselinesFilterValue}${filterValueSeparator}${baselineLabel}" )
+                            #end
+                            #addFilterOptionMacro($documentBaselineFilterOptions $baselineLabel)
                         #end
                     #end
                 #end
             #end
 
             #set ( $void = $rowsMap.put("documentBaselinesHtml", $documentBaselineItemsHtml) )
+            #set ( $void = $rowsMap.put("__tsbFilterValue_documentBaselinesHtml", $documentBaselinesFilterValue) )
             #set ( $void = $rowsMap.put("__tsbSearchValue_documentBaselinesHtml", $documentBaselinesSearchText.trim()) )
         #end
 
@@ -1062,6 +1105,7 @@
         #if ( true == $matrixShowBranchedDocuments )
             #set ( $branchedDocumentItemsHtml = "" )
             #set ( $branchedDocumentsSearchText = "" )
+            #set ( $branchedDocumentsFilterValue = "" )
             #set ( $branchedModules = $oldApiDocument.getBranchedModules() )
 
             #foreach ( $branchedModule in $branchedModules )
@@ -1113,10 +1157,18 @@
                     #set ( $branchedDocumentRowHtml = "${branchedDocumentRowHtml}$branchedDocumentLocationHtml</div>" )
                     #set ( $branchedDocumentItemsHtml = "${branchedDocumentItemsHtml}${branchedDocumentRowHtml}" )
                     #set ( $branchedDocumentsSearchText = "${branchedDocumentsSearchText} ${branchedTitle} ${branchedProjectName} ${branchedSpaceLabel}" )
+                    #set ( $branchedDocumentFilterLabel = "$branchedTitle ($branchedProjectName / $branchedSpaceLabel)" )
+                    #if ( $branchedDocumentsFilterValue.equals("") )
+                        #set ( $branchedDocumentsFilterValue = $branchedDocumentFilterLabel )
+                    #else
+                        #set ( $branchedDocumentsFilterValue = "${branchedDocumentsFilterValue}${filterValueSeparator}${branchedDocumentFilterLabel}" )
+                    #end
+                    #addFilterOptionMacro($branchedDocumentFilterOptions $branchedDocumentFilterLabel)
                 #end
             #end
 
             #set ( $void = $rowsMap.put("branchedDocumentsHtml", $branchedDocumentItemsHtml) )
+            #set ( $void = $rowsMap.put("__tsbFilterValue_branchedDocumentsHtml", $branchedDocumentsFilterValue) )
             #set ( $void = $rowsMap.put("__tsbSearchValue_branchedDocumentsHtml", $branchedDocumentsSearchText.trim()) )
         #end
 
@@ -1221,6 +1273,7 @@
             #set ( $unresolvedRootComments = $oldApiDocument.getRootComments(false) )
             #set ( $unresolvedCommentItemsHtml = "" )
             #set ( $unresolvedCommentsSearchText = "" )
+            #set ( $unresolvedCommentsFilterValue = "" )
 
             #foreach ( $unresolvedComment in $unresolvedRootComments )
                 #set ( $unresolvedCommentText = "" )
@@ -1239,9 +1292,16 @@
                 #set ( $unresolvedCommentRowHtml = "<div style=${q}white-space:nowrap;${q}>$unresolvedCommentLinkHtml</div>" )
                 #set ( $unresolvedCommentItemsHtml = "${unresolvedCommentItemsHtml}${unresolvedCommentRowHtml}" )
                 #set ( $unresolvedCommentsSearchText = "${unresolvedCommentsSearchText} ${unresolvedCommentText}" )
+                #if ( $unresolvedCommentsFilterValue.equals("") )
+                    #set ( $unresolvedCommentsFilterValue = $unresolvedCommentText )
+                #else
+                    #set ( $unresolvedCommentsFilterValue = "${unresolvedCommentsFilterValue}${filterValueSeparator}${unresolvedCommentText}" )
+                #end
+                #addFilterOptionMacro($unresolvedCommentFilterOptions $unresolvedCommentText)
             #end
 
             #set ( $void = $rowsMap.put("unresolvedCommentsHtml", $unresolvedCommentItemsHtml) )
+            #set ( $void = $rowsMap.put("__tsbFilterValue_unresolvedCommentsHtml", $unresolvedCommentsFilterValue) )
             #set ( $void = $rowsMap.put("__tsbSearchValue_unresolvedCommentsHtml", $unresolvedCommentsSearchText.trim()) )
         #end
 
@@ -1303,6 +1363,7 @@
         #if ( true == $matrixShowApprovedVersions )
             #set ( $approvedVersionItemsHtml = "" )
             #set ( $approvedVersionsSearchText = "" )
+            #set ( $approvedVersionsFilterValue = "" )
 
             #foreach ( $approvedSignature in $oldApiDocument.getWorkflowSignatures() )
                 #set ( $approvedTargetStatusId = "$!approvedSignature.targetStatus.id" )
@@ -1369,11 +1430,18 @@
                         #set ( $approvedVersionRowHtml = "${approvedVersionRowHtml}<a href=${q}${approvedLink}${q}${newWindowLinkAttributes}>$approvedVersionLinkTextHtml</a> $approvedUpdatedHtml</div>" )
                         #set ( $approvedVersionItemsHtml = "${approvedVersionItemsHtml}${approvedVersionRowHtml}" )
                         #set ( $approvedVersionsSearchText = "${approvedVersionsSearchText} ${approvedLabel}" )
+                        #if ( $approvedVersionsFilterValue.equals("") )
+                            #set ( $approvedVersionsFilterValue = $approvedLabel )
+                        #else
+                            #set ( $approvedVersionsFilterValue = "${approvedVersionsFilterValue}${filterValueSeparator}${approvedLabel}" )
+                        #end
+                        #addFilterOptionMacro($approvedVersionFilterOptions $approvedLabel)
                     #end
                 #end
             #end
 
             #set ( $void = $rowsMap.put("approvedVersionsHtml", $approvedVersionItemsHtml) )
+            #set ( $void = $rowsMap.put("__tsbFilterValue_approvedVersionsHtml", $approvedVersionsFilterValue) )
             #set ( $void = $rowsMap.put("__tsbSearchValue_approvedVersionsHtml", $approvedVersionsSearchText.trim()) )
         #end
 
@@ -1516,6 +1584,9 @@
     #set ( $void = $tableSettings.put("showSearchBar", $parameters.showSearchBar.value()) )
     #set ( $void = $tableSettings.put("enablePaging", $parameters.enablePaging.value()) )
     #set ( $void = $tableSettings.put("rowsPerPage", $parameters.rowsPerPage.value()) )
+    #set ( $void = $tableSettings.put("defaultSortKeys", "project,space,documentHtml") )
+    #set ( $void = $tableSettings.put("emptyTableMessage", "No documents are available for the selected data set.") )
+    #set ( $void = $tableSettings.put("zeroRecordsMessage", "No documents match the selected filters.") )
 #end
 
 ## ===========================================================================
