@@ -2,6 +2,10 @@
 
 ## Version 4.0
 
+### 2026-08-26
+
+- [FIX] Made Document column filter options use the rendered document title instead of the internal module name when both differ.
+
 ### 2026-08-18
 
 - [FIX] Prevented long rendered table cell content from going beyond its assigned cell.

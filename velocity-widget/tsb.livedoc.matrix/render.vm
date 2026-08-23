@@ -550,15 +550,20 @@
     #end
 
     ## =======================================================================
-    ## The Document column filters by the actual returned documents, not by
-    ## module type. Document type can be displayed as a normal field column.
+    ## The Document column filters by the same title users see in the rendered
+    ## table cell. Module name remains only a fallback for untitled documents.
     ## =======================================================================
     #foreach ( $filterDocument in $docItems )
         #set ( $documentName = "$!filterDocument.fields().moduleName().get()" )
+        #set ( $documentFilterLabel = "$!filterDocument.getOldApi().getTitle()" )
         #set ( $spaceLabel = "$!filterDocument.space().label()" )
 
         #if ( $documentName.equals("") )
             #set ( $documentName = "$!filterDocument.getOldApi().getTitle()" )
+        #end
+
+        #if ( $documentFilterLabel.equals("") )
+            #set ( $documentFilterLabel = $documentName )
         #end
 
         #if ( $spaceLabel.equals("") )
@@ -569,8 +574,8 @@
             #set ( $void = $spaceFilterOptions.add($spaceLabel) )
         #end
 
-        #if ( !$documentName.equals("") && !$documentFilterOptions.contains($documentName) )
-            #set ( $void = $documentFilterOptions.add($documentName) )
+        #if ( !$documentFilterLabel.equals("") && !$documentFilterOptions.contains($documentFilterLabel) )
+            #set ( $void = $documentFilterOptions.add($documentFilterLabel) )
         #end
     #end
 
@@ -845,18 +850,23 @@
         ## ===================================================================
         ## Add the Document cell. Display keeps Polarion-rendered link HTML.
         ## Native renderer configuration opens the document in a new window.
-        ## The column filter uses the actual document name, while global
-        ## search receives only the document's plain title.
+        ## The column filter and global search use the same plain title users
+        ## see in the rendered document link. Module name remains only a
+        ## fallback for untitled documents; documentName is kept for links.
         ## ===================================================================
         #set ( $documentHtml = $docu.render().withIcon().withLinks(true).openLinksInNewWindow() )
         #set ( $documentName = "$!docu.fields().moduleName().get()" )
+        #set ( $documentFilterLabel = "$!oldApiDocument.getTitle()" )
         #if ( $documentName.equals("") )
             #set ( $documentName = "$!oldApiDocument.getTitle()" )
         #end
+        #if ( $documentFilterLabel.equals("") )
+            #set ( $documentFilterLabel = $documentName )
+        #end
         #set ( $documentSpace = $oldApiDocument.getModuleFolder() )
         #set ( $void = $rowsMap.put("documentHtml", $documentHtml) )
-        #set ( $void = $rowsMap.put("__tsbFilterValue_documentHtml", $documentName) )
-        #set ( $void = $rowsMap.put("__tsbSearchValue_documentHtml", $oldApiDocument.getTitle()) )
+        #set ( $void = $rowsMap.put("__tsbFilterValue_documentHtml", $documentFilterLabel) )
+        #set ( $void = $rowsMap.put("__tsbSearchValue_documentHtml", $documentFilterLabel) )
 
         ## ===================================================================
         ## Add the Signatures cell when enabled.

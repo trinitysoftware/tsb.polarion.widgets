@@ -1,4 +1,32 @@
 ## ===========================================================================
+## BSD 3-CLAUSE LICENSE
+## Copyright (c) 2008-2026, Trinity Software & Beyond Ltd.
+##
+## All rights reserved.
+##
+## Redistribution and use in source and binary forms, with or without modification,
+## are permitted provided that the following conditions are met:
+##
+## 1. Redistributions of source code must retain the above copyright notice,
+##    this list of conditions and the following disclaimer.
+## 2. Redistributions in binary form must reproduce the above copyright notice,
+##    this list of conditions and the following disclaimer in the documentation
+##    and/or other materials provided with the distribution.
+## 3. Neither the name of the copyright holder nor the names of its contributors
+##    may be used to endorse or promote products derived from this software
+##    without specific prior written permission.
+##
+## THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+## AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+## THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+## IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY
+## DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+## (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+## LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+## WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+## ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+## ===========================================================================
+## ===========================================================================
 ## Shared macros for loading widget resources and rendering DataTables output.
 ## Import this file from a widget render file before calling these macros.
 ## ===========================================================================
@@ -310,10 +338,10 @@
         }
 
         // ===================================================================
-        // Register a checklist that filters against a separate row property.
-        // The visible cell text remains available to the global search bar,
-        // while catalog and count dropdowns use their dedicated raw values.
-        // DataTables' CheckList helper retains the standard dropdown design.
+        // Register a checklist for cases where DataTables' built-in searchList
+        // is not enough: dedicated raw row values, zero/non-zero count groups,
+        // and cells that contain multiple independent filter values.
+        // DataTables' CheckList helper still provides the dropdown UI.
         // ===================================================================
         DataTable.ColumnControl.content.tsbOptionList = {
             defaults: {
@@ -419,8 +447,8 @@
 
         // ===================================================================
         // Register an inclusive date-range control for date-typed columns.
-        // Native date inputs provide calendar pickers without another library.
-        // The fixed search participates in DataTables drawing and cleanup.
+        // ColumnControl's built-in date search supports one comparison at a
+        // time; this widget contract needs From and To bounds together.
         // ===================================================================
         DataTable.ColumnControl.content.tsbDateRange = {
             defaults: {},
