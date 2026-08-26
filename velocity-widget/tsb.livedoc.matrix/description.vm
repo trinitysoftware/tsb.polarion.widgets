@@ -1,4 +1,4 @@
-## ==========================================================================
+## ===========================================================================
 ## BSD 3-CLAUSE LICENSE
 ## Copyright (c) 2008-2026, Trinity Software & Beyond Ltd.
 ##
@@ -25,18 +25,13 @@
 ## LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 ## WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
 ## ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-## ==========================================================================
-
-## ==========================================================================
+## ===========================================================================
+## ===========================================================================
 ## OVERVIEW — tsb.livedoc.matrix — description.vm
-## ==========================================================================
-
+## ===========================================================================
 <ul>
-	<li><b>Data Set</b> — Defines the data source for the matrix, including Scope (specific project), query type, document type, and query. </li>
-	<li><b>Show Signatures Status</b> — Adds a signatures column showing electronic sign-off status for LiveDocs, providing visible proof of review, approval, and compliance.</li>
-	<li><b>Show Unresolved Comments</b> — When enabled, this will show unresolved review comments per document so teams can quickly identify open discussion items (planned; not yet rendered in this version).</li>
-	<li><b>Show Project</b> — Adds a project column so each document row shows its project context.</li>
-	<li><b>Show Space</b> — Displays the document's Space (a container similar to a digital folder, used to organize documents and rich pages).</li>
-	<li><b>Show Fields as Columns</b> — Displays selected document fields as extra columns for side-by-side comparison (for example: <code>author</code>, <code>updated</code>, <code>status</code>).</li>
-	<li><b>Additional Columns</b> — Define custom matrix columns using a title plus a work item query; each cell shows a clickable count and document link.</li>
+    <li><b>LiveDoc Matrix</b> - Renders a permission-aware document matrix for review, traceability, release-readiness, and reporting workflows.</li>
+    <li><b>Data Set Scope</b> - Supports project, project group, global, Collection, inherited Collection, Project Baseline, specific revision, and HEAD rendering modes where applicable.</li>
+    <li><b>Configuration</b> - Provides recommended presets or full custom configuration for document metadata columns, LiveDoc status columns, computed query-count columns, Recycle Bin counts, and optional Risksheet links.</li>
+    <li><b>Table Experience</b> - Uses DataTables with multi-sort, smart per-column filters, optional global search, optional export buttons, optional paging, fixed header, configurable colors, and zero-count highlighting.</li>
 </ul>

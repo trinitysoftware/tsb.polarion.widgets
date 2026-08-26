@@ -1,169 +1,986 @@
-## ==========================================================================
+## ===========================================================================
+## BSD 3-CLAUSE LICENSE
+## Copyright (c) 2008-2026, Trinity Software & Beyond Ltd.
+##
+## All rights reserved.
+##
+## Redistribution and use in source and binary forms, with or without modification,
+## are permitted provided that the following conditions are met:
+##
+## 1. Redistributions of source code must retain the above copyright notice,
+##    this list of conditions and the following disclaimer.
+## 2. Redistributions in binary form must reproduce the above copyright notice,
+##    this list of conditions and the following disclaimer in the documentation
+##    and/or other materials provided with the distribution.
+## 3. Neither the name of the copyright holder nor the names of its contributors
+##    may be used to endorse or promote products derived from this software
+##    without specific prior written permission.
+##
+## THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+## AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+## THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+## IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY
+## DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+## (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+## LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+## WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+## ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+## ===========================================================================
+## ===========================================================================
 ## Shared macros for loading widget resources and rendering DataTables output.
 ## Import this file from a widget render file before calling these macros.
-## ==========================================================================
-
-## ==========================================================================
+## ===========================================================================
+## ===========================================================================
 ## Resolve a widget-local JavaScript resource URL, then load the script.
-## ==========================================================================
+## ===========================================================================
 #macro ( loadWidgetJsResource $js )
     #loadJsResource($widgetContext.resourceUrl("$js"))
 #end
 
-## ==========================================================================
+## ===========================================================================
 ## Load JavaScript from a URL and execute it in the page.
 ## Polarion widget resources require this XHR loading pattern.
-## ==========================================================================
+## ===========================================================================
 #macro ( loadJsResource $url )
-    ## ======================================================================
-    ## Synchronous XHR fetch and eval — required for Polarion widget resources.
-    ## ======================================================================
+    ## =======================================================================
+    ## Polarion widget resources must be fetched synchronously before the table
+    ## initializes. Execute only a successful response and keep loader variables
+    ## local so multiple widget instances cannot overwrite one another.
+    ## =======================================================================
     <script type="text/javascript">
-        var xhrObj = new XMLHttpRequest();
-        xhrObj.open('GET', '$url', false);
-        xhrObj.send(null);
-        eval(xhrObj.responseText);
+        (function (resourceUrl) {
+            var request = new XMLHttpRequest();
+
+            request.open('GET', resourceUrl, false);
+            request.send(null);
+
+            if ((request.status >= 200 && request.status < 300) || request.status === 0) {
+                window.eval(request.responseText);
+                return;
+            }
+
+            throw new Error(
+                'Unable to load widget JavaScript resource: ' +
+                resourceUrl + ' (HTTP ' + request.status + ')'
+            );
+        }('$esc.javascript($url)'));
     </script>
 #end
 
-## ==========================================================================
+## ===========================================================================
 ## Resolve a widget-local CSS resource URL, then load the stylesheet.
-## ==========================================================================
+## ===========================================================================
 #macro ( loadWidgetCssResource $css )
     #loadCssResource( $widgetContext.resourceUrl("$css") )
 #end
 
-## ==========================================================================
+## ===========================================================================
 ## Load CSS from a URL and inject it into a generated <style> element.
 ## Polarion widget resources require this XHR loading pattern.
-## ==========================================================================
+## ===========================================================================
 #macro ( loadCssResource $url )
     ## =======================================================================
-    ## Synchronous XHR fetch injected into a <style> tag — required for Polarion widget resources.
-    ## ======================================================================
+    ## Fetch the stylesheet before table initialization. textContent treats the
+    ## response strictly as CSS and avoids parsing it as generated HTML.
+    ## =======================================================================
     #set ( $cssId = $widgetContext.generateUniqueElementId() )
 
     <style id="$cssId"></style>
 
     <script type="text/javascript">
-        var xhrObj = new XMLHttpRequest();
-        xhrObj.open('GET', '$url', false);
-        xhrObj.send(null);
-        document.getElementById("$cssId").innerHTML = xhrObj.responseText;
+        (function (resourceUrl, styleElementId) {
+            var request = new XMLHttpRequest();
+            var styleElement = document.getElementById(styleElementId);
+
+            if (!styleElement) {
+                throw new Error('Unable to find widget style element: ' + styleElementId);
+            }
+
+            request.open('GET', resourceUrl, false);
+            request.send(null);
+
+            if ((request.status >= 200 && request.status < 300) || request.status === 0) {
+                styleElement.textContent = request.responseText;
+                return;
+            }
+
+            throw new Error(
+                'Unable to load widget CSS resource: ' +
+                resourceUrl + ' (HTTP ' + request.status + ')'
+            );
+        }('$esc.javascript($url)', '$esc.javascript($cssId)'));
     </script>
 #end
 
-## ==========================================================================
+## ===========================================================================
 ## Convert Velocity header and row maps into JavaScript data for DataTables.
 ## The server prepares the maps; this macro serializes them for the client.
-## ==========================================================================
-#macro ( renderWidgetDataMacro $headersMap $headersKeys $dataRows )
+## ===========================================================================
+#macro ( renderWidgetDataMacro $headersMap $headersKeys $headerFilterTypesMap $headerFilterOptionsMap $headerGlobalSearchMap $dataRows )
 <script type="text/javascript">
-    // ======================================================================
+    // =======================================================================
     // This object is passed to DataTables.
     // headers stores the columns; rows stores the row data.
-    // ======================================================================
+    // =======================================================================
     var widgetData = {
         headers: [],
         rows: []
     };
 
-    // ======================================================================
+    // =======================================================================
     // Convert the Velocity headers map into JavaScript header objects.
     // Example: "space" -> "Space" becomes { key: "space", title: "Space" }.
-    // ======================================================================
-    #foreach ( $headerKey in $headersKeys)
-        widgetData.headers.push({
-            title: "$esc.javascript($headersMap.get($headerKey))",
-            key: "$esc.javascript($headerKey)"
-        });
+    // =======================================================================
+    #foreach ( $headerKey in $headersKeys )
+        #set ( $isGlobalSearchable = $headerGlobalSearchMap.get($headerKey) )
+        #set ( $headerTitleHtml = $esc.html($headersMap.get($headerKey)) )
+        #if ( "$!isGlobalSearchable" == "" )
+            #set ( $isGlobalSearchable = true )
+        #end
+        var headerData = {
+            title: "$esc.javascript($headerTitleHtml)",
+            key: "$esc.javascript($headerKey)",
+            filterType: "$esc.javascript($headerFilterTypesMap.get($headerKey))",
+            globalSearch: $isGlobalSearchable,
+            filterOptions: []
+        };
+
+        // ===================================================================
+        // Catalog options come from Polarion configuration, not table rows.
+        // This keeps valid choices visible when no current row uses them.
+        // ===================================================================
+        #if ( $headerFilterOptionsMap.containsKey($headerKey) )
+            #foreach ( $filterOption in $headerFilterOptionsMap.get($headerKey) )
+                headerData.filterOptions.push({
+                    label: "$esc.javascript($filterOption)",
+                    value: "$esc.javascript($filterOption)"
+                });
+            #end
+        #end
+
+        widgetData.headers.push(headerData);
     #end
 
-    // ======================================================================
+    // =======================================================================
     // Convert each Velocity row map into a JavaScript row object.
     // Each Velocity row map becomes one JavaScript row object.
-    // ======================================================================
+    // =======================================================================
     #foreach ( $rowMap in $dataRows )
         var rowData = {};
 
-        // ==================================================================
+        // ===================================================================
         // Copy every cell from the row map into the JavaScript row object.
-        // ==================================================================
+        // ===================================================================
         #foreach ( $rowKey in $rowMap.keySet() )
             rowData["$esc.javascript($rowKey)"] = "$esc.javascript($rowMap.get($rowKey))";
         #end
 
-        // ==================================================================
+        // ===================================================================
         // This row is ready. Give it to DataTables' row list.
-        // ==================================================================
+        // ===================================================================
         widgetData.rows.push(rowData);
     #end
 </script>
 #end
 
-## ==========================================================================
+## ===========================================================================
 ## Render the table shell, load DataTables assets, and initialize DataTables.
-## The caller provides the table id, ordered headers, and prepared row data.
-## ==========================================================================
-#macro ( initDataTableMacro $widgetTableId $headersKeys $headersMap $dataRows)
-    ## ======================================================================
+## The caller provides the table id, ordered headers, prepared row data, and
+## table settings collected from the widget properties panel.
+## ===========================================================================
+#macro ( initDataTableMacro $widgetTableId $headersKeys $headersMap $headerFilterTypesMap $headerFilterOptionsMap $headerGlobalSearchMap $dataRows $tableSettings )
+    ## =======================================================================
     ## This is the empty table element.
     ## DataTables will fill it using widgetData.
-    ## ======================================================================
-    <table id="$widgetTableId" class="stripe hover row-border order-column nowrap"></table>
-    
+    ## =======================================================================
+    <table id="$widgetTableId" class="stripe hover row-border order-column nowrap">
+        ## ===================================================================
+        ## Render the header cells before DataTables starts.
+        ## ColumnControl otherwise creates a control-only header row that
+        ## disables DataTables sorting when the table shell is empty.
+        ## ===================================================================
+        <thead>
+            <tr>
+                #foreach ( $headerKey in $headersKeys )
+                    <th></th>
+                #end
+            </tr>
+        </thead>
+    </table>
+
     #set ( $h = "#")
     #set ( $forId = "${h}${widgetTableId}" )
 
-    ## ======================================================================
+    ## =======================================================================
     ## Write the prepared server data into JavaScript.
-    ## ======================================================================
-    #renderWidgetDataMacro( $headersMap $headersKeys $dataRows )
+    ## =======================================================================
+    #renderWidgetDataMacro( $headersMap $headersKeys $headerFilterTypesMap $headerFilterOptionsMap $headerGlobalSearchMap $dataRows )
     <script type="text/javascript">
     (function () {
-        // ==================================================================
+        // ===================================================================
         // Find our table shell by its unique id.
         // The unique id lets this widget find its own table.
-        // ==================================================================
+        // ===================================================================
         var tableSelector = "$esc.javascript($forId)";
+        var tableNode = document.querySelector(tableSelector);
 
-        // ==================================================================
+        if (!tableNode) {
+            throw new Error('Unable to find DataTable element: ' + tableSelector);
+        }
+
+        // ===================================================================
+        // Polarion replaces the widget markup when a user clicks Apply.
+        // FixedHeader renders its floating header outside that markup, so it
+        // must be destroyed explicitly when the original table is removed.
+        //
+        // Remove disconnected table instances before creating this one.
+        // This also covers a re-render that occurs before MutationObserver has
+        // delivered its removal notification.
+        // ===================================================================
+        var tableInstances = window.tsbDataTableInstances =
+            window.tsbDataTableInstances || [];
+
+        for (var instanceIndex = tableInstances.length - 1; instanceIndex >= 0; instanceIndex--) {
+            var existingInstance = tableInstances[instanceIndex];
+
+            if (!document.documentElement.contains(existingInstance.container)) {
+                existingInstance.destroy();
+            }
+        }
+
+        // ===================================================================
+        // Read table display settings. Widget parameters are intentionally
+        // editable, so the browser validates them before they reach DataTables
+        // or CSS variables. Invalid values fall back to conservative defaults
+        // instead of breaking the rendered table.
+        // ===================================================================
+        function isSafeCssLength(value) {
+            var length = String(value || '').trim();
+
+            return /^(auto|[1-9]\d{0,3}(\.\d+)?(px|vh|vw|rem|em|%))$/.test(length);
+        }
+
+        function normalizeCssLength(value, fallbackValue) {
+            var length = String(value || '').trim();
+
+            return isSafeCssLength(length) ? length : fallbackValue;
+        }
+
+        function normalizeBoolean(value, fallbackValue) {
+            var normalizedValue = String(value).trim().toLowerCase();
+
+            if (normalizedValue === 'true') {
+                return true;
+            }
+
+            if (normalizedValue === 'false') {
+                return false;
+            }
+
+            return fallbackValue;
+        }
+
+        function normalizeText(value, fallbackValue) {
+            var normalizedValue = String(value || '').trim();
+
+            return normalizedValue || fallbackValue;
+        }
+
+        function normalizeKeyList(value) {
+            return String(value || '')
+                .split(',')
+                .map(function (key) {
+                    return key.trim();
+                })
+                .filter(function (key) {
+                    return key.length > 0;
+                });
+        }
+
+        var filterValueSeparator = '|||TSB_FILTER_VALUE|||';
+
+        var tableHeight = normalizeCssLength(
+            "$esc.javascript($tableSettings.get("tableHeight"))",
+            '60vh'
+        );
+        var showExportButtons = normalizeBoolean(
+            "$esc.javascript($tableSettings.get("showExportButtons"))",
+            true
+        );
+        var showSearchBar = normalizeBoolean(
+            "$esc.javascript($tableSettings.get("showSearchBar"))",
+            true
+        );
+        var enablePaging = normalizeBoolean(
+            "$esc.javascript($tableSettings.get("enablePaging"))",
+            false
+        );
+        var rowsPerPage = parseInt("$esc.javascript($tableSettings.get("rowsPerPage"))", 10);
+        var emptyTableMessage = normalizeText(
+            "$esc.javascript($tableSettings.get("emptyTableMessage"))",
+            'No data is available for the selected configuration.'
+        );
+        var zeroRecordsMessage = normalizeText(
+            "$esc.javascript($tableSettings.get("zeroRecordsMessage"))",
+            'No rows match the selected filters.'
+        );
+
+        // ===================================================================
+        // Keep the page size valid if a stored widget value is missing or
+        // invalid. The properties panel defaults to ten rows per page.
+        // ===================================================================
+        if (isNaN(rowsPerPage) || rowsPerPage < 1) {
+            rowsPerPage = 10;
+        }
+
+        if (rowsPerPage > 500) {
+            rowsPerPage = 500;
+        }
+
+        // ===================================================================
+        // Register a checklist for cases where DataTables' built-in searchList
+        // is not enough: dedicated raw row values, zero/non-zero count groups,
+        // and cells that contain multiple independent filter values.
+        // DataTables' CheckList helper still provides the dropdown UI.
+        // ===================================================================
+        DataTable.ColumnControl.content.tsbOptionList = {
+            defaults: {
+                options: [],
+                rowDataKey: '',
+                valueMode: 'raw'
+            },
+            init: function (config) {
+                var control = this;
+                var dataTableApi = control.dt();
+                var columnIndex = control.idx();
+                var checkList = new DataTable.ColumnControl.CheckList(
+                    dataTableApi,
+                    control,
+                    {
+                        search: false,
+                        select: true
+                    }
+                );
+
+                function getRowFilterValues(rowData) {
+                    var value = rowData[config.rowDataKey];
+
+                    if (config.valueMode === 'numberCategory') {
+                        value = parseInt(value, 10);
+                        value = isNaN(value) ? 0 : value;
+
+                        return [value === 0
+                            ? 'Zero values'
+                            : 'Non-zero values'];
+                    }
+
+                    value = String(value || '');
+
+                    if (!value) {
+                        return [''];
+                    }
+
+                    return value
+                        .split(filterValueSeparator)
+                        .map(function (filterValue) {
+                            return filterValue.trim();
+                        })
+                        .filter(function (filterValue) {
+                            return filterValue.length > 0;
+                        });
+                }
+
+                function setActiveState(active) {
+                    if (!config._parents) {
+                        return;
+                    }
+
+                    config._parents.forEach(function (button) {
+                        button.activeList(
+                            control.unique() + 'optionList',
+                            active
+                        );
+                    });
+                }
+
+                function applyOptionFilter(redraw) {
+                    var selectedValues = checkList.values();
+                    var column = dataTableApi.column(columnIndex);
+                    var active = selectedValues.length > 0;
+
+                    if (active) {
+                        column.search.fixed(
+                            'tsb-option-list',
+                            function (searchValue, rowData) {
+                                var rowValues = getRowFilterValues(rowData);
+
+                                return selectedValues.some(function (selectedValue) {
+                                    return rowValues.includes(selectedValue);
+                                });
+                            }
+                        );
+                    } else {
+                        column.search.fixed('tsb-option-list', '');
+                    }
+
+                    setActiveState(active);
+
+                    if (redraw) {
+                        dataTableApi.draw();
+                    }
+                }
+
+                checkList
+                    .searchListener(dataTableApi)
+                    .handler(function (event, button, buttons, redraw) {
+                        if (button) {
+                            button.active(!button.active());
+                        }
+
+                        applyOptionFilter(redraw);
+                    })
+                    .add(config.options);
+
+                return checkList.element();
+            }
+        };
+
+        // ===================================================================
+        // Register an inclusive date-range control for date-typed columns.
+        // ColumnControl's built-in date search supports one comparison at a
+        // time; this widget contract needs From and To bounds together.
+        // ===================================================================
+        DataTable.ColumnControl.content.tsbDateRange = {
+            defaults: {},
+            init: function (config) {
+                var control = this;
+                var dataTableApi = control.dt();
+                var columnIndex = control.idx();
+                var eventNamespace = '.tsbDateRange' + columnIndex;
+                var container = document.createElement('div');
+                var fromLabel = document.createElement('label');
+                var fromInput = document.createElement('input');
+                var toLabel = document.createElement('label');
+                var toInput = document.createElement('input');
+
+                container.className = 'tsb-date-range';
+                fromLabel.textContent = 'From';
+                toLabel.textContent = 'To';
+                fromInput.type = 'date';
+                toInput.type = 'date';
+                fromInput.setAttribute('aria-label', 'Date from');
+                toInput.setAttribute('aria-label', 'Date to');
+                fromLabel.appendChild(fromInput);
+                toLabel.appendChild(toInput);
+                container.appendChild(fromLabel);
+                container.appendChild(toLabel);
+
+                function setActiveState(active) {
+                    if (!config._parents) {
+                        return;
+                    }
+
+                    config._parents.forEach(function (button) {
+                        button.activeList(
+                            control.unique() + 'dateRange',
+                            active
+                        );
+                    });
+                }
+
+                function applyDateRange(redraw) {
+                    var fromDate = fromInput.value;
+                    var toDate = toInput.value;
+                    var column = dataTableApi.column(columnIndex);
+                    var active = Boolean(fromDate || toDate);
+
+                    if (active) {
+                        column.search.fixed(
+                            'tsb-date-range',
+                            function (searchValue, rowData) {
+                                var value = rowData[config.rowDataKey] || '';
+
+                                return (!fromDate || value >= fromDate) &&
+                                    (!toDate || value <= toDate);
+                            }
+                        );
+                    } else {
+                        column.search.fixed('tsb-date-range', '');
+                    }
+
+                    setActiveState(active);
+
+                    if (redraw) {
+                        dataTableApi.draw();
+                    }
+                }
+
+                function clearDateRange(event, targetColumnIndex) {
+                    if (targetColumnIndex !== columnIndex) {
+                        return;
+                    }
+
+                    fromInput.value = '';
+                    toInput.value = '';
+                    applyDateRange(false);
+                }
+
+                fromInput.addEventListener('change', function () {
+                    applyDateRange(true);
+                });
+                toInput.addEventListener('change', function () {
+                    applyDateRange(true);
+                });
+                dataTableApi.on(
+                    'cc-search-clear' + eventNamespace,
+                    clearDateRange
+                );
+
+                return container;
+            }
+        };
+
+        // ===================================================================
         // DataTables wants columns in this shape:
-        // { title: "Human label", data: "rowObjectKey" }
-        // ==================================================================
+        // { title: "Human label", data: "rowObjectKey", name: "stableColumnName" }
+        //
+        // title = the text shown in the column header.
+        // data = the key used to read the value from each row object.
+        // name = the stable id used by DataTables ordering configuration.
+        // ===================================================================
+        function stripHtml(value) {
+            var container = document.createElement('div');
+            container.innerHTML = String(value || '');
+
+            return container.textContent || container.innerText || '';
+        }
+
+        // ===================================================================
+        // Server-side row building can provide clean values beside rendered
+        // HTML. Display keeps Polarion links and icons; filtering and global
+        // search use the semantic value when one exists, so users search for
+        // titles, statuses, and labels instead of hidden markup.
+        // ===================================================================
+        function getSemanticDataValue(rowData, header, prefix) {
+            var semanticKey = prefix + header.key;
+
+            if (Object.prototype.hasOwnProperty.call(rowData, semanticKey)) {
+                return rowData[semanticKey];
+            }
+
+            return null;
+        }
+
+        function getFilterDataValue(rowData, header, fallbackValue) {
+            var searchValue = getSemanticDataValue(
+                rowData,
+                header,
+                '__tsbSearchValue_'
+            );
+            var filterValue;
+
+            if (searchValue !== null) {
+                return searchValue;
+            }
+
+            filterValue = getSemanticDataValue(
+                rowData,
+                header,
+                '__tsbFilterValue_'
+            );
+
+            if (filterValue !== null) {
+                return filterValue;
+            }
+
+            return stripHtml(fallbackValue);
+        }
+
+        function getListFilterOptions(header) {
+            var filterValueKey = '__tsbFilterValue_' + header.key;
+            var options = header.filterOptions.slice();
+            var hasEmptyRows = widgetData.rows.some(function (row) {
+                return !String(row[filterValueKey] || '').trim();
+            });
+            var hasEmptyOption = options.some(function (option) {
+                return option.value === '';
+            });
+
+            if (hasEmptyRows && !hasEmptyOption) {
+                options.unshift({
+                    label: '',
+                    value: ''
+                });
+            }
+
+            return options;
+        }
+
         var columns = widgetData.headers.map(function (header) {
-            return {
+            var filterContent;
+
+            if (header.filterType === 'date') {
+                filterContent = {
+                    extend: 'tsbDateRange',
+                    rowDataKey: '__tsbFilterValue_' + header.key
+                };
+            } else if (header.filterType === 'catalog') {
+                filterContent = {
+                    extend: 'tsbOptionList',
+                    options: header.filterOptions,
+                    rowDataKey: '__tsbFilterValue_' + header.key
+                };
+            } else if (header.filterType === 'number') {
+                filterContent = {
+                    extend: 'tsbOptionList',
+                    options: [
+                        {
+                            label: 'Zero values',
+                            value: 'Zero values'
+                        },
+                        {
+                            label: 'Non-zero values',
+                            value: 'Non-zero values'
+                        }
+                    ],
+                    rowDataKey: '__tsbFilterValue_' + header.key,
+                    valueMode: 'numberCategory'
+                };
+            } else if (header.filterType === 'list' && header.filterOptions.length > 0) {
+                filterContent = {
+                    extend: 'tsbOptionList',
+                    options: getListFilterOptions(header),
+                    rowDataKey: '__tsbFilterValue_' + header.key
+                };
+            } else {
+                filterContent = {
+                    extend: 'searchList',
+                    search: false,
+                    select: true,
+                    orthogonal: 'filter'
+                };
+            }
+
+            var column = {
                 title: header.title,
-                data: header.key
+                data: header.key,
+                name: header.key,
+                searchable: true,
+                render: function (data, type, row) {
+                    if (type === 'display') {
+                        return data;
+                    }
+
+                    if (type === 'filter' || type === 'sort') {
+                        return getFilterDataValue(row, header, data);
+                    }
+
+                    return data;
+                },
+                columnControl: [{
+                    extend: 'dropdown',
+                    icon: 'filter',
+                    text: 'Filter',
+                    className: 'filterDropdown',
+                    content: [filterContent]
+                }]
             };
+
+            // ===============================================================
+            // Additional query columns retain their rendered links for display
+            // and global searching. Their raw counts provide numeric sorting;
+            // the custom option list maps those counts to zero or non-zero.
+            // ===============================================================
+            if (header.filterType === 'number') {
+                column.type = 'num';
+                column.render = function (data, type, row) {
+                    if (type === 'display') {
+                        return data;
+                    }
+
+                    if (type === 'filter') {
+                        // DataTables uses one filter value for both global and
+                        // column searches. Keep the column searchable so its
+                        // custom filter runs, but hide opted-out values from the
+                        // global search text.
+                        if (header.globalSearch === false) {
+                            return '';
+                        }
+
+                        return getFilterDataValue(row, header, data);
+                    }
+
+                    var filterValueKey = '__tsbFilterValue_' + header.key;
+                    var filterValue = parseInt(row[filterValueKey], 10);
+
+                    return isNaN(filterValue) ? 0 : filterValue;
+                };
+            }
+
+            // ===============================================================
+            // Date columns retain rendered values for display/global search.
+            // Raw ISO dates provide sorting and date-range comparisons.
+            // ===============================================================
+            if (header.filterType === 'date') {
+                column.type = 'date';
+                column.render = function (data, type, row) {
+                    if (type === 'display') {
+                        return data;
+                    }
+
+                    if (type === 'filter') {
+                        return getFilterDataValue(row, header, data);
+                    }
+
+                    return row['__tsbFilterValue_' + header.key] || '';
+                };
+            }
+
+            return column;
         });
 
-        new DataTable(tableSelector, {
+        // ===================================================================
+        // Define the preferred initial row order from caller-provided column
+        // keys. The shared table layer does not assume widget-specific fields.
+        // ===================================================================
+        var defaultSortKeys = normalizeKeyList(
+            "$esc.javascript($tableSettings.get("defaultSortKeys"))"
+        );
+
+        // ===================================================================
+        // Keep only default sort columns that are present in this table.
+        // This prevents DataTables from trying to sort by a column that the
+        // current widget configuration did not render.
+        // ===================================================================
+        var defaultOrder = defaultSortKeys
+            .filter(function (key) {
+                return widgetData.headers.some(function (header) {
+                    return header.key === key;
+                });
+            })
+
+            // ===============================================================
+            // Convert the existing sort keys into DataTables' named ordering
+            // format. The order of this array defines sort priority.
+            // ===============================================================
+            .map(function (key) {
+                return {
+                    name: key,
+                    dir: 'asc'
+                };
+            });
+
+        var topEndLayout = {};
+
+        if (showExportButtons) {
+            topEndLayout.buttons = ['copy', 'csvHtml5', 'excel'];
+        }
+
+        if (showSearchBar) {
+            topEndLayout.search = {};
+        }
+
+        // ===================================================================
+        // ColumnControl does not provide a funnel icon in the downloaded
+        // bundle. Register a Lucide-style funnel for the filter dropdown.
+        // ===================================================================
+        DataTable.ColumnControl.icons.filter =
+            '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" ' +
+            'viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+            'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>';
+
+        var dataTable = new DataTable(tableNode, {
             columns: columns,
             data: widgetData.rows,
 
-            paging:false,
-            scrollY: '60vh',
+            // ===============================================================
+            // Enable DataTables ordering explicitly.
+            // orderMulti allows users to add secondary and tertiary sorts
+            // manually with Shift + click on column headers.
+            // ===============================================================
+            ordering: true,
+            orderMulti: true,
+            order: defaultOrder.length ? defaultOrder : [],
+
+            // ===============================================================
+            // Paging remains disabled by default to preserve existing widget
+            // behavior. When enabled, pageLength limits each page to the row
+            // count configured in the widget properties panel. lengthChange
+            // keeps the page-size control out of the rendered table.
+            // ===============================================================
+            paging: enablePaging,
+            pageLength: rowsPerPage,
+            lengthChange: false,
+            scrollX: true,
+            scrollY: tableHeight,
             autoWidth: true,
             fixedHeader: true,
+            language: {
+                emptyTable: emptyTableMessage,
+                zeroRecords: zeroRecordsMessage
+            },
 
+            // ===============================================================
+            // Show the entry count above the table. Set bottomStart to null
+            // so DataTables does not render the same information below it.
+            // ===============================================================
             layout: {
-                topEnd: {
-                    buttons: ['copy','csvHtml5', 'excel'],
-                    search: {}
-                }
+                topStart: [
+                    'info',
+                    {
+                        buttons: [{
+                            text: 'Clear filters',
+                            className: 'tsb-clear-filters',
+                            enabled: false,
+                            init: function (dt) {
+                                var clearFiltersButton = this;
+
+                                // ===========================================
+                                // Enable the action only while at least one
+                                // ColumnControl filter is active.
+                                // ===========================================
+                                dt.on('draw.tsbClearFilters', function () {
+                                    var hasColumnFilter = false;
+
+                                    dt.columns().every(function () {
+                                        if (this.search.fixed('dtcc') ||
+                                            this.search.fixed('dtcc-list') ||
+                                            this.search.fixed('tsb-option-list') ||
+                                            this.search.fixed('tsb-date-range')) {
+                                            hasColumnFilter = true;
+                                        }
+                                    });
+
+                                    clearFiltersButton.enable(hasColumnFilter);
+                                });
+                            },
+                            action: function (event, dt) {
+                                dt.columns().columnControl.searchClear();
+                                dt.draw();
+                            }
+                        }]
+                    }
+                ],
+                topEnd: topEndLayout,
+                bottomStart: null,
+                bottomEnd: null,
+                bottom: enablePaging ? 'paging' : null
             }
         });
 
-        new TableEffects(tableSelector, {
+        var tableContainer = dataTable.table().container();
+
+        new TableEffects(tableContainer, {
             header: {
-                backgroundColor: "rgb(31, 41, 55)",
-                color: "rgb(255, 255, 255)"
+                backgroundColor: "$esc.javascript($tableSettings.get("headerBackgroundColor"))",
+                color: "$esc.javascript($tableSettings.get("headerTextColor"))"
             },
             rows: {
-                backgroundColor: "rgb(255, 255, 255)",
-                alternateBackgroundColor: "rgb(248, 250, 252)"
+                backgroundColor: "$esc.javascript($tableSettings.get("rowBackgroundColor"))",
+                alternateBackgroundColor: "$esc.javascript($tableSettings.get("alternateRowBackgroundColor"))"
             }
+        });
+
+        // ===================================================================
+        // Track this DataTable for the lifetime of its rendered widget.
+        // Destroying the DataTable invokes FixedHeader's own cleanup and
+        // removes the floating header that FixedHeader appends to the page.
+        // ===================================================================
+        var tableInstance = {
+            container: tableContainer,
+            dataTable: dataTable,
+            observer: null,
+            resizeObserver: null,
+            adjustmentFrame: null,
+            destroyed: false,
+            destroy: function () {
+                if (this.destroyed) {
+                    return;
+                }
+
+                this.destroyed = true;
+
+                if (this.observer) {
+                    this.observer.disconnect();
+                }
+
+                if (this.resizeObserver) {
+                    this.resizeObserver.disconnect();
+                }
+
+                if (this.adjustmentFrame !== null) {
+                    window.cancelAnimationFrame(this.adjustmentFrame);
+                }
+
+                var registeredIndex = tableInstances.indexOf(this);
+                if (registeredIndex !== -1) {
+                    tableInstances.splice(registeredIndex, 1);
+                }
+
+                this.dataTable.destroy(true);
+            }
+        };
+
+        tableInstances.push(tableInstance);
+
+        // ===================================================================
+        // Polarion's widget editor can resize the rendered widget after
+        // DataTables performs its initial column-width calculation.
+        // Recalculate header and body widths after the new size settles.
+        // ===================================================================
+        function scheduleColumnAdjustment() {
+            if (tableInstance.destroyed || tableInstance.adjustmentFrame !== null) {
+                return;
+            }
+
+            tableInstance.adjustmentFrame = window.requestAnimationFrame(function () {
+                tableInstance.adjustmentFrame = null;
+
+                if (!document.documentElement.contains(tableContainer)) {
+                    return;
+                }
+
+                dataTable.columns.adjust();
+                dataTable.fixedHeader.adjust();
+            });
+        }
+
+        if (window.ResizeObserver) {
+            var observedContainerWidth = -1;
+
+            tableInstance.resizeObserver = new ResizeObserver(function (entries) {
+                if (!entries.length) {
+                    return;
+                }
+
+                var containerWidth = entries[0].contentRect.width;
+
+                if (containerWidth > 0 && containerWidth !== observedContainerWidth) {
+                    observedContainerWidth = containerWidth;
+                    scheduleColumnAdjustment();
+                }
+            });
+
+            tableInstance.resizeObserver.observe(tableContainer);
+        }
+
+        scheduleColumnAdjustment();
+
+        // ===================================================================
+        // Polarion does not call DataTables when it removes widget markup.
+        // Observe the page so the table can clean up as soon as its generated
+        // DataTables container is no longer attached to the document.
+        // ===================================================================
+        tableInstance.observer = new MutationObserver(function () {
+            if (!document.documentElement.contains(tableContainer)) {
+                tableInstance.destroy();
+            }
+        });
+
+        tableInstance.observer.observe(document.documentElement, {
+            childList: true,
+            subtree: true
         });
     })();
     </script>

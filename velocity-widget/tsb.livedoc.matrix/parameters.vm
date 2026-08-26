@@ -1,4 +1,4 @@
-## ==========================================================================
+## ===========================================================================
 ## BSD 3-CLAUSE LICENSE
 ##
 ## Copyright (c) 2008-2026, Trinity Software & Beyond Ltd.
@@ -26,44 +26,64 @@
 ## LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 ## WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
 ## ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-## ==========================================================================
+## ===========================================================================
+## ===========================================================================
+## OVERVIEW - tsb.livedoc.matrix - parameters.vm
+## ===========================================================================
+## ===========================================================================
+## Build Data Set Parameter. The Data Set serves as the single source of truth
+## for scope selection (single project, project group, collection, or global
+## repository scope).
+## ===========================================================================
+#set ( $projectBaselineParam = $factory.customEnum("Project Baseline").allowNoValue(true).allowMultipleValues(false).dependencyTarget(true).build() )
+#set ( $specificRevisionParam = $factory.string("Revision").value("").dependencyTarget(true).build() )
+#set ( $collectionInheritanceParam = $factory.bool("Collection Inheritance").value(false).dependencyTarget(true).build() )
 
-## ==========================================================================
-## OVERVIEW — tsb.livedoc.matrix — parameters.vm
-## ==========================================================================
+$parameters.put("dataSet", $factory.dataSet("Data Set").prototype().document().allowedPrototypes(["Document"]).allowCollectionScope(true).luceneQuery("").add("projectBaseline", $projectBaselineParam).add("specificRevision", $specificRevisionParam).add("collectionInheritance", $collectionInheritanceParam).dependencySource(true).build())
 
-## ==========================================================================
-## Build Data Set Parameter
-## ==========================================================================
-$parameters.put("dataSet", $factory.dataSet("Data Set").prototype().document().allowedPrototypes(["Document"]).build())
+## ===========================================================================
+## Define the matrix content parameters. dependencies.vm controls their dynamic
+## visibility, and render.vm turns their stored values into the effective table.
+## ===========================================================================
+$parameters.put("matrixConfigurationPreset", $factory.customEnum("Recommended Preset").allowNoValue(false).allowMultipleValues(false).dependencySource(true).dependencyTarget(true).build())
+$parameters.put("showSignaturesStatus", $factory.bool("Show Signatures Status").value(true).dependencyTarget(true).build())
+$parameters.put("showDocumentBaselines", $factory.bool("Show Document Baselines").value(true).dependencyTarget(true).build())
+$parameters.put("showBranchedDocuments", $factory.bool("Show Branched Documents").value(false).dependencyTarget(true).build())
+$parameters.put("showMasterDocument", $factory.bool("Show Master Document").value(false).dependencyTarget(true).build())
+$parameters.put("showUnresolvedComments", $factory.bool("Show Unresolved Comments").value(false).dependencyTarget(true).build())
+$parameters.put("showUnreferencedWorkItems", $factory.bool("Show Recycle Bin").value(false).dependencyTarget(true).build())
+$parameters.put("showApprovedVersions", $factory.bool("Show Approved Versions").value(true).dependencyTarget(true).build())
+$parameters.put("showProject", $factory.bool("Show Project").value(true).dependencyTarget(true).build())
+$parameters.put("showSpace", $factory.bool("Show Space").value(true).dependencyTarget(true).build())
+$parameters.put("columnFields", $factory.string("Show Fields as Columns").value("status,updated").dependencyTarget(true).build())
 
-## --------------------------------------------------------------------------
-## dependencySource = allows the script to process dependencies (parent-child items) - can be used to include the entire linked structure
-## When we create a report, we can pull user stories, evaluate their status, which document it is linked to, etc.
-## --------------------------------------------------------------------------
+## ===========================================================================
+## Build DataTables display and behavior parameters.
+## These let users adjust table presentation from the widget properties
+## panel without changing Velocity or JavaScript files.
+## ===========================================================================
+$parameters.put("tableHeight", $factory.string("Table Height").value("60vh").dependencyTarget(true).build())
+$parameters.put("headerBackgroundColor", $factory.string("Header Background Color").value("#ffffff").dependencyTarget(true).build())
+$parameters.put("headerTextColor", $factory.string("Header Text Color").value("#111827").dependencyTarget(true).build())
+$parameters.put("rowBackgroundColor", $factory.string("Row Background Color").value("#ffffff").dependencyTarget(true).build())
+$parameters.put("alternateRowBackgroundColor", $factory.string("Alternate Row Background Color").value("#f8fafc").dependencyTarget(true).build())
+$parameters.put("showExportButtons", $factory.bool("Show Export Buttons").value(true).dependencyTarget(true).build())
+$parameters.put("showSearchBar", $factory.bool("Show Search Bar").value(true).dependencyTarget(true).build())
+$parameters.put("showRisksheetLink", $factory.bool("Show Risksheet Link").value(false).dependencyTarget(true).build())
+$parameters.put("enablePaging", $factory.bool("Enable Paging").value(false).dependencySource(true).build())
+$parameters.put("rowsPerPage", $factory.integer("Rows Per Page").value(10).dependencyTarget(true).build())
 
-## ==========================================================================
-## Parameters are the conditions or filters that we can see in the widget
-## These can help filter the data accordingly - aligned with what users want to see
-##
-## These are just IDs and labels that we're initializing for later.
-## ==========================================================================
-$parameters.put("showSignaturesStatus", $factory.bool("Show Signatures Status").value(true).build())
-$parameters.put("showProject", $factory.bool("Show Project").value(true).build())
-$parameters.put("showSpace", $factory.bool("Show Space").value(true).build())
-$parameters.put("columnFields", $factory.string("Show Fields as Columns").value("status,updated").build())
-
-## ==========================================================================
-## Build Additional Column workitem queries
-## ==========================================================================
+## ===========================================================================
+## Build Additional Column work item queries.
+## ===========================================================================
 #set ( $title = $factory.string("Title").build() )
 #set ( $query = $factory.string("Query (Lucene)").value("").build() )
 #set ( $composite = $factory.composite("Column Query").add("title", $title).add("query", $query).build() )
-$parameters.put("columns", $factory.multi("Additional Columns", $composite).build())
+$parameters.put("columns", $factory.multi("Additional Columns", $composite).dependencyTarget(true).build())
 
-## --------------------------------------------------------------------------
+## ---------------------------------------------------------------------------
 ## SIDE NOTE: A composite groups related inputs into one reusable parameter block.
-## Here, each block contains a column Title and a Lucene Query.
+## Here, each block contains a column Title, Lucene Query, and query behavior.
 ## Wrapping that composite in multi("Additional Columns", ...) lets users add
 ## multiple query columns in the widget configuration.
-## --------------------------------------------------------------------------
+## ---------------------------------------------------------------------------

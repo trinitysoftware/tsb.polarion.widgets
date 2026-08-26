@@ -1,24 +1,223 @@
 .tsb-table-effects {
-    --tsb-header-bg: #1f2937;
-    --tsb-header-color: #ffffff;
+    --tsb-header-bg: #ffffff;
+    --tsb-header-color: #111827;
     --tsb-row-bg: #ffffff;
     --tsb-row-alt-bg: #f8fafc;
+    --tsb-zero-value-color: #990000;
+    --tsb-paging-hover-bg: #315f7d;
+    --tsb-paging-hover-border: #244960;
+    --tsb-paging-active-bg: #244960;
 }
 
-.tsb-table-effects thead th {
+.tsb-table-effects table.dataTable thead th,
+.tsb-table-effects table.dataTable thead td,
+.tsb-table-effects div.dt-scroll-head table.dataTable thead th,
+.tsb-table-effects div.dt-scroll-head table.dataTable thead td {
     background-color: var(--tsb-header-bg);
     color: var(--tsb-header-color);
 }
 
-.tsb-table-effects tbody tr {
+.tsb-table-effects table.dataTable thead th .dt-column-order,
+.tsb-table-effects table.dataTable thead td .dt-column-order,
+.tsb-table-effects table.dataTable thead th .dt-column-order::before,
+.tsb-table-effects table.dataTable thead th .dt-column-order::after,
+.tsb-table-effects table.dataTable thead td .dt-column-order::before,
+.tsb-table-effects table.dataTable thead td .dt-column-order::after {
+    color: var(--tsb-header-color);
+    opacity: 1;
+}
+
+/* Keep ColumnControl filter icons visible with custom header colors. */
+.tsb-table-effects table.dataTable thead {
+    --dtcc-button-icon_color: var(--tsb-header-color);
+    --dtcc-button_opacity: 0.7;
+    --dtcc-button_hover-opacity: 1;
+    --dtcc-button_hover-background: rgba(127, 127, 127, 0.18);
+}
+
+/* Keep filter and sorting controls in the same order for every data type. */
+.tsb-table-effects table.dataTable thead div.dt-column-header {
+    flex-direction: row !important;
+}
+
+.tsb-table-effects table.dataTable thead span.dt-column-title {
+    order: 1;
+}
+
+.tsb-table-effects table.dataTable thead span.dtcc {
+    order: 2;
+    margin-left: auto;
+}
+
+.tsb-table-effects table.dataTable thead span.dt-column-order {
+    order: 3;
+    flex: 0 0 12px;
+}
+
+/* Let DataTables size columns from single-line content and scroll horizontally. */
+.tsb-table-effects div.dt-scroll-head table.dataTable,
+.tsb-table-effects div.dt-scroll-body > table.dataTable {
+    table-layout: auto;
+    min-width: 100%;
+}
+
+/* Keep rendered values on one line so columns expand instead of text bleeding. */
+.tsb-table-effects table.dataTable tbody td,
+.tsb-table-effects table.dataTable tbody td * {
+    box-sizing: border-box;
+    max-width: none;
+    white-space: nowrap !important;
+    overflow-wrap: normal;
+    word-break: normal;
+}
+
+/* Replace the funnel with ColumnControl's check mark when a filter is active. */
+.tsb-table-effects table.dataTable thead
+    button.dtcc-button_filterDropdown.dtcc-button_active {
+    color: var(--tsb-header-color);
+    background: rgba(49, 95, 125, 0.16);
+    opacity: 1;
+}
+
+.tsb-table-effects table.dataTable thead
+    button.dtcc-button_filterDropdown.dtcc-button_active
+    span.dtcc-button-icon {
+    display: none;
+}
+
+.tsb-table-effects table.dataTable thead
+    button.dtcc-button_filterDropdown.dtcc-button_active
+    span.dtcc-button-state {
+    display: inline-flex;
+    width: 16px;
+    height: 16px;
+}
+
+.tsb-table-effects table.dataTable thead
+    button.dtcc-button_filterDropdown.dtcc-button_active
+    span.dtcc-button-state svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* Hide only the master table's internal sizing header. */
+.tsb-table-effects div.dt-scroll-body > table.dataTable[id] > thead,
+.tsb-table-effects div.dt-scroll-body > table.dataTable[id] > thead > tr,
+.tsb-table-effects div.dt-scroll-body > table.dataTable[id] > thead > tr > th,
+.tsb-table-effects div.dt-scroll-body > table.dataTable[id] > thead > tr > td,
+.tsb-table-effects div.dt-scroll-body > table.dataTable[id] > thead .dt-scroll-sizing {
+    height: 0 !important;
+    max-height: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    border-top-width: 0 !important;
+    border-bottom-width: 0 !important;
+    overflow: hidden !important;
+    line-height: 0 !important;
+    font-size: 0 !important;
+}
+
+.tsb-table-effects table.dataTable tbody tr {
     background-color: var(--tsb-row-bg);
 }
 
-.tsb-table-effects tbody tr:nth-child(even) {
+.tsb-table-effects table.dataTable tbody tr:nth-child(even) {
     background-color: var(--tsb-row-alt-bg);
 }
 
-.tsb-table-effects thead th {
-    background-color: var(--tsb-header-bg);
-    color: var(--tsb-header-color);
+/* Keep numeric additional-column headers aligned with the other labels. */
+.tsb-table-effects table.dataTable thead th.dt-type-numeric
+    span.dt-column-title {
+    text-align: left;
+}
+
+/* Keep numeric additional-column values aligned with the other table data. */
+.tsb-table-effects table.dataTable tbody td.dt-type-numeric {
+    text-align: left;
+}
+
+/* Numeric zero-count styling for additional query columns. */
+.tsb-table-effects table.dataTable tbody a.tsb-computed-count-zero {
+    color: var(--tsb-zero-value-color) !important;
+}
+
+/* Present the clear action as a compact link beside the entry count. */
+.tsb-table-effects.dt-container div.dt-buttons
+    button.dt-button.tsb-clear-filters {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    color: #315f7d;
+    background: transparent;
+    box-shadow: none;
+    font-size: inherit;
+    line-height: inherit;
+    text-decoration: underline;
+}
+
+.tsb-table-effects.dt-container div.dt-buttons
+    button.dt-button.tsb-clear-filters:hover:not(.disabled),
+.tsb-table-effects.dt-container div.dt-buttons
+    button.dt-button.tsb-clear-filters:focus:not(.disabled) {
+    color: #244960;
+    background: transparent;
+    box-shadow: none;
+}
+
+.tsb-table-effects.dt-container div.dt-buttons
+    button.dt-button.tsb-clear-filters.disabled {
+    color: #6b7280;
+    background: transparent;
+    opacity: 0.55;
+    text-decoration: none;
+}
+
+/* Keep the Updated date range compact and readable inside its dropdown. */
+.tsb-date-range {
+    display: grid;
+    gap: 8px;
+    padding: 8px 12px;
+}
+
+.tsb-date-range label {
+    display: grid;
+    grid-template-columns: 36px minmax(130px, 1fr);
+    gap: 8px;
+    align-items: center;
+    color: #111827;
+    font-weight: 600;
+}
+
+.tsb-date-range input[type="date"] {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 5px 7px;
+    border: 1px solid #9ca3af;
+    border-radius: 3px;
+    color: #111827;
+    background: #ffffff;
+    font: inherit;
+}
+
+.tsb-date-range input[type="date"]:focus {
+    border-color: #315f7d;
+    outline: 2px solid rgba(49, 95, 125, 0.2);
+    outline-offset: 1px;
+}
+
+/* Use a restrained corporate-blue interaction state for pagination. */
+.tsb-table-effects.dt-container .dt-paging
+    .dt-paging-button:hover:not(.disabled):not(.current) {
+    color: #ffffff !important;
+    border-color: var(--tsb-paging-hover-border);
+    background: var(--tsb-paging-hover-bg);
+    box-shadow: none;
+}
+
+.tsb-table-effects.dt-container .dt-paging
+    .dt-paging-button:active:not(.disabled):not(.current) {
+    color: #ffffff !important;
+    border-color: var(--tsb-paging-hover-border);
+    background: var(--tsb-paging-active-bg);
+    box-shadow: none;
 }

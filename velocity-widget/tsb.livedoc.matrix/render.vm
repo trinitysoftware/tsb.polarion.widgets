@@ -1,4 +1,4 @@
-## ==========================================================================
+## ===========================================================================
 ## BSD 3-CLAUSE LICENSE
 ## Copyright (c) 2008-2026, Trinity Software & Beyond Ltd.
 ##
@@ -25,294 +25,1514 @@
 ## LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 ## WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
 ## ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-## ==========================================================================
-
+## ===========================================================================
 #import("tsb.framework.vm")
 
-## ==========================================================================
-## Warning shown when the Data Set does not resolve to one project.
-## This widget builds document and work item links in one project context.
-## ==========================================================================
-#set ( $warnSingleProject = "This widget renders a document matrix for <b>single Projects only</b>. Please select a <b>single Project</b> for the <b>Scope parameter</b>." )
+## ===========================================================================
+## Resolve document search criteria directly from the Data Set parameter.
+## The Data Set parameter handles single project, project group, collection,
+## and global scope.
+## ===========================================================================
+#set ( $dataSetScope = $parameters.dataSet.scope() )
+#set ( $dataSetCollectionReference = $parameters.dataSet.getCollectionReference() )
+#set ( $dataSetCollectionScopeSelected = false )
+#set ( $dataSetCollectionInheritanceEnabled = false )
+#set ( $dataSetWidgetContextScope = "$!parameters.dataSet.getWidgetContextScope()" )
+#set ( $dataSetWidgetContextScopeLower = $dataSetWidgetContextScope.toLowerCase() )
+#set ( $projectId = $dataSetScope.projectId() )
+#set ( $scopePath = $dataSetScope.path() )
+#set ( $dataSetScopeIsGlobal = $dataSetScope.isGlobal() )
+#set ( $effectiveRevision = "" )
+#set ( $revisionWarning = "" )
 
-## ==========================================================================
-## Read the selected project and document query from the Data Set parameter.
-## $allowRendering is turned off when the required project scope is missing.
-## ==========================================================================
-#set ( $allowRendering = true )
-#set ( $projectId = $parameters.dataSet.scope().projectId() )
-#set ( $documentQuery = $parameters.dataSet.getFor().revision("").queryToShow() )
-
-## ==========================================================================
-## Stop rendering early when the Data Set does not select a single project.
-## ==========================================================================
-#if ( !$projectId )
-    $widgetContext.renderWarning("$warnSingleProject")
-    #set ( $allowRendering = false )
+## ===========================================================================
+## Prefer the active Data Set scope over a stale Collection reference. Polarion
+## can retain a previous Collection reference after switching back to a normal
+## scope, while the active scope still exposes project/path/global state.
+## ===========================================================================
+#if ( $dataSetWidgetContextScopeLower.contains("collection") )
+    #set ( $dataSetCollectionScopeSelected = true )
+    #set ( $dataSetCollectionInheritanceEnabled = $parameters.dataSet.collectionInheritance.value() )
+#elseif ( $projectId || $scopePath || $dataSetScopeIsGlobal )
+    #set ( $dataSetCollectionScopeSelected = false )
+#elseif ( $dataSetCollectionReference )
+    #set ( $dataSetCollectionScopeSelected = true )
+    #set ( $dataSetCollectionInheritanceEnabled = $parameters.dataSet.collectionInheritance.value() )
 #end
 
-## ==========================================================================
+## ===========================================================================
+## Resolve the revision context before any document or work item search runs.
+## Empty revision means HEAD/current. Project Baseline selection takes
+## precedence because its base revision is the authoritative snapshot point.
+## The selected revision applies to all documents represented by the Data Set.
+##
+## Collection scope carries per-document revisions from its Collection elements,
+## so Project Baseline and Revision are intentionally ignored in that mode.
+## ===========================================================================
+#set ( $q = '"' )
+#set ( $newWindowLinkAttributes = " target=${q}_blank${q} rel=${q}noopener noreferrer${q}" )
+#set ( $projectBaselineValues = $parameters.dataSet.projectBaseline.values() )
+#set ( $specificRevision = $parameters.dataSet.specificRevision.value().trim() )
+
+#set ( $currentDocumentQuery = $parameters.dataSet.getFor().revision("").queryToShow() )
+
+#if ( !$dataSetCollectionScopeSelected && !$projectBaselineValues.isEmpty() )
+    #set ( $projectBaselineValue = "$!projectBaselineValues.get(0)" )
+    #set ( $projectBaselineValue = $projectBaselineValue.trim() )
+    #set ( $projectBaselineSeparatorIndex = $projectBaselineValue.indexOf("|") )
+
+    #if ( $projectBaselineValue.equals("") )
+        ## ===================================================================
+        ## No Project Baseline is selected. Polarion can still return a
+        ## one-item values list containing an empty string, so treat that as
+        ## the same HEAD/current behavior as a truly empty list.
+        ## ===================================================================
+    #elseif ( $projectBaselineSeparatorIndex > 0 )
+        #set ( $selectedProjectBaselineIsValid = false )
+        #set ( $scopeBaselineProjectIds = [] )
+
+        #if ( $projectId )
+            #set ( $void = $scopeBaselineProjectIds.add($projectId) )
+        #else
+            #set ( $scopeDocuments = $transaction.documents().search().query($currentDocumentQuery).sort("project.id") )
+
+            #foreach ( $scopeDocument in $scopeDocuments )
+                #if ( !$scopeDocument.isUnresolvable() && $scopeDocument.can().read() )
+                    #set ( $scopeProjectId = $scopeDocument.fields().project().projectId() )
+
+                    #if ( $scopeProjectId && !$scopeBaselineProjectIds.contains($scopeProjectId) )
+                        #set ( $void = $scopeBaselineProjectIds.add($scopeProjectId) )
+                    #end
+                #end
+            #end
+        #end
+
+        #foreach ( $scopeBaselineProjectId in $scopeBaselineProjectIds )
+            #set ( $scopeBaselineTrackerProject = $trackerService.getTrackerProject($scopeBaselineProjectId) )
+
+            #if ( $scopeBaselineTrackerProject )
+                #foreach ( $scopeProjectBaseline in $scopeBaselineTrackerProject.getBaselinesManager().getBaselines() )
+                    #set ( $scopeBaselineName = "$!scopeProjectBaseline.getName()" )
+                    #set ( $scopeBaselineRevision = "$!scopeProjectBaseline.getBaseRevision()" )
+
+                    #if ( $scopeBaselineName.equals("") )
+                        #set ( $scopeBaselineName = "$!scopeProjectBaseline.getId()" )
+                    #end
+
+                    #set ( $scopeBaselineValue = "$scopeBaselineRevision|$scopeBaselineName|$scopeBaselineProjectId" )
+
+                    #if ( $projectBaselineValue.equals($scopeBaselineValue) )
+                        #set ( $selectedProjectBaselineIsValid = true )
+                    #end
+                #end
+            #end
+        #end
+
+        #if ( $selectedProjectBaselineIsValid )
+            #set ( $projectBaselineRevision = $projectBaselineValue.substring(0, $projectBaselineSeparatorIndex) )
+            #set ( $effectiveRevision = $projectBaselineRevision.trim() )
+        #else
+            #set ( $revisionWarning = "Project Baseline '$projectBaselineValue' is not available in the current Data Set scope. Rows are rendered from HEAD." )
+        #end
+    #else
+        #set ( $revisionWarning = "Project Baseline '$projectBaselineValue' cannot be resolved. Rows are rendered from HEAD." )
+    #end
+#elseif ( !$dataSetCollectionScopeSelected && !$specificRevision.equals("") )
+    #set ( $effectiveRevision = $specificRevision )
+#end
+
+#set ( $documentQuery = $parameters.dataSet.getFor().revision("$!effectiveRevision").queryToShow() )
+
+## ===========================================================================
 ## $docItems stores the LiveDocs found by the document query.
 ## $docQueries stores the matching work item query for each LiveDoc.
 ## Both lists use the same index so each document can find its own query later.
-## ==========================================================================
+##
+## $projectIds stores each represented project once for filter catalogs.
+## ===========================================================================
 #set ( $docItems = [] )
 #set ( $docQueries = [] )
+#set ( $docRevisions = [] )
+#set ( $projectIds = [] )
+#set ( $collectionDocumentKeys = [] )
+#set ( $collectionDocumentMap = $objectFactory.newMap() )
+#set ( $collectionDocumentRevisionsMap = $objectFactory.newMap() )
+#set ( $processedCollectionKeys = [] )
 
-## ==========================================================================
-## $q keeps double quotes readable when building Lucene query strings.
-## 
+#if ( !$dataSetCollectionScopeSelected && $projectId )
+    #set ( $void = $projectIds.add($projectId) )
+#end
+
+## ===========================================================================
+## Resolve the selected recommended matrix configuration preset.
+## Presets provide complete, conservative matrix setups for common review
+## workflows. Custom Configuration keeps the manually entered widget values.
+## ===========================================================================
+#set ( $matrixPresetValues = $parameters.matrixConfigurationPreset.values() )
+#set ( $selectedMatrixPreset = "custom" )
+
+#if ( !$matrixPresetValues.isEmpty() )
+    #set ( $selectedMatrixPreset = "$!matrixPresetValues.get(0)" )
+#end
+
+#set ( $validMatrixPresetValues = ["custom", "basicLiveDocStatus", "reviewAndApproval", "traceabilityCounts", "releaseReadiness"] )
+
+#if ( !$validMatrixPresetValues.contains($selectedMatrixPreset) )
+    #set ( $selectedMatrixPreset = "custom" )
+#end
+
+## ===========================================================================
+## Build the effective matrix configuration used by rendering.
+## Query columns are kept in a normalized map list so preset and custom columns
+## use the same rendering path and the same Lucene handling. Each column also
+## receives an internal key that cannot collide with a display title or field id.
+## ===========================================================================
+#set ( $matrixShowSignaturesStatus = $parameters.showSignaturesStatus.value() )
+#set ( $matrixShowDocumentBaselines = $parameters.showDocumentBaselines.value() )
+#set ( $matrixShowBranchedDocuments = $parameters.showBranchedDocuments.value() )
+#set ( $matrixShowMasterDocument = $parameters.showMasterDocument.value() )
+#set ( $matrixShowUnresolvedComments = $parameters.showUnresolvedComments.value() )
+#set ( $matrixShowUnreferencedWorkItems = $parameters.showUnreferencedWorkItems.value() )
+#set ( $matrixShowApprovedVersions = $parameters.showApprovedVersions.value() )
+#set ( $matrixShowProject = $parameters.showProject.value() )
+#set ( $matrixShowSpace = $parameters.showSpace.value() )
+#set ( $matrixColumnFields = $parameters.columnFields.value() )
+#set ( $matrixShowRisksheetLink = $parameters.showRisksheetLink.value() )
+#set ( $matrixColumnQueries = [] )
+#set ( $matrixColumnQueryTitles = [] )
+
+#macro ( addMatrixColumnQueryMacro $title $query )
+    #set ( $matrixColumnTitle = "$!title" )
+    #set ( $matrixColumnQuery = "$!query" )
+    #set ( $matrixColumnTitle = $matrixColumnTitle.trim() )
+    #set ( $matrixColumnQuery = $matrixColumnQuery.trim() )
+
+    #if ( !$matrixColumnTitle.equals("") && !$matrixColumnQuery.equals("") && !$matrixColumnQueryTitles.contains($matrixColumnTitle) )
+        #set ( $matrixColumnQueryMap = $objectFactory.newMap() )
+        #set ( $matrixColumnIndex = $matrixColumnQueries.size() )
+        #set ( $matrixColumnKey = "queryColumn${matrixColumnIndex}" )
+        #set ( $void = $matrixColumnQueryMap.put("key", $matrixColumnKey) )
+        #set ( $void = $matrixColumnQueryMap.put("title", $matrixColumnTitle) )
+        #set ( $void = $matrixColumnQueryMap.put("query", $matrixColumnQuery) )
+        #set ( $void = $matrixColumnQueries.add($matrixColumnQueryMap) )
+        #set ( $void = $matrixColumnQueryTitles.add($matrixColumnTitle) )
+    #end
+#end
+
+#if ( $selectedMatrixPreset.equals("basicLiveDocStatus") )
+    #set ( $matrixShowSignaturesStatus = false )
+    #set ( $matrixShowDocumentBaselines = false )
+    #set ( $matrixShowBranchedDocuments = false )
+    #set ( $matrixShowMasterDocument = false )
+    #set ( $matrixShowUnresolvedComments = false )
+    #set ( $matrixShowUnreferencedWorkItems = false )
+    #set ( $matrixShowApprovedVersions = false )
+    #set ( $matrixShowProject = true )
+    #set ( $matrixShowSpace = true )
+    #set ( $matrixColumnFields = "status,updated" )
+#elseif ( $selectedMatrixPreset.equals("reviewAndApproval") )
+    #set ( $matrixShowSignaturesStatus = true )
+    #set ( $matrixShowDocumentBaselines = true )
+    #set ( $matrixShowBranchedDocuments = false )
+    #set ( $matrixShowMasterDocument = false )
+    #set ( $matrixShowUnresolvedComments = true )
+    #set ( $matrixShowUnreferencedWorkItems = false )
+    #set ( $matrixShowApprovedVersions = true )
+    #set ( $matrixShowProject = true )
+    #set ( $matrixShowSpace = true )
+    #set ( $matrixColumnFields = "status,updated" )
+#elseif ( $selectedMatrixPreset.equals("traceabilityCounts") )
+    #set ( $matrixShowSignaturesStatus = false )
+    #set ( $matrixShowDocumentBaselines = false )
+    #set ( $matrixShowBranchedDocuments = false )
+    #set ( $matrixShowMasterDocument = false )
+    #set ( $matrixShowUnresolvedComments = false )
+    #set ( $matrixShowUnreferencedWorkItems = true )
+    #set ( $matrixShowApprovedVersions = false )
+    #set ( $matrixShowProject = true )
+    #set ( $matrixShowSpace = true )
+    #set ( $matrixColumnFields = "status,updated,type" )
+    #addMatrixColumnQueryMacro("Requirements" "type:requirement")
+    #addMatrixColumnQueryMacro("Test Cases" "type:testcase")
+    #addMatrixColumnQueryMacro("Defects" "type:defect")
+    #addMatrixColumnQueryMacro("Risks" "type:risk")
+#elseif ( $selectedMatrixPreset.equals("releaseReadiness") )
+    #set ( $matrixShowSignaturesStatus = true )
+    #set ( $matrixShowDocumentBaselines = true )
+    #set ( $matrixShowBranchedDocuments = true )
+    #set ( $matrixShowMasterDocument = true )
+    #set ( $matrixShowUnresolvedComments = true )
+    #set ( $matrixShowUnreferencedWorkItems = true )
+    #set ( $matrixShowApprovedVersions = true )
+    #set ( $matrixShowProject = true )
+    #set ( $matrixShowSpace = true )
+    #set ( $matrixColumnFields = "status,updated" )
+    #addMatrixColumnQueryMacro("Open Items" "NOT status:(closed resolved done approved rejected)")
+    #addMatrixColumnQueryMacro("Change Requests" "type:changeRequest")
+    #addMatrixColumnQueryMacro("Defects" "type:defect")
+#else
+    #foreach ( $columnParam in $parameters.columns.get() )
+        #addMatrixColumnQueryMacro($columnParam.title.value() $columnParam.query.value())
+    #end
+#end
+
+## ===========================================================================
 ## $widgetTableId gives this widget instance its own table element.
-## ==========================================================================
-#set ( $q = '"' )
+## ===========================================================================
 #set ( $tableUniqueId = $widgetContext.generateUniqueElementId() )
 #set ( $widgetTableId = "widget-table-${tableUniqueId}" )
 
-## ==========================================================================
-## This is the id used for the div that encloses the widget table.
-## Used for styling the table. 
-## ==========================================================================
-#set ( $divId = $widgetContext.generateUniqueElementId() )
-
-## ==========================================================================
+## ===========================================================================
 ## Collect LiveDocs and build one work item query per LiveDoc.
 ## The row-building step uses the collected documents and matching queries.
-## ==========================================================================
-#macro ( prepareRowsMacro )
-    ## ======================================================================
-    ## Get the documents selected by the widget parameter.
-    ## Sort them by project, space, and title.
-    ## ======================================================================
-    #set ( $_docs = $transaction.documents().search().query($documentQuery).sort("project.id space.id title") )
+## ===========================================================================
+#macro ( collectCollectionDocumentsMacro $collection )
+    #if ( $collection && !$collection.isUnresolvable() )
+        #set ( $collectionReference = $collection.getReference() )
+        #set ( $collectionKey = "$!collectionReference.toPath()" )
 
-    #foreach ( $_doc in $_docs )
-        ## ==================================================================
-        ## Skip unresolved documents because their fields and links cannot be
-        ## rendered safely. Resolved documents become table rows.
-        ## ==================================================================
-        #if (!$_doc.isUnresolvable())
-            #set ( $void = $docItems.add($_doc) )
+        #if ( !$collectionKey.equals("") && !$processedCollectionKeys.contains($collectionKey) )
+            #set ( $void = $processedCollectionKeys.add($collectionKey) )
 
-            ## ==============================================================
-            ## Get the document id used by work item document queries.
-            ## Polarion stores the default space with an "_default/" prefix.
-            ## ==============================================================
-            #set ( $docNameWithSpace = $_doc.getOldApi().getRelativePath().replace("_default/","") )
+            ## ===============================================================
+            ## Collection elements are stored as document objects. Keep a key
+            ## based on project and document path so duplicates are removed
+            ## without mixing documents from different projects.
+            ## ===============================================================
+            #foreach ( $collectionElement in $collection.fields().elements() )
+                #set ( $collectionObject = $collectionElement.fields().object().get() )
 
-            ## ==============================================================
-            ## Build a work item query for this document.
-            ## It finds non-heading work items inside this document.
-            ## ==============================================================
-            #set ( $void = $docQueries.add("(project.id:$_doc.fields().project().projectId() AND (NOT type:heading) AND document.id:$q$docNameWithSpace$q)") )
+                ## ===========================================================
+                ## Collection object references can point to documents outside
+                ## the user's readable scope. Skip them before reading project,
+                ## path, or revision metadata.
+                ## ===========================================================
+                #if ( $collectionObject && !$collectionObject.isUnresolvable() && $collectionObject.can().read() )
+                    #set ( $collectionProjectId = $collectionObject.fields().project().projectId() )
+
+                    #if ( $collectionProjectId )
+                        #set ( $collectionDocumentPath = $collectionObject.getOldApi().getRelativePath().replace("_default/","") )
+                        #set ( $collectionDocumentKey = "$collectionProjectId|$collectionDocumentPath" )
+
+                        ## ===================================================
+                        ## The selected Collection is visited before inherited
+                        ## Collections. Keep the first occurrence so an upstream
+                        ## duplicate cannot replace the selected revision.
+                        ## ===================================================
+                        #if ( !$collectionDocumentKeys.contains($collectionDocumentKey) )
+                            #set ( $void = $collectionDocumentKeys.add($collectionDocumentKey) )
+                            #set ( $void = $collectionDocumentMap.put($collectionDocumentKey, $collectionObject) )
+                            #set ( $collectionElementRevision = "$!collectionElement.fields().revision().get()" )
+                            #set ( $void = $collectionDocumentRevisionsMap.put($collectionDocumentKey, $collectionElementRevision) )
+                        #end
+                    #end
+                #end
+            #end
+
+            #if ( $dataSetCollectionInheritanceEnabled )
+                ## ===========================================================
+                ## Inheritance follows direct upstream Collections recursively.
+                ## processedCollectionKeys prevents cycles from repeating rows.
+                ## ===========================================================
+                #foreach ( $upstreamCollection in $collection.fields().upstreamCollections() )
+                    #collectCollectionDocumentsMacro($upstreamCollection)
+                #end
+            #end
         #end
     #end
 #end
 
-## ==========================================================================
+#macro ( prepareCollectionScopeMacro )
+    #if ( $dataSetCollectionScopeSelected && $dataSetCollectionReference )
+        #set ( $selectedCollection = $dataSetCollectionReference.get($transaction) )
+        #collectCollectionDocumentsMacro($selectedCollection)
+    #end
+#end
+
+#macro ( prepareRowsMacro )
+    #if ( $dataSetCollectionScopeSelected )
+        ## ===================================================================
+        ## Collection mode renders from Collection elements directly so selected
+        ## and inherited Collection contents keep their configured revisions.
+        ## ===================================================================
+        #foreach ( $rowDocumentKey in $collectionDocumentKeys )
+            #set ( $rowDocument = $collectionDocumentMap.get($rowDocumentKey) )
+
+            #if ( $rowDocument && !$rowDocument.isUnresolvable() )
+                #set ( $rowProjectId = $rowDocument.fields().project().projectId() )
+                #set ( $rowRevision = "$!collectionDocumentRevisionsMap.get($rowDocumentKey)" )
+
+                #if ( $rowProjectId )
+                    #set ( $docNameWithSpace = $rowDocument.getOldApi().getRelativePath().replace("_default/","") )
+
+                    #if ( !$projectIds.contains($rowProjectId) )
+                        #set ( $void = $projectIds.add($rowProjectId) )
+                    #end
+
+                    #set ( $void = $docItems.add($rowDocument) )
+                    #set ( $void = $docRevisions.add($rowRevision) )
+
+                    ## =======================================================
+                    ## Build the work item query with the document's own project.
+                    ## Equal document paths in different projects therefore keep
+                    ## independent work item counts.
+                    ## =======================================================
+                    #set ( $void = $docQueries.add("(project.id:$rowProjectId AND (NOT type:heading) AND document.id:$q$docNameWithSpace$q)") )
+                #end
+            #end
+        #end
+    #else
+        ## ===================================================================
+        ## Execute the Data Set query through document search. This preserves
+        ## Polarion's native scope, project group, query builder, and revision
+        ## behavior; each returned row then supplies its own project context.
+        ## ===================================================================
+        #set ( $_docsSearch = $transaction.documents().search().query($documentQuery) )
+
+        #if ( !$effectiveRevision.equals("") )
+            #set ( $_docsSearch = $_docsSearch.baseline("$effectiveRevision") )
+        #end
+
+        #set ( $_docs = $_docsSearch.sort("project.id space.id title") )
+
+        #foreach ( $_doc in $_docs )
+            ## ===============================================================
+            ## Skip unresolved documents because their fields and links cannot
+            ## be rendered safely.
+            ## ===============================================================
+            #if ( !$_doc.isUnresolvable() && $_doc.can().read() )
+                #set ( $rowProjectId = $_doc.fields().project().projectId() )
+                #set ( $rowRevision = "$!effectiveRevision" )
+
+                ## ===========================================================
+                ## A valid project context is required for this document's work
+                ## item query and portal links.
+                ## ===========================================================
+                #if ( $rowProjectId )
+                    #if ( !$projectIds.contains($rowProjectId) )
+                        #set ( $void = $projectIds.add($rowProjectId) )
+                    #end
+
+                    #set ( $void = $docItems.add($_doc) )
+                    #set ( $void = $docRevisions.add($rowRevision) )
+
+                    ## =======================================================
+                    ## Polarion stores the default space with an "_default/"
+                    ## prefix that is not part of document.id query values.
+                    ## =======================================================
+                    #set ( $docNameWithSpace = $_doc.getOldApi().getRelativePath().replace("_default/","") )
+
+                    ## =======================================================
+                    ## Build the work item query with the document's own project.
+                    ## Equal document paths in different projects therefore keep
+                    ## independent work item counts.
+                    ## =======================================================
+                    #set ( $void = $docQueries.add("(project.id:$rowProjectId AND (NOT type:heading) AND document.id:$q$docNameWithSpace$q)") )
+                #end
+            #end
+        #end
+    #end
+#end
+
+## ===========================================================================
+## Resolve configured document field metadata once for all later table stages.
+## Internal keys keep configured field ids separate from built-in column keys.
+## Filter behavior comes from Polarion field types rather than field ids:
+##   - date and date-time fields use the date-range control;
+##   - enum, text, multi-value, unknown, or cross-project conflicts use
+##     DataTables' row-derived list search.
+##
+## A field may be undefined or configured differently in another project.
+## The list fallback keeps one DataTables column behavior safe for every row.
+## ===========================================================================
+#macro ( prepareFieldMetadataMacro )
+    #set ( $columnFieldIds = [] )
+    #set ( $fieldColumnKeysMap = $objectFactory.newMap() )
+    #set ( $fieldTitlesMap = $objectFactory.newMap() )
+    #set ( $fieldFilterTypesMap = $objectFactory.newMap() )
+
+    #foreach ( $fieldIdRaw in $matrixColumnFields.split(",") )
+        #set ( $fieldId = $fieldIdRaw.trim() )
+
+        #if ( !$fieldId.equals("") && !$columnFieldIds.contains($fieldId) )
+            #set ( $fieldColumnIndex = $columnFieldIds.size() )
+            #set ( $fieldColumnKey = "documentField${fieldColumnIndex}" )
+            #set ( $void = $columnFieldIds.add($fieldId) )
+            #set ( $void = $fieldColumnKeysMap.put($fieldId, $fieldColumnKey) )
+            #set ( $fieldTitle = $fieldId )
+            #set ( $resolvedFilterType = "" )
+            #set ( $hasTypeConflict = false )
+
+            ## ===============================================================
+            ## Inspect every represented document because custom field
+            ## definitions can differ by project or document configuration.
+            ## Undefined fields are ignored and render as empty cells later.
+            ## ===============================================================
+            #foreach ( $metadataDoc in $docItems )
+                #set ( $renderingField = $metadataDoc.fields().get($fieldId) )
+
+                #if ( $renderingField.is().defined() )
+                    #if ( $fieldTitle.equals($fieldId) )
+                        #set ( $fieldTitle = $renderingField.label() )
+                    #end
+
+                    ## =======================================================
+                    ## getFieldType() supports both built-in and custom
+                    ## fields. Only date-like primitives get a typed filter;
+                    ## enum fields intentionally stay as row-derived lists so
+                    ## users see only values present in the rendered table.
+                    ## =======================================================
+                    #set ( $oldApiDocument = $metadataDoc.getOldApi() )
+                    #set ( $fieldType = $oldApiDocument.getFieldType($fieldId) )
+                    #set ( $candidateFilterType = "list" )
+                    #set ( $primitiveTypeName = "$!fieldType.getTypeName()" )
+
+                    #if ( $primitiveTypeName.equals("java.util.Date") || $primitiveTypeName.equals("com.polarion.core.util.types.DateOnly") )
+                        #set ( $candidateFilterType = "date" )
+                    #end
+
+                    ## =======================================================
+                    ## One table column can have only one filter control.
+                    ## Prefer list search when projects disagree about the
+                    ## same field id instead of applying invalid typed logic.
+                    ## =======================================================
+                    #if ( $resolvedFilterType.equals("") )
+                        #set ( $resolvedFilterType = $candidateFilterType )
+                    #elseif ( !$resolvedFilterType.equals($candidateFilterType) )
+                        #set ( $hasTypeConflict = true )
+                    #end
+                #end
+            #end
+
+            #if ( $resolvedFilterType.equals("") || $hasTypeConflict )
+                #set ( $resolvedFilterType = "list" )
+            #end
+
+            #set ( $void = $fieldTitlesMap.put($fieldId, $fieldTitle) )
+            #set ( $void = $fieldFilterTypesMap.put($fieldId, $resolvedFilterType) )
+        #end
+    #end
+#end
+
+## ===========================================================================
+## Build explicit filter option lists for built-in identity columns. Configured
+## document fields use DataTables' row-derived list search instead of configured
+## enum catalogs, so users select only values visible in the current table.
+## ===========================================================================
+#macro ( prepareFilterOptionsMacro )
+    #set ( $headerFilterOptionsMap = $objectFactory.newMap() )
+    #set ( $projectFilterOptions = [] )
+    #set ( $spaceFilterOptions = [] )
+    #set ( $documentFilterOptions = [] )
+    #set ( $signatureFilterOptions = [] )
+    #set ( $documentBaselineFilterOptions = [] )
+    #set ( $branchedDocumentFilterOptions = [] )
+    #set ( $unresolvedCommentFilterOptions = [] )
+    #set ( $approvedVersionFilterOptions = [] )
+
+    #foreach ( $catalogProjectId in $projectIds )
+        #set ( $trackerProject = $trackerService.getTrackerProject($catalogProjectId) )
+
+        #if ( $trackerProject )
+            ## ===============================================================
+            ## Project display names are the raw values stored on table rows.
+            ## Deduplicate names because filter values are currently strings,
+            ## not project-id/label pairs.
+            ## ===============================================================
+            #set ( $projectName = "$!trackerProject.getName()" )
+            #if ( $projectName.equals("") )
+                #set ( $projectName = $catalogProjectId )
+            #end
+            #if ( !$projectFilterOptions.contains($projectName) )
+                #set ( $void = $projectFilterOptions.add($projectName) )
+            #end
+        #end
+    #end
+
+    ## =======================================================================
+    ## The Document column filters by the same title users see in the rendered
+    ## table cell. Module name remains only a fallback for untitled documents.
+    ## =======================================================================
+    #foreach ( $filterDocument in $docItems )
+        #set ( $documentName = "$!filterDocument.fields().moduleName().get()" )
+        #set ( $documentFilterLabel = "$!filterDocument.getOldApi().getTitle()" )
+        #set ( $spaceLabel = "$!filterDocument.space().label()" )
+
+        #if ( $documentName.equals("") )
+            #set ( $documentName = "$!filterDocument.getOldApi().getTitle()" )
+        #end
+
+        #if ( $documentFilterLabel.equals("") )
+            #set ( $documentFilterLabel = $documentName )
+        #end
+
+        #if ( $spaceLabel.equals("") )
+            #set ( $spaceLabel = "(Default)" )
+        #end
+
+        #if ( !$spaceLabel.equals("") && !$spaceFilterOptions.contains($spaceLabel) )
+            #set ( $void = $spaceFilterOptions.add($spaceLabel) )
+        #end
+
+        #if ( !$documentFilterLabel.equals("") && !$documentFilterOptions.contains($documentFilterLabel) )
+            #set ( $void = $documentFilterOptions.add($documentFilterLabel) )
+        #end
+    #end
+
+    ## =======================================================================
+    ## Publish built-in option lists after collecting the visible row values.
+    ## The shared DataTables macro reads these lists by header key.
+    ## =======================================================================
+    #set ( $void = $headerFilterOptionsMap.put("project", $projectFilterOptions) )
+    #set ( $void = $headerFilterOptionsMap.put("space", $spaceFilterOptions) )
+    #set ( $void = $headerFilterOptionsMap.put("documentHtml", $documentFilterOptions) )
+    #set ( $void = $headerFilterOptionsMap.put("signatureHtml", $signatureFilterOptions) )
+    #set ( $void = $headerFilterOptionsMap.put("documentBaselinesHtml", $documentBaselineFilterOptions) )
+    #set ( $void = $headerFilterOptionsMap.put("branchedDocumentsHtml", $branchedDocumentFilterOptions) )
+    #set ( $void = $headerFilterOptionsMap.put("unresolvedCommentsHtml", $unresolvedCommentFilterOptions) )
+    #set ( $void = $headerFilterOptionsMap.put("approvedVersionsHtml", $approvedVersionFilterOptions) )
+#end
+
+#macro ( addFilterOptionMacro $filterOptions $filterOption )
+    #set ( $normalizedFilterOption = "$!filterOption" )
+    #set ( $normalizedFilterOption = $normalizedFilterOption.trim() )
+
+    #if ( !$normalizedFilterOption.equals("") && !$filterOptions.contains($normalizedFilterOption) )
+        #set ( $void = $filterOptions.add($normalizedFilterOption) )
+    #end
+#end
+
+## ===========================================================================
+## Build one grouped Lucene query for a list of readable work item identities.
+## ===========================================================================
+#macro ( prepareWorkItemIdentityQueryMacro $workItems )
+    ## =======================================================================
+    ## Recycle-bin work items are expected to belong to the row document's
+    ## project. Keep that project once and group the ids as requested, producing
+    ## a compact query such as: project.id:PROJECT_A AND id:(REQ-1 REQ-2).
+    ## =======================================================================
+    #set ( $workItemIdentityProjectId = "" )
+    #set ( $workItemIdentityIds = [] )
+    #set ( $workItemIdentityHasMatches = false )
+
+    #foreach ( $workItem in $workItems )
+        #if ( $workItem && !$workItem.isUnresolvable() && $workItem.can().read() )
+            #set ( $oldApiWorkItem = $workItem.getOldApi() )
+            #set ( $workItemProjectId = "$!oldApiWorkItem.getProjectId()" )
+            #set ( $workItemId = "$!oldApiWorkItem.getId()" )
+
+            #if ( !$workItemProjectId.equals("") && !$workItemId.equals("") )
+                #if ( $workItemIdentityProjectId.equals("") )
+                    #set ( $workItemIdentityProjectId = $workItemProjectId )
+                #end
+
+                #if ( !$workItemIdentityIds.contains($workItemId) )
+                    #set ( $void = $workItemIdentityIds.add($workItemId) )
+                #end
+            #end
+        #end
+    #end
+
+    #if ( $workItemIdentityIds.isEmpty() || $workItemIdentityProjectId.equals("") )
+        #set ( $workItemIdentityQuery = "project.id:__tsb_no_matching_project__" )
+    #else
+        #set ( $workItemIdentityQueryIds = $workItemIdentityIds.toString().replace("[","(").replace("]",")").replace(", "," ") )
+        #set ( $workItemIdentityQuery = "project.id:$workItemIdentityProjectId AND id:$workItemIdentityQueryIds" )
+        #set ( $workItemIdentityHasMatches = true )
+    #end
+#end
+
+#macro ( resolveDocumentApiByLocationMacro $documentProjectId $documentSpace $documentName )
+    ## =======================================================================
+    ## Convert old-API module relationship objects back to Transaction document
+    ## objects through the typed selector. This avoids Lucene path ambiguity and
+    ## lets related document cells use Polarion's native icon renderer.
+    ## =======================================================================
+    #set ( $resolvedDocumentApi = false )
+    #set ( $resolvedDocumentCandidate = $transaction.documents().getBy().projectSpaceAndName("$documentProjectId", "$documentSpace", "$documentName") )
+
+    #if ( $resolvedDocumentCandidate && !$resolvedDocumentCandidate.isUnresolvable() && $resolvedDocumentCandidate.can().read() )
+        #set ( $resolvedDocumentApi = $resolvedDocumentCandidate )
+    #end
+#end
+
+## ===========================================================================
 ## Build the DataTables column definitions in Velocity maps.
 ## $headersKeys preserves display order because map iteration order is not used.
-## ==========================================================================
+## ===========================================================================
 #macro ( prepareHeadersMacro )
-    ## ======================================================================
+    ## =======================================================================
     ## This map stores the table columns.
     ## key = the id used by JavaScript/DataTables
     ## value = the text shown in the column header
-    ## ======================================================================
+    ## =======================================================================
     #set ( $headersMap = $objectFactory.newMap() )
 
-    ## ======================================================================
+    ## =======================================================================
+    ## This map identifies the filter control for each displayed column.
+    ## Catalog, date, list, and computed numeric columns use distinct controls.
+    ## =======================================================================
+    #set ( $headerFilterTypesMap = $objectFactory.newMap() )
+
+    ## =======================================================================
+    ## This map decides whether a column contributes to the global search.
+    ## Displayed semantic columns use clean values prepared with their metadata.
+    ## =======================================================================
+    #set ( $headerGlobalSearchMap = $objectFactory.newMap() )
+
+    ## =======================================================================
     ## Used to track the order of columns when rendering, since map is unordered.
-    ## ======================================================================
+    ## =======================================================================
     #set ( $headersKeys = [] )
 
-    #if ( true == $parameters.showProject.value() )
+    #if ( true == $matrixShowProject )
         #set ( $void = $headersMap.put("project", "Project") )
+        #set ( $void = $headerFilterTypesMap.put("project", "catalog") )
+        #set ( $void = $headerGlobalSearchMap.put("project", true) )
         #set ( $void = $headersKeys.add("project") )
     #end
 
-    #if ( true == $parameters.showSpace.value() )
+    #if ( true == $matrixShowSpace )
         #set ( $void = $headersMap.put("space", "Space") )
+        #set ( $void = $headerFilterTypesMap.put("space", "catalog") )
+        #set ( $void = $headerGlobalSearchMap.put("space", true) )
         #set ( $void = $headersKeys.add("space") )
     #end
 
     #set ( $void = $headersMap.put("documentHtml", "Document") )
+    #set ( $void = $headerFilterTypesMap.put("documentHtml", "catalog") )
+    #set ( $void = $headerGlobalSearchMap.put("documentHtml", true) )
     #set ( $void = $headersKeys.add("documentHtml") )
 
-    ## ======================================================================
-    ## Custom columns from the widget parameter.
-    ## Example: "status,severity" becomes two table columns.
-    ## ======================================================================
-    ###set ( $firstDoc = "" )
-    ###set ( $firstDoc = $docItems.get(0) )
-
-    #foreach ( $fieldIdRaw in $parameters.columnFields.value().split(",") )
-        #set ( $fieldId = $fieldIdRaw.trim() )
-
-        #if ( !$fieldId.equals("") )
-            #if ( $docItems.size() > 0 )
-                #set ( $fieldTitle = "$!docItems.get(0).fields().get($fieldId).label()" )
-            #else
-                #set ( $fieldTitle = $fieldId )
-            #end
-
-            #set ( $void = $headersMap.put($fieldId, $fieldTitle) )
-            #set ( $void = $headersKeys.add($fieldId) )
-        #end
+    ## =======================================================================
+    ## Custom document columns use metadata prepared from every represented
+    ## project. The user-facing label remains separate from the field type that
+    ## selects the appropriate DataTables filter control.
+    ## =======================================================================
+    #foreach ( $fieldId in $columnFieldIds )
+        #set ( $fieldColumnKey = $fieldColumnKeysMap.get($fieldId) )
+        #set ( $void = $headersMap.put($fieldColumnKey, $fieldTitlesMap.get($fieldId)) )
+        #set ( $void = $headerFilterTypesMap.put($fieldColumnKey, $fieldFilterTypesMap.get($fieldId)) )
+        #set ( $void = $headerGlobalSearchMap.put($fieldColumnKey, true) )
+        #set ( $void = $headersKeys.add($fieldColumnKey) )
     #end
 
-    #if ( true == $parameters.showSignaturesStatus.value() )
+    #if ( true == $matrixShowSignaturesStatus )
         #set ( $void = $headersMap.put("signatureHtml","Signatures") )
+        #set ( $void = $headerFilterTypesMap.put("signatureHtml", "list") )
+        #set ( $void = $headerGlobalSearchMap.put("signatureHtml", true) )
         #set ( $void = $headersKeys.add("signatureHtml") )
     #end
 
-    ## ======================================================================
-    ## This is for user-defined query-count columns in the matrix.
-    ## Lets user create columns with defined queries from Lucene
-    ## ======================================================================
-    #foreach ( $columnParam in $parameters.columns.get() )
-        #if ( !($columnParam.title.value() == "") && !($columnParam.query.value() == "") )
-            #set ( $void = $headersMap.put($columnParam.title.value(), $columnParam.title.value()) )
-            #set ( $void = $headersKeys.add($columnParam.title.value()) )
+    ## =======================================================================
+    ## Optional LiveDoc metadata columns are rendered after document fields and
+    ## signatures, before user-defined query-count columns.
+    ## =======================================================================
+    #if ( true == $matrixShowDocumentBaselines )
+        #set ( $void = $headersMap.put("documentBaselinesHtml", "Document Baselines") )
+        #set ( $void = $headerFilterTypesMap.put("documentBaselinesHtml", "list") )
+        #set ( $void = $headerGlobalSearchMap.put("documentBaselinesHtml", true) )
+        #set ( $void = $headersKeys.add("documentBaselinesHtml") )
+    #end
+
+    #if ( true == $matrixShowBranchedDocuments )
+        #set ( $void = $headersMap.put("branchedDocumentsHtml", "Branched Documents") )
+        #set ( $void = $headerFilterTypesMap.put("branchedDocumentsHtml", "list") )
+        #set ( $void = $headerGlobalSearchMap.put("branchedDocumentsHtml", true) )
+        #set ( $void = $headersKeys.add("branchedDocumentsHtml") )
+    #end
+
+    #if ( true == $matrixShowMasterDocument )
+        #set ( $void = $headersMap.put("masterDocumentHtml", "Master Document") )
+        #set ( $void = $headerFilterTypesMap.put("masterDocumentHtml", "list") )
+        #set ( $void = $headerGlobalSearchMap.put("masterDocumentHtml", true) )
+        #set ( $void = $headersKeys.add("masterDocumentHtml") )
+    #end
+
+    #if ( true == $matrixShowUnresolvedComments )
+        #set ( $void = $headersMap.put("unresolvedCommentsHtml", "Unresolved Comments") )
+        #set ( $void = $headerFilterTypesMap.put("unresolvedCommentsHtml", "list") )
+        #set ( $void = $headerGlobalSearchMap.put("unresolvedCommentsHtml", true) )
+        #set ( $void = $headersKeys.add("unresolvedCommentsHtml") )
+    #end
+
+    #if ( true == $matrixShowUnreferencedWorkItems )
+        #set ( $void = $headersMap.put("unreferencedWorkItemsHtml", "Recycle Bin") )
+        #set ( $void = $headerFilterTypesMap.put("unreferencedWorkItemsHtml", "number") )
+        #set ( $void = $headerGlobalSearchMap.put("unreferencedWorkItemsHtml", false) )
+        #set ( $void = $headersKeys.add("unreferencedWorkItemsHtml") )
+    #end
+
+    #if ( true == $matrixShowApprovedVersions )
+        #set ( $void = $headersMap.put("approvedVersionsHtml", "Approved Versions") )
+        #set ( $void = $headerFilterTypesMap.put("approvedVersionsHtml", "list") )
+        #set ( $void = $headerGlobalSearchMap.put("approvedVersionsHtml", true) )
+        #set ( $void = $headersKeys.add("approvedVersionsHtml") )
+    #end
+
+    ## =======================================================================
+    ## This is for configured query-count columns in the matrix.
+    ## Custom Configuration uses user-defined Lucene queries; recommended
+    ## presets provide vetted common queries through the same path.
+    ## =======================================================================
+    #foreach ( $columnQueryParam in $matrixColumnQueries )
+        #set ( $columnQueryKey = $columnQueryParam.get("key") )
+        #set ( $columnQueryTitle = $columnQueryParam.get("title") )
+        #set ( $columnQueryText = $columnQueryParam.get("query") )
+        #if ( !$columnQueryTitle.equals("") && !$columnQueryText.equals("") )
+            #set ( $void = $headersMap.put($columnQueryKey, $columnQueryTitle) )
+            #set ( $void = $headerFilterTypesMap.put($columnQueryKey, "number") )
+            #set ( $void = $headerGlobalSearchMap.put($columnQueryKey, false) )
+            #set ( $void = $headersKeys.add($columnQueryKey) )
         #end
     #end
 #end
 
-## ==========================================================================
-## Fetching data using Velocity maps, then passing
-## those maps to Javascript for DataTables.
-## ==========================================================================
+## ===========================================================================
+## Build one Velocity map per document for client-side DataTables rendering.
+## ===========================================================================
 #macro ( prepareDataRowsMacro )
-    ## ======================================================================
+    ## =======================================================================
     ## $dataRows stores all table rows.
     ## Each $rowsMap inside it stores one table row.
-    ## ======================================================================
+    ## =======================================================================
     #set ( $dataRows = [] )
+    #set ( $dataService = false )
+    #set ( $filterValueSeparator = "|||TSB_FILTER_VALUE|||" )
 
-    ## ======================================================================
+    #if ( $matrixShowDocumentBaselines || $matrixShowApprovedVersions )
+        #set ( $dataService = $trackerService.getDataService() )
+    #end
+
+    ## =======================================================================
     ## Create one row map for each document.
-    ## ======================================================================
+    ## =======================================================================
     #foreach ( $docu in $docItems )
         #set ( $indexLoop = $velocityCount - 1 )
         #set ( $docQuery = $docQueries.get($indexLoop) )
+        #set ( $rowRevision = $docRevisions.get($indexLoop) )
 
-        ## ==================================================================
+        #set ( $rowProjectId = $docu.fields().project().projectId() )
+        #set ( $oldApiDocument = $docu.getOldApi() )
+
+        ## ===================================================================
         ## This map stores all cells for the current row.
         ## key = column id, value = rendered cell content.
-        ## ==================================================================
+        ## ===================================================================
         #set ( $rowsMap = $objectFactory.newMap() )
 
-        #set ( $spaceHtml = "" )
-        #set ( $projectHtml = "" )
-        #set ( $signatureHtml = "" )
-
-        ## ==================================================================
+        ## ===================================================================
         ## Add the Project cell when the Project column is enabled.
-        ## ==================================================================
-        #if ( true == $parameters.showProject.value() )
-            #set ( $projectHtml = "$!docu.fields().project().render()")
-            #set ( $void = $rowsMap.put("project", $projectHtml) )
+        ## ===================================================================
+        #if ( true == $matrixShowProject )
+            #set ( $rowProjectName = "$!oldApiDocument.getProject().getName()" )
+            #if ( $rowProjectName.equals("") )
+                #set ( $rowProjectName = $rowProjectId )
+            #end
+            #set ( $void = $rowsMap.put("project", "$!docu.fields().project().render().openLinksInNewWindow()") )
+            #set ( $void = $rowsMap.put("__tsbFilterValue_project", $rowProjectName) )
+            #set ( $void = $rowsMap.put("__tsbSearchValue_project", $rowProjectName) )
         #end
 
-        ## ==================================================================
+        ## ===================================================================
         ## Add the Space cell when the Space column is enabled.
-        ## ==================================================================
-        #if ( true == $parameters.showSpace.value() )
-            #set ( $spaceHtml = "$!docu.space().render()" )
-            #set ( $void = $rowsMap.put("space", $spaceHtml) )
+        ## ===================================================================
+        #if ( true == $matrixShowSpace )
+            #set ( $rowSpaceLabel = "$!docu.space().label()" )
+            #if ( $rowSpaceLabel.equals("") )
+                #set ( $rowSpaceLabel = "(Default)" )
+            #end
+            #set ( $void = $rowsMap.put("space", "$!docu.space().render().openLinksInNewWindow()") )
+            #set ( $void = $rowsMap.put("__tsbFilterValue_space", $rowSpaceLabel) )
+            #set ( $void = $rowsMap.put("__tsbSearchValue_space", $rowSpaceLabel) )
         #end
 
-        ## ==================================================================
-        ## Add the Document cell. This contains Polarion-rendered link HTML.
-        ## ==================================================================
-        #set ( $documentHtml = $docu.render().withIcon().withLinks(true) )
+        ## ===================================================================
+        ## Add the Document cell. Display keeps Polarion-rendered link HTML.
+        ## Native renderer configuration opens the document in a new window.
+        ## The column filter and global search use the same plain title users
+        ## see in the rendered document link. Module name remains only a
+        ## fallback for untitled documents; documentName is kept for links.
+        ## ===================================================================
+        #set ( $documentHtml = $docu.render().withIcon().withLinks(true).openLinksInNewWindow() )
+        #set ( $documentName = "$!docu.fields().moduleName().get()" )
+        #set ( $documentFilterLabel = "$!oldApiDocument.getTitle()" )
+        #if ( $documentName.equals("") )
+            #set ( $documentName = "$!oldApiDocument.getTitle()" )
+        #end
+        #if ( $documentFilterLabel.equals("") )
+            #set ( $documentFilterLabel = $documentName )
+        #end
+        #set ( $documentSpace = $oldApiDocument.getModuleFolder() )
         #set ( $void = $rowsMap.put("documentHtml", $documentHtml) )
+        #set ( $void = $rowsMap.put("__tsbFilterValue_documentHtml", $documentFilterLabel) )
+        #set ( $void = $rowsMap.put("__tsbSearchValue_documentHtml", $documentFilterLabel) )
 
-        ## ==================================================================
+        ## ===================================================================
         ## Add the Signatures cell when enabled.
-        ## Only active signature states are shown.
-        ## ==================================================================
-        #if ( true == $parameters.showSignaturesStatus.value() )
+        ## Only active signature states are shown. Each workflow signature
+        ## contributes a bold state label, followed by the individual signer
+        ## verdict rows that belong to that state.
+        ## ===================================================================
+        #if ( true == $matrixShowSignaturesStatus )
+            #set ( $signatureHtml = "" )
+            #set ( $signatureFilterValue = "" )
             #set ( $workflowSignatures = $docu.fields().workflowSignatures().toArrayList )
-            
-            #foreach( $row in $workflowSignatures )
-                #set ( $signatureStatus = $row.fields().signatureState().optionId() )
+
+            #foreach ( $workflowSignature in $workflowSignatures )
+                #set ( $signatureStatus = $workflowSignature.fields().signatureState().optionId() )
+
+                ## ===========================================================
+                ## Obsolete and unavailable states are historical or empty
+                ## workflow metadata. They are intentionally hidden so the
+                ## column tells reviewers only what still needs attention.
+                ## ===========================================================
                 #if ( !($signatureStatus.equals("obsolete")) && !($signatureStatus.equals("notAvailable")) )
-					#set ($sigsHtml = "<b>$row.fields().signatureState().render().withIcon(false) - $row.label()</b><br>")
-					#set ($signatureHtml = "${signatureHtml}<br>${sigsHtml}" )
-					
-					#foreach($s in $row.fields().signatures().toArrayList())
-						#set ($renderedSig = "<b>$s.fields().signedBy().render()</b> - $s.fields().verdict().render().withIcon(false) - $s.fields().verdictTime().render()")
-						#set ($signatureHtml = "${signatureHtml}<br>${renderedSig}" )
-					#end
+                    #set ( $signatureStateHtml = $workflowSignature.fields().signatureState().render().withIcon(false).openLinksInNewWindow() )
+                    #set ( $signatureStateLabel = "$!workflowSignature.fields().signatureState().optionId()" )
+                    #set ( $signatureLabelHtml = $esc.html($workflowSignature.label()) )
+                    #set ( $signatureFilterLabel = "$!workflowSignature.label()" )
+                    #if ( !$signatureStateLabel.equals("") )
+                        #set ( $signatureFilterLabel = "$signatureFilterLabel - $signatureStateLabel" )
+                    #end
+                    #set ( $signatureGroupHtml = "<div style=${q}margin:0 0 12px 0;white-space:nowrap;${q}>" )
+                    #set ( $signatureGroupHtml = "${signatureGroupHtml}<div><b>$signatureStateHtml - $signatureLabelHtml</b></div>" )
+                    #if ( !$signatureFilterLabel.trim().equals("") )
+                        #if ( $signatureFilterValue.equals("") )
+                            #set ( $signatureFilterValue = $signatureFilterLabel )
+                        #else
+                            #set ( $signatureFilterValue = "${signatureFilterValue}${filterValueSeparator}${signatureFilterLabel}" )
+                        #end
+                        #addFilterOptionMacro($signatureFilterOptions $signatureFilterLabel)
+                    #end
+
+                    ## =======================================================
+                    ## Render each signature decision below its workflow state.
+                    ## The signer, verdict, and verdict time all keep Polarion's
+                    ## native renderers so links and formatting stay consistent.
+                    ## =======================================================
+                    #foreach ( $signatureEntry in $workflowSignature.fields().signatures().toArrayList() )
+                        #set ( $signatureSignerHtml = $signatureEntry.fields().signedBy().render().openLinksInNewWindow() )
+                        #set ( $signatureVerdictHtml = $signatureEntry.fields().verdict().render().withIcon(false).openLinksInNewWindow() )
+                        #set ( $signatureVerdictTimeHtml = $signatureEntry.fields().verdictTime().render().openLinksInNewWindow() )
+                        #set ( $renderedSignatureHtml = "<div><b>$signatureSignerHtml</b> - $signatureVerdictHtml - $signatureVerdictTimeHtml</div>" )
+                        #set ( $signatureGroupHtml = "${signatureGroupHtml}${renderedSignatureHtml}" )
+                    #end
+
+                    #set ( $signatureGroupHtml = "${signatureGroupHtml}</div>" )
+                    #set ( $signatureHtml = "${signatureHtml}${signatureGroupHtml}" )
                 #end
             #end
 
             #set ( $void = $rowsMap.put("signatureHtml", $signatureHtml) )
+            #set ( $void = $rowsMap.put("__tsbFilterValue_signatureHtml", $signatureFilterValue) )
         #end
 
-        ## ==================================================================
-        ## Add one cell for each configured document field id.
-        ## ==================================================================
-        #set ( $fieldsId = $parameters.columnFields.value().split(",") )
-        #foreach ( $fieldIdRaw in $fieldsId )
-            #set ( $fieldId = $fieldIdRaw.trim() )
-            #if ( !$fieldId.equals("") )
-                #set ( $fieldHtml = "$!docu.fields().get($fieldId).render()" )
-                #set ( $void = $rowsMap.put($fieldId, $fieldHtml) )
+        ## ===================================================================
+        ## Add document baseline information when enabled.
+        ## The baseline object gives us the display name and revision, but the
+        ## link should behave like Polarion's revision view for a document: keep
+        ## the normal document route and carry the historical revision as a query
+        ## parameter. The repository revision renderer supplies the native
+        ## revision icon and revision number once, while this column keeps
+        ## control of the final document link target and baseline name.
+        ## ===================================================================
+        #if ( true == $matrixShowDocumentBaselines )
+            #set ( $documentBaselinesSearchText = "" )
+            #set ( $documentBaselinesFilterValue = "" )
+            #set ( $documentBaselineItemsHtml = "" )
+            #set ( $documentBaseObjectPath = "document/$oldApiDocument.getModuleLocation().getLocationPath()" )
+            #set ( $documentBaselineQuery = "project.id:$q$rowProjectId$q AND baseObject:$q$documentBaseObjectPath$q" )
+            #set ( $documentBaselines = $dataService.searchInstances("Baseline", $documentBaselineQuery, "baseRevision") )
+
+            #foreach ( $documentBaseline in $documentBaselines )
+                #set ( $documentBaselineName = "$!documentBaseline.getName()" )
+                #set ( $documentBaselineRevision = "$!documentBaseline.getBaseRevision()" )
+
+                #if ( $documentBaselineName.equals("") )
+                    #set ( $documentBaselineName = "$!documentBaseline.getId()" )
+                #end
+
+                #if ( !$documentBaselineRevision.equals("") )
+                    #set ( $baselineDocument = false )
+                    #set ( $baselineDocument = $documentBaseline.getBaseObject() )
+
+                    #if ( $baselineDocument && $baselineDocument.can().read() )
+                        #set ( $baselineDocumentSpace = "$!baselineDocument.getModuleFolder()" )
+                        #set ( $baselineDocumentName = "$!baselineDocument.getModuleName()" )
+                        #if ( $baselineDocumentSpace.equals("") )
+                            #set ( $baselineDocumentSpace = $documentSpace )
+                        #end
+                        #if ( $baselineDocumentName.equals("") )
+                            #set ( $baselineDocumentName = $documentName )
+                        #end
+                        #set ( $baselineRevisionDocument = false )
+                        #set ( $baselineRevision = false )
+                        #set ( $baselineRevisionDocument = $docu.getReference().getFromRevision($transaction, $documentBaselineRevision) )
+                        #set ( $baselineRevision = $transaction.revisions().getBy().id($documentBaselineRevision) )
+
+                        ## ===================================================
+                        ## The versioned document proves the user can read the
+                        ## target, and the repository revision supplies only the
+                        ## native revision marker plus revision number. The link
+                        ## is deliberately built from a
+                        ## non-baseline portal link, then amended with the
+                        ## revision query parameter, so the target opens as
+                        ## #/project/.../Document?revision=123 instead of the
+                        ## legacy #/baseline/123/... route.
+                        ## ===================================================
+                        #if ( $baselineRevisionDocument && $baselineRevisionDocument.can().read() && $baselineRevision && !$baselineRevision.isUnresolvable() )
+                            #set ( $baselineLink = $transaction.context().createPortalLink().project("$rowProjectId").document("$baselineDocumentSpace","$baselineDocumentName").toEncodedRelativeUrl() )
+                            #set ( $baselineRevisionSeparator = "?" )
+                            #if ( $baselineLink.indexOf("?") >= 0 )
+                                #set ( $baselineRevisionSeparator = "&" )
+                            #end
+                            #set ( $baselineLink = "${baselineLink}${baselineRevisionSeparator}revision=${documentBaselineRevision}" )
+                            #set ( $baselineLabel = "$documentBaselineName ($documentBaselineRevision)" )
+                            #set ( $baselineNameHtml = $esc.html($documentBaselineName) )
+                            #set ( $baselineRevisionHtml = "$!baselineRevision.render().withIcon().withText(true).withLinks(false)" )
+                            #set ( $baselineRowStyle = "display:block;white-space:nowrap;" )
+                            #set ( $baselineLinkStyle = "white-space:nowrap;" )
+                            #set ( $documentBaselineRowHtml = "<div style=${q}${baselineRowStyle}${q}>" )
+                            #set ( $documentBaselineRowHtml = "${documentBaselineRowHtml}<a href=${q}${baselineLink}${q}${newWindowLinkAttributes} style=${q}${baselineLinkStyle}${q}>" )
+                            #set ( $documentBaselineRowHtml = "${documentBaselineRowHtml}${baselineRevisionHtml} $baselineNameHtml</a></div>" )
+                            #set ( $documentBaselineItemsHtml = "${documentBaselineItemsHtml}${documentBaselineRowHtml}" )
+                            #set ( $documentBaselinesSearchText = "${documentBaselinesSearchText} ${baselineLabel}" )
+                            #if ( $documentBaselinesFilterValue.equals("") )
+                                #set ( $documentBaselinesFilterValue = $baselineLabel )
+                            #else
+                                #set ( $documentBaselinesFilterValue = "${documentBaselinesFilterValue}${filterValueSeparator}${baselineLabel}" )
+                            #end
+                            #addFilterOptionMacro($documentBaselineFilterOptions $baselineLabel)
+                        #end
+                    #end
+                #end
             #end
+
+            #set ( $void = $rowsMap.put("documentBaselinesHtml", $documentBaselineItemsHtml) )
+            #set ( $void = $rowsMap.put("__tsbFilterValue_documentBaselinesHtml", $documentBaselinesFilterValue) )
+            #set ( $void = $rowsMap.put("__tsbSearchValue_documentBaselinesHtml", $documentBaselinesSearchText.trim()) )
         #end
-        
-        ## ==================================================================
-        ## This is for user-defined query-count columns in the matrix.
-        ## Lets user create columns with defined queries from Lucene
-        ## ==================================================================
-        #foreach ( $columnParam in $parameters.columns.get() )
-            #if ( !($columnParam.title.value() == "") && !($columnParam.query.value() == "") )
-                ## ==========================================================
-                ## Count matching work items and build links to the tracker
-                ## result and filtered document view.
-                ## ==========================================================
-                #set ( $cellQuery = "$docQuery AND ($columnParam.query.value())" )
-                #set ( $workitemCount = $transaction.workItems().search().query("$cellQuery").size() )
-                #set ( $trackerLink = $transaction.context().createPortalLink().project("$docu.fields().project().projectId()").workItems().query("$cellQuery").toEncodedRelativeUrl() )
-                #set ( $docSpace = $docu.getOldApi().getModuleFolder() )
-                #set ( $docName = $docu.fields().moduleName().get() )
-                #set ( $docLink = $transaction.context().createPortalLink().project("$docu.fields().project().projectId()").document("$docSpace","$docName").filter("$cellQuery").toEncodedRelativeUrl() )
-               
-                #set ( $cellHtml = "<a href=$q$trackerLink$q>$workitemCount</a> / <a href=$q$docLink$q>Doc</a>" )
-                #set ( $void = $rowsMap.put($columnParam.title.value(), $cellHtml) )
+
+        ## ===================================================================
+        ## Add branched document links when enabled.
+        ## Branch targets are rendered as a compact location trail. When the
+        ## target resolves through the Transaction API, the document renderer
+        ## carries its space via withSpace(), preserving native icons and labels.
+        ## ===================================================================
+        #if ( true == $matrixShowBranchedDocuments )
+            #set ( $branchedDocumentItemsHtml = "" )
+            #set ( $branchedDocumentsSearchText = "" )
+            #set ( $branchedDocumentsFilterValue = "" )
+            #set ( $branchedModules = $oldApiDocument.getBranchedModules() )
+
+            #foreach ( $branchedModule in $branchedModules )
+                ## ===========================================================
+                ## Render only branch targets the current user can read.
+                ## ===========================================================
+                #if ( $branchedModule && $branchedModule.can().read() )
+                    #set ( $branchedProjectId = "$!branchedModule.getProject().getId()" )
+                    #if ( $branchedProjectId.equals("") )
+                        #set ( $branchedProjectId = $rowProjectId )
+                    #end
+                    #set ( $branchedProjectName = "$!branchedModule.getProject().getName()" )
+                    #if ( $branchedProjectName.equals("") )
+                        #set ( $branchedProjectName = $branchedProjectId )
+                    #end
+                    #set ( $branchedSpace = "$!branchedModule.getModuleFolder()" )
+                    #set ( $branchedSpaceLabel = $branchedSpace )
+                    #if ( $branchedSpaceLabel.equals("") )
+                        #set ( $branchedSpaceLabel = "(Default)" )
+                    #end
+                    #set ( $branchedName = "$!branchedModule.getModuleName()" )
+                    #set ( $branchedTitle = "$!branchedModule.getTitleOrName()" )
+                    #if ( $branchedTitle.equals("") )
+                        #set ( $branchedTitle = $branchedName )
+                    #end
+
+                    #set ( $branchedLink = $transaction.context().createPortalLink().project("$branchedProjectId").document("$branchedSpace","$branchedName").toEncodedRelativeUrl() )
+                    #set ( $branchedTitleHtml = $esc.html($branchedTitle) )
+                    #set ( $branchedProjectNameHtml = $esc.html($branchedProjectName) )
+                    #set ( $branchedSpaceLabelHtml = $esc.html($branchedSpaceLabel) )
+                    #resolveDocumentApiByLocationMacro($branchedProjectId $branchedSpace $branchedName)
+                    #set ( $branchedDocumentLinkHtml = "<a href=${q}${branchedLink}${q}${newWindowLinkAttributes}>$branchedTitleHtml</a>" )
+                    #set ( $branchedProjectHtml = $branchedProjectNameHtml )
+                    #set ( $branchedDocumentLocationHtml = "$branchedProjectHtml - $branchedDocumentLinkHtml" )
+
+                    ## =======================================================
+                    ## Use native project and document renderers when the branch
+                    ## target resolves. The document link is controlled here so
+                    ## only the document opens the branch target.
+                    ## =======================================================
+                    #if ( $resolvedDocumentApi )
+                        #set ( $branchedProjectHtml = "$!resolvedDocumentApi.fields().project().render().withLinks(false)" )
+                        #set ( $branchedDocumentRenderedHtml = "$!resolvedDocumentApi.render().withIcon().withSpace().withLinks(false)" )
+                        #set ( $branchedDocumentLinkHtml = "<a href=${q}${branchedLink}${q}${newWindowLinkAttributes}>$branchedDocumentRenderedHtml</a>" )
+                        #set ( $branchedDocumentLocationHtml = "$branchedProjectHtml - $branchedDocumentLinkHtml" )
+                    #end
+
+                    #set ( $branchedDocumentRowHtml = "<div style=${q}white-space:nowrap;${q}>" )
+                    #set ( $branchedDocumentRowHtml = "${branchedDocumentRowHtml}$branchedDocumentLocationHtml</div>" )
+                    #set ( $branchedDocumentItemsHtml = "${branchedDocumentItemsHtml}${branchedDocumentRowHtml}" )
+                    #set ( $branchedDocumentsSearchText = "${branchedDocumentsSearchText} ${branchedTitle} ${branchedProjectName} ${branchedSpaceLabel}" )
+                    #set ( $branchedDocumentFilterLabel = "$branchedTitle ($branchedProjectName / $branchedSpaceLabel)" )
+                    #if ( $branchedDocumentsFilterValue.equals("") )
+                        #set ( $branchedDocumentsFilterValue = $branchedDocumentFilterLabel )
+                    #else
+                        #set ( $branchedDocumentsFilterValue = "${branchedDocumentsFilterValue}${filterValueSeparator}${branchedDocumentFilterLabel}" )
+                    #end
+                    #addFilterOptionMacro($branchedDocumentFilterOptions $branchedDocumentFilterLabel)
+                #end
+            #end
+
+            #set ( $void = $rowsMap.put("branchedDocumentsHtml", $branchedDocumentItemsHtml) )
+            #set ( $void = $rowsMap.put("__tsbFilterValue_branchedDocumentsHtml", $branchedDocumentsFilterValue) )
+            #set ( $void = $rowsMap.put("__tsbSearchValue_branchedDocumentsHtml", $branchedDocumentsSearchText.trim()) )
+        #end
+
+        ## ===================================================================
+        ## Add the master/source document for branched or derived documents.
+        ## The source is displayed with the same project/document trail as branch
+        ## targets. When Polarion exposes the source revision carried by the
+        ## branch relationship, the document renderer and URL both point at that
+        ## historical revision; otherwise the current source is shown.
+        ## ===================================================================
+        #if ( true == $matrixShowMasterDocument )
+            #set ( $masterDocumentHtml = "" )
+            #set ( $masterDocumentSearchText = "" )
+            #set ( $masterModule = false )
+            #set ( $masterModule = $oldApiDocument.getBranchedFrom() )
+
+            #if ( !$masterModule )
+                #set ( $masterModule = $oldApiDocument.getDerivedFrom() )
+            #end
+
+            ## ===============================================================
+            ## Render only source documents the current user can read.
+            ## ===============================================================
+            #if ( $masterModule && $masterModule.can().read() )
+                #set ( $masterProjectId = "$!masterModule.getProject().getId()" )
+                #if ( $masterProjectId.equals("") )
+                    #set ( $masterProjectId = $rowProjectId )
+                #end
+                #set ( $masterProjectName = "$!masterModule.getProject().getName()" )
+                #if ( $masterProjectName.equals("") )
+                    #set ( $masterProjectName = $masterProjectId )
+                #end
+                #set ( $masterSpace = "$!masterModule.getModuleFolder()" )
+                #set ( $masterSpaceLabel = $masterSpace )
+                #if ( $masterSpaceLabel.equals("") )
+                    #set ( $masterSpaceLabel = "(Default)" )
+                #end
+                #set ( $masterName = "$!masterModule.getModuleName()" )
+                #set ( $masterTitle = "$!masterModule.getTitleOrName()" )
+                #if ( $masterTitle.equals("") )
+                    #set ( $masterTitle = $masterName )
+                #end
+
+                #set ( $masterLink = $transaction.context().createPortalLink().project("$masterProjectId").document("$masterSpace","$masterName").toEncodedRelativeUrl() )
+                #set ( $masterTitleHtml = $esc.html($masterTitle) )
+                #set ( $masterProjectNameHtml = $esc.html($masterProjectName) )
+                #set ( $masterSpaceLabelHtml = $esc.html($masterSpaceLabel) )
+                #resolveDocumentApiByLocationMacro($masterProjectId $masterSpace $masterName)
+                #set ( $masterDocumentLinkHtml = "<a href=${q}${masterLink}${q}${newWindowLinkAttributes}>$masterTitleHtml</a>" )
+                #set ( $masterProjectHtml = $masterProjectNameHtml )
+                #set ( $masterDocumentLocationHtml = "$masterProjectHtml - $masterDocumentLinkHtml" )
+                #set ( $masterSourceRevision = "$!masterModule.getRevision()" )
+
+                ## ===========================================================
+                ## Use the revisioned shared document when the branch source
+                ## carries a revision. The link follows the normal document route
+                ## with ?revision=... so it opens the historical source view.
+                ## ===========================================================
+                #if ( $resolvedDocumentApi )
+                    #set ( $masterProjectHtml = "$!resolvedDocumentApi.fields().project().render().withLinks(false)" )
+                    #set ( $masterRenderedDocumentApi = $resolvedDocumentApi )
+
+                    #if ( !$masterSourceRevision.equals("") )
+                        #set ( $masterRevisionDocument = false )
+                        #set ( $masterRevisionDocument = $resolvedDocumentApi.getFromRevision($masterSourceRevision) )
+
+                        #if ( $masterRevisionDocument && !$masterRevisionDocument.isUnresolvable() && $masterRevisionDocument.can().read() )
+                            #set ( $masterRenderedDocumentApi = $masterRevisionDocument )
+                            #set ( $masterRevisionSeparator = "?" )
+                            #if ( $masterLink.indexOf("?") >= 0 )
+                                #set ( $masterRevisionSeparator = "&" )
+                            #end
+                            #set ( $masterLink = "${masterLink}${masterRevisionSeparator}revision=${masterSourceRevision}" )
+                        #end
+                    #end
+
+                    #set ( $masterDocumentRenderedHtml = "$!masterRenderedDocumentApi.render().withIcon().withSpace().withRevisionIcon().withLinks(false)" )
+                    #set ( $masterDocumentLinkHtml = "<a href=${q}${masterLink}${q}${newWindowLinkAttributes}>$masterDocumentRenderedHtml</a>" )
+                    #set ( $masterDocumentLocationHtml = "$masterProjectHtml - $masterDocumentLinkHtml" )
+                #end
+
+                #set ( $masterDocumentHtml = $masterDocumentLocationHtml )
+                #set ( $masterDocumentSearchText = "$masterTitle $masterProjectName $masterSpaceLabel" )
+            #end
+
+            #set ( $void = $rowsMap.put("masterDocumentHtml", $masterDocumentHtml) )
+            #set ( $void = $rowsMap.put("__tsbSearchValue_masterDocumentHtml", $masterDocumentSearchText) )
+        #end
+
+        ## ===================================================================
+        ## Add unresolved root comments when enabled. The column shows the
+        ## comment text directly. Each comment is kept on its own row without
+        ## bullets so multi-comment cells stay compact and scan like the other
+        ## multi-value document metadata columns.
+        ## ===================================================================
+        #if ( true == $matrixShowUnresolvedComments )
+            #set ( $documentPortalLinkBuilder = $transaction.context().createPortalLink() )
+            #if ( !$rowRevision.equals("") )
+                #set ( $documentPortalLinkBuilder = $documentPortalLinkBuilder.baseline("$rowRevision") )
+            #end
+            #set ( $documentLink = $documentPortalLinkBuilder.project("$rowProjectId").document("$documentSpace","$documentName").toEncodedRelativeUrl() )
+            #set ( $unresolvedRootComments = $oldApiDocument.getRootComments(false) )
+            #set ( $unresolvedCommentItemsHtml = "" )
+            #set ( $unresolvedCommentsSearchText = "" )
+            #set ( $unresolvedCommentsFilterValue = "" )
+
+            #foreach ( $unresolvedComment in $unresolvedRootComments )
+                #set ( $unresolvedCommentText = "" )
+                #set ( $unresolvedCommentTextValue = $unresolvedComment.getText() )
+                #if ( $unresolvedCommentTextValue )
+                    #set ( $unresolvedCommentText = "$!unresolvedCommentTextValue.getContent()" )
+                    #if ( $unresolvedCommentText.equals("") )
+                        #set ( $unresolvedCommentText = "$!unresolvedCommentTextValue" )
+                    #end
+                #end
+                #if ( $unresolvedCommentText.equals("") )
+                    #set ( $unresolvedCommentText = "(Empty comment)" )
+                #end
+                #set ( $unresolvedCommentTextHtml = $esc.html($unresolvedCommentText) )
+                #set ( $unresolvedCommentLinkHtml = "<a href=${q}${documentLink}${q}${newWindowLinkAttributes}>$unresolvedCommentTextHtml</a>" )
+                #set ( $unresolvedCommentRowHtml = "<div style=${q}white-space:nowrap;${q}>$unresolvedCommentLinkHtml</div>" )
+                #set ( $unresolvedCommentItemsHtml = "${unresolvedCommentItemsHtml}${unresolvedCommentRowHtml}" )
+                #set ( $unresolvedCommentsSearchText = "${unresolvedCommentsSearchText} ${unresolvedCommentText}" )
+                #if ( $unresolvedCommentsFilterValue.equals("") )
+                    #set ( $unresolvedCommentsFilterValue = $unresolvedCommentText )
+                #else
+                    #set ( $unresolvedCommentsFilterValue = "${unresolvedCommentsFilterValue}${filterValueSeparator}${unresolvedCommentText}" )
+                #end
+                #addFilterOptionMacro($unresolvedCommentFilterOptions $unresolvedCommentText)
+            #end
+
+            #set ( $void = $rowsMap.put("unresolvedCommentsHtml", $unresolvedCommentItemsHtml) )
+            #set ( $void = $rowsMap.put("__tsbFilterValue_unresolvedCommentsHtml", $unresolvedCommentsFilterValue) )
+            #set ( $void = $rowsMap.put("__tsbSearchValue_unresolvedCommentsHtml", $unresolvedCommentsSearchText.trim()) )
+        #end
+
+        ## ===================================================================
+        ## Resolve recycle-bin work items only when the row displays their count
+        ## or query-count columns need to exclude them. This lookup can be costly
+        ## for large matrices, so configurations that do not use it skip it.
+        ## ===================================================================
+        #set ( $recycleBinWorkItemQuery = "project.id:__tsb_no_matching_project__" )
+        #set ( $recycleBinWorkItemHasIdentities = false )
+        #set ( $recycleBinWorkItemCount = 0 )
+
+        #if ( $matrixShowUnreferencedWorkItems || !$matrixColumnQueries.isEmpty() )
+            #set ( $recycleBinWorkItems = $docu.items().unreferenced() )
+            #prepareWorkItemIdentityQueryMacro($recycleBinWorkItems)
+            #set ( $recycleBinWorkItemQuery = $workItemIdentityQuery )
+            #set ( $recycleBinWorkItemHasIdentities = $workItemIdentityHasMatches )
+
+            #if ( $recycleBinWorkItemHasIdentities )
+                #set ( $recycleBinWorkItemSearch = $transaction.workItems().search().query("$recycleBinWorkItemQuery") )
+
+                #if ( !$rowRevision.equals("") )
+                    #set ( $recycleBinWorkItemSearch = $recycleBinWorkItemSearch.baseline("$rowRevision") )
+                #end
+
+                #set ( $recycleBinWorkItemCount = $recycleBinWorkItemSearch.size() )
             #end
         #end
 
-        ## ==================================================================
+        ## ===================================================================
+        ## Add the recycle-bin count when enabled. The count and tracker link
+        ## are built from exact unreferenced item identities.
+        ## ===================================================================
+        #if ( true == $matrixShowUnreferencedWorkItems )
+            #set ( $recycleBinPortalLinkBuilder = $transaction.context().createPortalLink() )
+
+            #if ( !$rowRevision.equals("") )
+                #set ( $recycleBinPortalLinkBuilder = $recycleBinPortalLinkBuilder.baseline("$rowRevision") )
+            #end
+
+            #set ( $recycleBinTrackerLink = $recycleBinPortalLinkBuilder.project("$rowProjectId").workItems().query("$recycleBinWorkItemQuery").toEncodedRelativeUrl() )
+            #set ( $recycleBinClassAttribute = "" )
+
+            #if ( $recycleBinWorkItemCount == 0 )
+                #set ( $recycleBinClassAttribute = " class=${q}tsb-computed-count-zero${q}" )
+            #end
+
+            #set ( $recycleBinWorkItemsHtml = "<a$recycleBinClassAttribute href=${q}${recycleBinTrackerLink}${q}${newWindowLinkAttributes}>$recycleBinWorkItemCount</a>" )
+            #set ( $void = $rowsMap.put("unreferencedWorkItemsHtml", $recycleBinWorkItemsHtml) )
+            #set ( $void = $rowsMap.put("__tsbFilterValue_unreferencedWorkItemsHtml", $recycleBinWorkItemCount) )
+        #end
+
+        ## ===================================================================
+        ## Add approved version information from document workflow signatures.
+        ## Each approved transition is one row: Version (revision) date. The
+        ## version and revision are linked to the normal document route with the
+        ## matching ?revision=... query parameter.
+        ## ===================================================================
+        #if ( true == $matrixShowApprovedVersions )
+            #set ( $approvedVersionItemsHtml = "" )
+            #set ( $approvedVersionsSearchText = "" )
+            #set ( $approvedVersionsFilterValue = "" )
+
+            #foreach ( $approvedSignature in $oldApiDocument.getWorkflowSignatures() )
+                #set ( $approvedTargetStatusId = "$!approvedSignature.targetStatus.id" )
+
+                #if ( $approvedSignature.transitionRevision && $approvedTargetStatusId.equals("approved") )
+                    #set ( $approvedRevision = "$!approvedSignature.transitionRevision" )
+                    #set ( $approvedVersionedDoc = false )
+                    #set ( $approvedVersionedDoc = $dataService.getVersionedInstance($oldApiDocument.getUri(), $approvedRevision) )
+
+                    ## =======================================================
+                    ## Render approved version metadata only when the user can
+                    ## read the versioned document object.
+                    ## =======================================================
+                    #if ( $approvedVersionedDoc && $approvedVersionedDoc.can().read() )
+                        #set ( $approvedVersionValue = "" )
+                        #set ( $approvedVersionValue = $approvedVersionedDoc.getValue("version") )
+                        #set ( $approvedVersion = "$!approvedVersionValue" )
+                        #set ( $approvedHasNamedVersion = true )
+                        #if ( $approvedVersion.equals("") )
+                            ## If the approved revision has no document version value, use
+                            ## the plain revision as the label and avoid rendering it twice.
+                            #set ( $approvedVersion = "$approvedRevision" )
+                            #set ( $approvedHasNamedVersion = false )
+                        #end
+                        #set ( $approvedUpdated = "" )
+                        #if ( $approvedVersionedDoc.getUpdated() )
+                            #set ( $approvedUpdated = $date.format("dd-MMM-yyyy", $approvedVersionedDoc.getUpdated()) )
+                        #end
+                        #if ( $approvedUpdated.equals("") )
+                            #set ( $approvedUpdated = "Unknown" )
+                        #end
+                        #set ( $approvedDocumentSpace = "$!approvedVersionedDoc.getModuleFolder()" )
+                        #set ( $approvedDocumentName = "$!approvedVersionedDoc.getModuleName()" )
+                        #if ( $approvedDocumentSpace.equals("") )
+                            #set ( $approvedDocumentSpace = $documentSpace )
+                        #end
+                        #if ( $approvedDocumentName.equals("") )
+                            #set ( $approvedDocumentName = $documentName )
+                        #end
+                        #set ( $approvedLink = $transaction.context().createPortalLink().project("$rowProjectId").document("$approvedDocumentSpace","$approvedDocumentName").toEncodedRelativeUrl() )
+                        #set ( $approvedRevisionSeparator = "?" )
+                        #if ( $approvedLink.indexOf("?") >= 0 )
+                            #set ( $approvedRevisionSeparator = "&" )
+                        #end
+                        #set ( $approvedLink = "${approvedLink}${approvedRevisionSeparator}revision=${approvedRevision}" )
+                        #set ( $approvedLabel = "$approvedVersion ($approvedRevision) $approvedUpdated" )
+                        #if ( !$approvedHasNamedVersion )
+                            #set ( $approvedLabel = "$approvedVersion $approvedUpdated" )
+                        #end
+
+                        #set ( $approvedVersionHtml = $esc.html($approvedVersion) )
+                        #set ( $approvedRevisionHtml = $esc.html($approvedRevision) )
+                        #set ( $approvedUpdatedHtml = $esc.html($approvedUpdated) )
+
+                        ## ===================================================
+                        ## The version and revision act as the historical
+                        ## document link; the approval date follows as plain text.
+                        ## ===================================================
+                        #set ( $approvedVersionLinkTextHtml = "$approvedVersionHtml ($approvedRevisionHtml)" )
+                        #if ( !$approvedHasNamedVersion )
+                            #set ( $approvedVersionLinkTextHtml = "$approvedVersionHtml" )
+                        #end
+                        #set ( $approvedVersionRowHtml = "<div style=${q}white-space:nowrap;${q}>" )
+                        #set ( $approvedVersionRowHtml = "${approvedVersionRowHtml}<a href=${q}${approvedLink}${q}${newWindowLinkAttributes}>$approvedVersionLinkTextHtml</a> $approvedUpdatedHtml</div>" )
+                        #set ( $approvedVersionItemsHtml = "${approvedVersionItemsHtml}${approvedVersionRowHtml}" )
+                        #set ( $approvedVersionsSearchText = "${approvedVersionsSearchText} ${approvedLabel}" )
+                        #if ( $approvedVersionsFilterValue.equals("") )
+                            #set ( $approvedVersionsFilterValue = $approvedLabel )
+                        #else
+                            #set ( $approvedVersionsFilterValue = "${approvedVersionsFilterValue}${filterValueSeparator}${approvedLabel}" )
+                        #end
+                        #addFilterOptionMacro($approvedVersionFilterOptions $approvedLabel)
+                    #end
+                #end
+            #end
+
+            #set ( $void = $rowsMap.put("approvedVersionsHtml", $approvedVersionItemsHtml) )
+            #set ( $void = $rowsMap.put("__tsbFilterValue_approvedVersionsHtml", $approvedVersionsFilterValue) )
+            #set ( $void = $rowsMap.put("__tsbSearchValue_approvedVersionsHtml", $approvedVersionsSearchText.trim()) )
+        #end
+
+        ## ===================================================================
+        ## Add one cell for each configured document field id. Visible cells
+        ## keep Polarion-rendered HTML. Date filters receive normalized raw
+        ## values; list filters intentionally use the rendered cell text so
+        ## DataTables offers only values present in the visible table.
+        ## ===================================================================
+        #foreach ( $fieldId in $columnFieldIds )
+            #set ( $fieldColumnKey = $fieldColumnKeysMap.get($fieldId) )
+            #set ( $documentField = $docu.fields().get($fieldId) )
+            #set ( $fieldHtml = "$!documentField.render().openLinksInNewWindow()" )
+            #set ( $void = $rowsMap.put($fieldColumnKey, $fieldHtml) )
+            #set ( $fieldFilterType = $fieldFilterTypesMap.get($fieldId) )
+            #set ( $filterValueKey = "__tsbFilterValue_${fieldColumnKey}" )
+            #set ( $searchValueKey = "__tsbSearchValue_${fieldColumnKey}" )
+
+            ## ===============================================================
+            ## Date and DateOnly values have different old-API representations.
+            ## Normalize both to yyyy-MM-dd for DataTables sorting and range
+            ## comparisons without changing their rendered cell content.
+            ## ===============================================================
+            #if ( $fieldFilterType.equals("date") )
+                #set ( $oldApiDocument = $docu.getOldApi() )
+                #set ( $oldFieldValue = $oldApiDocument.getValue($fieldId) )
+                #set ( $rowFieldType = $oldApiDocument.getFieldType($fieldId) )
+                #set ( $rowFieldTypeName = "$!rowFieldType.getTypeName()" )
+                #set ( $rawFilterValue = "" )
+
+                #if ( $oldFieldValue )
+                    #if ( $rowFieldTypeName.equals("java.util.Date") )
+                        #set ( $rawFilterValue = $date.format("yyyy-MM-dd", $oldFieldValue) )
+                    #elseif ( $rowFieldTypeName.equals("com.polarion.core.util.types.DateOnly") )
+                        #set ( $rawFilterValue = $date.format("yyyy-MM-dd", $oldFieldValue.getDate()) )
+                    #end
+                #end
+
+                #set ( $void = $rowsMap.put($filterValueKey, $rawFilterValue) )
+                #set ( $void = $rowsMap.put($searchValueKey, $rawFilterValue) )
+            #end
+        #end
+
+        ## ===================================================================
+        ## This is for configured query-count columns in the matrix.
+        ## Custom Configuration uses user-defined Lucene queries; recommended
+        ## presets provide vetted common queries through the same path.
+        ## ===================================================================
+        #foreach ( $columnQueryParam in $matrixColumnQueries )
+            #set ( $columnQueryKey = $columnQueryParam.get("key") )
+            #set ( $columnQueryTitle = $columnQueryParam.get("title") )
+            #set ( $columnQueryText = $columnQueryParam.get("query") )
+            #if ( !$columnQueryTitle.equals("") && !$columnQueryText.equals("") )
+                ## ===========================================================
+                ## Count matching work items and build links to the tracker,
+                ## filtered document, and optional risksheet views.
+                ## Zero counts receive a dedicated CSS class.
+                ## The class applies only to additional-column count links.
+                ## ===========================================================
+                #set ( $columnQuery = "$!columnQueryText" )
+                #set ( $cellQuery = "$docQuery AND ($columnQuery)" )
+
+                ## ===========================================================
+                ## Recycle-bin identities are excluded automatically from every
+                ## additional column.
+                ## ===========================================================
+                #if ( $recycleBinWorkItemHasIdentities )
+                    #set ( $cellQuery = "$cellQuery AND (NOT ($recycleBinWorkItemQuery))" )
+                #end
+
+                ## ===========================================================
+                ## Count only work items contained in the current LiveDoc.
+                ## The column query narrows the document-specific base query,
+                ## and the same query is reused for tracker and document links.
+                ## ===========================================================
+                #set ( $workitemSearch = $transaction.workItems().search().query("$cellQuery") )
+                #if ( !$rowRevision.equals("") )
+                    #set ( $workitemSearch = $workitemSearch.baseline("$rowRevision") )
+                #end
+                #set ( $workitemCount = $workitemSearch.size() )
+
+                #set ( $portalLinkBuilder = $transaction.context().createPortalLink() )
+                #if ( !$rowRevision.equals("") )
+                    #set ( $portalLinkBuilder = $portalLinkBuilder.baseline("$rowRevision") )
+                #end
+                #set ( $trackerLink = $portalLinkBuilder.project("$rowProjectId").workItems().query("$cellQuery").toEncodedRelativeUrl() )
+                #set ( $docLink = $portalLinkBuilder.project("$rowProjectId").document("$documentSpace","$documentName").filter("$cellQuery").toEncodedRelativeUrl() )
+
+                #set ( $countClassAttribute = "" )
+                #if ( $workitemCount == 0 )
+                    #set ( $countClassAttribute = " class=${q}tsb-computed-count-zero${q}" )
+                #end
+
+                #set ( $countHtml = "<a$countClassAttribute href=$q$trackerLink$q$newWindowLinkAttributes>$workitemCount</a>" )
+                #set ( $documentLinkHtml = "<a href=$q$docLink$q$newWindowLinkAttributes>Doc</a>" )
+                #set ( $cellHtml = "$countHtml / $documentLinkHtml" )
+                #if ( $matrixShowRisksheetLink )
+                    #set ( $risksheetLink = $portalLinkBuilder.project("$rowProjectId").document("$documentSpace","$documentName").tab("risksheet").filter("$cellQuery").toEncodedRelativeUrl() )
+                    #set ( $risksheetLinkHtml = "<a href=$q$risksheetLink$q$newWindowLinkAttributes>Risksheet</a>" )
+                    #set ( $cellHtml = "$cellHtml / $risksheetLinkHtml" )
+                #end
+                #set ( $void = $rowsMap.put($columnQueryKey, $cellHtml) )
+
+                ## ===========================================================
+                ## Keep the raw count separate from the rendered links.
+                ## DataTables uses this value for numeric filtering.
+                ## ===========================================================
+                #set ( $filterValueKey = "__tsbFilterValue_${columnQueryKey}" )
+                #set ( $void = $rowsMap.put($filterValueKey, $workitemCount) )
+            #end
+        #end
+
+        ## ===================================================================
         ## The row is complete.
         ## Add it to the list of all rows.
-        ## ==================================================================
+        ## ===================================================================
         #set ( $void = $dataRows.add($rowsMap) )
     #end
 #end
 
-## ==========================================================================
-## Main 
-## ==========================================================================
-#if ( $allowRendering )
-    #prepareRowsMacro()
+## ===========================================================================
+## Build DataTables settings from widget parameters.
+## Translate user-facing widget parameters into a smaller settings map so
+## the shared framework does not need to know every widget parameter.
+## ===========================================================================
+#macro ( prepareTableSettingsMacro )
+    ## =======================================================================
+    ## $tableSettings stores only values needed by DataTables and TableEffects.
+    ## =======================================================================
+    #set ( $tableSettings = $objectFactory.newMap() )
 
-    #prepareHeadersMacro()
-    #prepareDataRowsMacro()
-
-    ## ======================================================================
-    ## Load widget-local DataTables assets.
-    ## ======================================================================
-    #loadWidgetCssResource("resources/datatables.css")
-    #loadWidgetJsResource("resources/datatables.js")
-
-    ## ======================================================================
-    ## Load files for changing the effects or changing
-    ## the design of the table.
-    ## ======================================================================
-    #loadWidgetJsResource("resources/tableEffects.js")
-    #loadWidgetCssResource("resources/tableEffects.css")
-
-    #initDataTableMacro ( $widgetTableId $headersKeys $headersMap $dataRows )
+    #set ( $void = $tableSettings.put("tableHeight", $parameters.tableHeight.value()) )
+    #set ( $void = $tableSettings.put("headerBackgroundColor", $parameters.headerBackgroundColor.value()) )
+    #set ( $void = $tableSettings.put("headerTextColor", $parameters.headerTextColor.value()) )
+    #set ( $void = $tableSettings.put("rowBackgroundColor", $parameters.rowBackgroundColor.value()) )
+    #set ( $void = $tableSettings.put("alternateRowBackgroundColor", $parameters.alternateRowBackgroundColor.value()) )
+    #set ( $void = $tableSettings.put("showExportButtons", $parameters.showExportButtons.value()) )
+    #set ( $void = $tableSettings.put("showSearchBar", $parameters.showSearchBar.value()) )
+    #set ( $void = $tableSettings.put("enablePaging", $parameters.enablePaging.value()) )
+    #set ( $void = $tableSettings.put("rowsPerPage", $parameters.rowsPerPage.value()) )
+    #set ( $void = $tableSettings.put("defaultSortKeys", "project,space,documentHtml") )
+    #set ( $void = $tableSettings.put("emptyTableMessage", "No documents are available for the selected data set.") )
+    #set ( $void = $tableSettings.put("zeroRecordsMessage", "No documents match the selected filters.") )
 #end
+
+## ===========================================================================
+## Main
+## ===========================================================================
+#prepareCollectionScopeMacro()
+#prepareRowsMacro()
+#prepareFieldMetadataMacro()
+#prepareFilterOptionsMacro()
+#prepareHeadersMacro()
+#prepareDataRowsMacro()
+#prepareTableSettingsMacro()
+
+## ===========================================================================
+## Show revision-context warnings without preventing HEAD rendering.
+## ===========================================================================
+#if ( !$revisionWarning.equals("") )
+    $widgetContext.renderWarning($revisionWarning)
+#end
+
+## ===========================================================================
+## Load widget-local DataTables assets.
+## ===========================================================================
+#loadWidgetCssResource("resources/datatables.css")
+#loadWidgetJsResource("resources/datatables.js")
+
+## ===========================================================================
+## Load the first-party behavior and presentation overrides.
+## ===========================================================================
+#loadWidgetJsResource("resources/tableEffects.js")
+#loadWidgetCssResource("resources/tableEffects.css")
+
+#initDataTableMacro($widgetTableId $headersKeys $headersMap $headerFilterTypesMap $headerFilterOptionsMap $headerGlobalSearchMap $dataRows $tableSettings)
